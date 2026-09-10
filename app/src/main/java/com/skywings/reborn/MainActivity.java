@@ -6,10 +6,18 @@ import android.view.Window;
 import android.view.WindowManager;
 
 public class MainActivity extends Activity {
+    private GameView gameView;
+
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        setContentView(new GameView(this));
+        gameView = new GameView(this);
+        setContentView(gameView);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (gameView != null) gameView.onAdReturn();
     }
 }
