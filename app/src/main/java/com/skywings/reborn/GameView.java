@@ -1,240 +1,71 @@
 package com.skywings.reborn;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.*;
 import android.net.Uri;
-import android.view.*;
-import java.util.*;
+import android.view.MotionEvent;
+import android.view.View;
+import java.util.ArrayList;
+import java.util.Random;
 
-/**
- * SKY WINGS 1942 REBORN
- * Original arcade shooter. No real-world aircraft branding or copyrighted sprites.
- * Boss defeat is the only condition that clears a stage.
- */
+/** Original sci-fi arcade shooter. All aircraft and enemies are drawn as original vector art. */
 public class GameView extends View {
-    static final String MONETAG_URL = "https://omg10.com/4/10852115";
-    static final int MENU=0, PLAY=1, DEAD=2, CLEAR=3;
-    static class Obj {
-        float x,y,vx,vy,r; int type,hp; boolean alive=true;
-        Obj(float x,float y,float r,int type){this.x=x;this.y=y;this.r=r;this.type=type;}
-    }
-
-    final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-    final Random rng=new Random();
-    final ArrayList<Obj> enemies=new ArrayList<>(), bullets=new ArrayList<>(), drops=new ArrayList<>(), stars=new ArrayList<>();
-    final String[] ships={"FALCON","VIPER","PHANTOM","TYPHOON","AEGIS"};
-    final int[] shipColor={Color.rgb(60,205,255),Color.rgb(255,82,92),Color.rgb(255,190,55),Color.rgb(188,92,255),Color.rgb(220,245,255)};
-    final int[] enemyColor={Color.rgb(255,80,90),Color.rgb(255,155,45),Color.rgb(185,80,255),Color.rgb(65,230,190),Color.rgb(70,155,255),Color.rgb(255,80,190)};
-
-    int screen=MENU, stage=1, wave=0, score=0, coins=0, gems=0, hp=100, power=1, shield=0, bomb=3;
-    int enemiesKilled=0, enemiesTarget=8, bossMaxHp=50;
-    boolean bossSpawned=false, bossDefeated=false, adPending=false, touchMove=false;
-    long last, spawnTimer=0, shotTimer=0, adLaunchedAt=0, clearTimer=0;
-    float px=0,py=0; int W,H; int ship=0;
-
-    public GameView(Context c){
-        super(c); setFocusable(true); last=System.currentTimeMillis();
-        for(int i=0;i<120;i++){
-            Obj s=new Obj(rng.nextInt(1000),rng.nextInt(1800),rng.nextFloat()*2.2f+.5f,0);
-            s.vy=.35f+rng.nextFloat()*1.5f; stars.add(s);
-        }
-    }
-
-    void text(Canvas c,String s,float x,float y,float size,int color,Paint.Align align){
-        p.setStyle(Paint.Style.FILL); p.setColor(color); p.setTextSize(size); p.setTextAlign(align);
-        p.setTypeface(Typeface.create("sans",Typeface.BOLD)); c.drawText(s,x,y,p);
-    }
-    void panel(Canvas c,float l,float t,float r,float b){
-        p.setStyle(Paint.Style.FILL); p.setColor(Color.argb(225,5,14,31)); c.drawRoundRect(l,t,r,b,18,18,p);
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.5f); p.setColor(Color.rgb(35,150,220)); c.drawRoundRect(l,t,r,b,18,18,p);
-    }
-    void bg(Canvas c){
-        c.drawColor(Color.rgb(2,6,18));
-        for(Obj s:stars){
-            float sx=s.x/1000f*W, sy=s.y/1800f*H;
-            p.setStyle(Paint.Style.FILL); p.setColor(Color.argb(80+(int)(s.vy*45),120,210,255)); c.drawCircle(sx,sy,s.r,p);
-        }
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1); p.setColor(Color.argb(20,80,170,255));
-        for(int y=100;y<H;y+=140)c.drawLine(0,y,W,y,p);
-    }
-
-    @Override protected void onDraw(Canvas c){
-        W=getWidth(); H=getHeight();
-        if(screen==PLAY) drawGame(c); else if(screen==CLEAR) drawClear(c); else if(screen==DEAD) drawDead(c); else drawMenu(c);
-    }
-
-    void drawMenu(Canvas c){
-        bg(c);
-        text(c,"SKY WINGS",W/2,105,48,Color.WHITE,Paint.Align.CENTER);
-        text(c,"1942  REBORN",W/2,140,20,Color.rgb(255,190,50),Paint.Align.CENTER);
-        text(c,"NEON SKY ARCADE",W/2,165,11,Color.rgb(90,190,225),Paint.Align.CENTER);
-        panel(c,12,190,W-12,420);
-        text(c,"CHOOSE YOUR FIGHTER",W/2,220,16,Color.WHITE,Paint.Align.CENTER);
-        float gap=7,left=18,cardW=(W-36-gap*4)/5f;
-        for(int i=0;i<5;i++){
-            float l=left+i*(cardW+gap),r=l+cardW;
-            p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(150,8,31,55));c.drawRoundRect(l,238,r,388,12,12,p);
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(Color.rgb(25,82,120));c.drawRoundRect(l,238,r,388,12,12,p);
-            drawPlane(c,(l+r)/2,286,.62f,i);
-            text(c,ships[i],(l+r)/2,337,9,Color.WHITE,Paint.Align.CENTER);
-        }
-        button(c,25,442,W-25,505,"START  •  STAGE "+stage,true);
-        text(c,"STAGE PROGRESS",W/2,545,12,Color.LTGRAY,Paint.Align.CENTER);
-        text(c,"Every stage ends with a BOSS",W/2,570,15,Color.WHITE,Paint.Align.CENTER);
-        text(c,"Boss defeated = stage cleared",W/2,595,12,Color.rgb(80,210,255),Paint.Align.CENTER);
-        text(c,"COINS  "+coins,W-25,650,16,Color.YELLOW,Paint.Align.RIGHT);
-        text(c,"GEMS  "+gems,W-25,678,16,Color.CYAN,Paint.Align.RIGHT);
-        text(c,"20+ STAGES  •  BIG DROPS  •  EASY CONTROLS",W/2,H-78,10,Color.LTGRAY,Paint.Align.CENTER);
-        text(c,"Ads only after boss defeat",W/2,H-52,10,Color.rgb(120,180,210),Paint.Align.CENTER);
-    }
-
-    void button(Canvas c,float l,float t,float r,float b,String s,boolean primary){
-        p.setStyle(Paint.Style.FILL);p.setColor(primary?Color.rgb(8,88,125):Color.rgb(8,40,68));c.drawRoundRect(l,t,r,b,13,13,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(primary?2:1);p.setColor(primary?Color.rgb(75,220,255):Color.rgb(45,135,180));c.drawRoundRect(l,t,r,b,13,13,p);
-        text(c,s,(l+r)/2,t+(b-t)/2+7,16,Color.WHITE,Paint.Align.CENTER);
-    }
-
-    void startStage(){
-        screen=PLAY; wave=0; enemiesKilled=0; enemiesTarget=8+Math.min(10,stage/2); bossSpawned=false; bossDefeated=false;
-        enemies.clear();bullets.clear();drops.clear();spawnTimer=0;shotTimer=0;hp=Math.max(hp,60);shield=Math.min(shield,2);
-        px=W/2f;py=H-170; last=System.currentTimeMillis();
-    }
-
-    void drawGame(Canvas c){
-        bg(c);
-        long now=System.currentTimeMillis(), elapsed=now-last; last=now;
-        float dt=Math.min(.035f,elapsed/1000f);
-        spawnTimer+=elapsed;shotTimer+=elapsed;
-        for(Obj s:stars){s.y+=80*s.vy*dt;if(s.y>1800)s.y=0;}
-        if(px==0){px=W/2f;py=H-170;}
-        if(!bossSpawned){
-            if(enemiesKilled<enemiesTarget){
-                if(spawnTimer>520 && enemies.size()<8){spawnTimer=0;spawnEnemy();}
-            } else if(enemies.isEmpty()) spawnBoss();
-        }
-        if(shotTimer>190){shotTimer=0;shoot();}
-        update(dt); drawObjects(c); drawPlayer(c); hud(c);
-        postInvalidateDelayed(16);
-    }
-
-    void spawnEnemy(){
-        int t=rng.nextInt(6); Obj e=new Obj(40+rng.nextFloat()*(W-80),-55,18+rng.nextFloat()*9,t);
-        e.vy=90+rng.nextFloat()*90; e.hp=1+stage/5; enemies.add(e);
-    }
-
-    void spawnBoss(){
-        bossSpawned=true; bossMaxHp=50+stage*12;
-        Obj b=new Obj(W/2f,-90,58,10);b.hp=bossMaxHp;b.vy=70;enemies.add(b);
-    }
-
-    void update(float dt){
-        for(Obj b:bullets){b.y-=760*dt;if(b.y<-60)b.alive=false;}
-        for(Obj e:enemies){
-            e.y+=e.vy*dt;
-            if(e.type==10){e.x=W/2f+(float)Math.sin(e.y*.009f)*W*.34f;e.vy= e.y<150?65:18;}
-            else e.x+=Math.sin(e.y*.02f+e.type)*45*dt;
-            if(e.y>H+80)e.alive=false;
-        }
-        for(Obj d:drops){d.y+=145*dt;if(d.y>H+60)d.alive=false;if(Math.hypot(d.x-px,d.y-py)<48){d.alive=false;collect(d.type);}}
-        for(Obj b:bullets) if(b.alive) for(Obj e:enemies) if(e.alive&&Math.hypot(b.x-e.x,b.y-e.y)<e.r+10){
-            b.alive=false;e.hp--; if(e.hp<=0){e.alive=false;killEnemy(e);}
-        }
-        for(Obj e:enemies) if(e.alive&&Math.hypot(e.x-px,e.y-py)<e.r+25){e.alive=false;if(shield>0)shield--;else hp-=12;}
-        clean(bullets);clean(enemies);clean(drops);
-        if(bossSpawned && enemies.isEmpty() && !bossDefeated){bossDefeated=true;score+=stage*10000;coins+=stage*250;gems+=stage;screen=CLEAR;clearTimer=0;}
-        if(hp<=0)screen=DEAD;
-    }
-
-    void killEnemy(Obj e){
-        if(e.type==10){return;}
-        enemiesKilled++;score+=100+stage*15;coins+=5+stage;
-        if(rng.nextFloat()<.95f) drops.add(new Obj(e.x,e.y,15,rng.nextInt(12)));
-    }
-
-    void collect(int t){
-        if(t==0||t==2)power=Math.min(5,power+1); else if(t==1)power=Math.min(5,power+2); else if(t==3)shield=Math.min(3,shield+1);
-        else if(t==5)hp=Math.min(100,hp+30); else if(t==6)coins+=100; else if(t==7)gems+=5; else if(t==8)score+=500; else if(t==9)bomb=Math.min(5,bomb+1); else if(t==10){for(Obj e:enemies)if(e.type!=10)e.hp-=10;} else if(t==11)power=5;
-    }
-    void clean(ArrayList<Obj>a){for(int i=a.size()-1;i>=0;i--)if(!a.get(i).alive)a.remove(i);}
-
-    void shoot(){
-        int n=power>=4?3:power>=2?2:1;
-        for(int i=0;i<n;i++){float off=(i-(n-1)/2f)*16;bullets.add(new Obj(px+off,py-55,6,0));}
-    }
-
-    void drawObjects(Canvas c){for(Obj b:bullets)drawBullet(c,b);for(Obj e:enemies)drawEnemy(c,e);for(Obj d:drops)drawDrop(c,d);}
-    void drawBullet(Canvas c,Obj b){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(70,40,220,255));c.drawOval(b.x-9,b.y-28,b.x+9,b.y+28,p);p.setColor(Color.WHITE);c.drawRoundRect(b.x-3,b.y-18,b.x+3,b.y+18,3,3,p);}
-
-    void drawPlane(Canvas c,float x,float y,float sc,int variant){
-        int col=shipColor[Math.floorMod(variant,5)];p.setStyle(Paint.Style.FILL);
-        p.setColor(Color.argb(75,80,220,255));c.drawOval(x-9*sc,y+25*sc,x+9*sc,y+66*sc,p);
-        p.setColor(Color.argb(170,255,150,45));c.drawOval(x-5*sc,y+27*sc,x+5*sc,y+53*sc,p);
-        Path wing=new Path();wing.moveTo(x,y-8*sc);wing.lineTo(x+50*sc,y+25*sc);wing.lineTo(x+21*sc,y+22*sc);wing.lineTo(x+10*sc,y+38*sc);wing.lineTo(x,y+28*sc);wing.lineTo(x-10*sc,y+38*sc);wing.lineTo(x-21*sc,y+22*sc);wing.lineTo(x-50*sc,y+25*sc);wing.close();p.setColor(col);c.drawPath(wing,p);
-        Path body=new Path();body.moveTo(x,y-53*sc);body.cubicTo(x+13*sc,y-35*sc,x+16*sc,y+15*sc,x+8*sc,y+45*sc);body.lineTo(x,y+57*sc);body.lineTo(x-8*sc,y+45*sc);body.cubicTo(x-16*sc,y+15*sc,x-13*sc,y-35*sc,x,y-53*sc);body.close();p.setColor(Color.rgb(225,235,245));c.drawPath(body,p);
-        p.setColor(col);c.drawOval(x-7*sc,y-25*sc,x+7*sc,y+35*sc,p);p.setColor(Color.rgb(35,55,90));c.drawOval(x-7*sc,y-24*sc,x+7*sc,y-3*sc,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2*sc);p.setColor(Color.WHITE);c.drawLine(x-25*sc,y+22*sc,x-42*sc,y+27*sc,p);c.drawLine(x+25*sc,y+22*sc,x+42*sc,y+27*sc,p);p.setStrokeWidth(1);
-    }
-    void drawPlayer(Canvas c){drawPlane(c,px,py,1,ship);if(shield>0){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(Color.argb(170,80,235,255));c.drawCircle(px,py,50,p);p.setStrokeWidth(1);}}
-    void drawEnemy(Canvas c,Obj e){if(e.type==10){drawBoss(c,e);return;}float s=.72f;int col=enemyColor[e.type%enemyColor.length];p.setStyle(Paint.Style.FILL);Path w=new Path();w.moveTo(e.x,e.y-34*s);w.lineTo(e.x+45*s,e.y+22*s);w.lineTo(e.x+16*s,e.y+16*s);w.lineTo(e.x,e.y+35*s);w.lineTo(e.x-16*s,e.y+16*s);w.lineTo(e.x-45*s,e.y+22*s);w.close();p.setColor(col);c.drawPath(w,p);p.setColor(Color.rgb(65,75,105));c.drawOval(e.x-8*s,e.y-24*s,e.x+8*s,e.y+18*s,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.5f);p.setColor(Color.WHITE);c.drawPath(w,p);}
-    void drawBoss(Canvas c,Obj e){
-        p.setStyle(Paint.Style.FILL);p.setColor(Color.rgb(55,25,85));c.drawOval(e.x-e.r,e.y-e.r*.55f,e.x+e.r,e.y+e.r*.55f,p);
-        p.setColor(Color.rgb(150,50,145));c.drawOval(e.x-e.r*.72f,e.y-e.r*.36f,e.x+e.r*.72f,e.y+e.r*.36f,p);
-        p.setColor(Color.rgb(40,210,220));c.drawOval(e.x-15,e.y-9,e.x+15,e.y+9,p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);p.setColor(Color.rgb(255,205,55));c.drawOval(e.x-e.r,e.y-e.r*.55f,e.x+e.r,e.y+e.r*.55f,p);
-        float ratio=Math.max(0,e.hp)/(float)bossMaxHp; p.setStyle(Paint.Style.FILL);p.setColor(Color.DKGRAY);c.drawRoundRect(e.x-70,e.y-78,e.x+70,e.y-68,5,5,p);p.setColor(Color.rgb(255,70,100));c.drawRoundRect(e.x-70,e.y-78,e.x-70+140*ratio,e.y-68,5,5,p);
-        text(c,"BOSS",e.x,e.y+e.r+22,12,Color.rgb(255,210,80),Paint.Align.CENTER);
-    }
-    void drawDrop(Canvas c,Obj d){String s=new String[]{"P","+","W","S","X","H","C","G","$","B","*","MAX"}[d.type%12];int col=d.type==7?Color.CYAN:d.type==6?Color.YELLOW:Color.rgb(80,230,255);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(190,8,30,55));c.drawCircle(d.x,d.y,17,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(col);c.drawCircle(d.x,d.y,17,p);text(c,s,d.x,d.y+5,11,col,Paint.Align.CENTER);}
-
-    void hud(Canvas c){
-        p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(190,3,10,24));c.drawRect(0,0,W,72,p);
-        text(c,"STAGE "+stage,W/2,25,17,Color.WHITE,Paint.Align.CENTER);
-        text(c,bossSpawned?"BOSS FIGHT":"WAVE "+Math.min(enemiesTarget,enemiesKilled)+" / "+enemiesTarget,W/2,48,11,bossSpawned?Color.rgb(255,100,110):Color.LTGRAY,Paint.Align.CENTER);
-        text(c,"HP "+hp,W-14,24,13,Color.rgb(100,240,160),Paint.Align.RIGHT);text(c,"PWR "+power,W-14,45,11,Color.WHITE,Paint.Align.RIGHT);
-        text(c,"S "+score,14,24,12,Color.WHITE,Paint.Align.LEFT);text(c,"C "+coins,14,45,11,Color.YELLOW,Paint.Align.LEFT);
-    }
-
-    void drawClear(Canvas c){
-        bg(c);panel(c,20,170,W-20,600);
-        text(c,"STAGE CLEAR",W/2,235,34,Color.rgb(90,240,180),Paint.Align.CENTER);
-        text(c,"BOSS DEFEATED",W/2,270,17,Color.WHITE,Paint.Align.CENTER);
-        text(c,"STAGE "+stage+" COMPLETE",W/2,315,20,Color.rgb(255,205,70),Paint.Align.CENTER);
-        text(c,"+"+(stage*250)+" COINS",W/2,355,14,Color.YELLOW,Paint.Align.CENTER);
-        text(c,"+"+stage+" GEMS",W/2,380,14,Color.CYAN,Paint.Align.CENTER);
-        text(c,"Next stage is unlocked after the ad",W/2,430,12,Color.LTGRAY,Paint.Align.CENTER);
-        button(c,35,465,W-35,530,"WATCH AD  •  NEXT STAGE",true);
-        text(c,"No ads during shooting or boss battle",W/2,570,10,Color.rgb(110,180,210),Paint.Align.CENTER);
-    }
-
-    void drawDead(Canvas c){bg(c);panel(c,25,220,W-25,560);text(c,"MISSION FAILED",W/2,285,32,Color.rgb(255,90,110),Paint.Align.CENTER);text(c,"STAGE "+stage,W/2,325,17,Color.WHITE,Paint.Align.CENTER);text(c,"SCORE  "+score,W/2,360,14,Color.LTGRAY,Paint.Align.CENTER);button(c,45,410,W-45,475,"RETRY STAGE",true);button(c,45,490,W-45,550,"MAIN MENU",false);}
-
-    void launchAd(){
-        if(adPending)return;
-        adPending=true;adLaunchedAt=System.currentTimeMillis();
-        try{Intent i=new Intent(Intent.ACTION_VIEW, Uri.parse(MONETAG_URL));getContext().startActivity(i);}catch(Exception ignored){adPending=false;startNextStage();}
-    }
-    public void onAdReturn(){
-        if(!adPending)return;
-        if(System.currentTimeMillis()-adLaunchedAt<800)return;
-        adPending=false;startNextStage();
-    }
-    void startNextStage(){stage++;screen=MENU;bossSpawned=false;bossDefeated=false;invalidate();}
-
-    @Override public boolean onTouchEvent(android.view.MotionEvent e){
-        float x=e.getX(),y=e.getY();
-        if(e.getAction()==MotionEvent.ACTION_DOWN){
-            if(screen==MENU && y>430&&y<525){ship=Math.max(0,Math.min(4,(int)((x-18)/((W-36)/5f))));startStage();return true;}
-            if(screen==CLEAR && y>455&&y<545){launchAd();return true;}
-            if(screen==DEAD && y>400&&y<485){startStage();return true;}
-            if(screen==DEAD && y>485&&y<565){screen=MENU;invalidate();return true;}
-            touchMove=true;
-        }
-        if(screen==PLAY && touchMove && (e.getAction()==MotionEvent.ACTION_MOVE||e.getAction()==MotionEvent.ACTION_DOWN)){
-            px=Math.max(35,Math.min(W-35,x));py=Math.max(105,Math.min(H-80,y));return true;
-        }
-        if(e.getAction()==MotionEvent.ACTION_UP)touchMove=false;
-        return true;
-    }
+    private static final String MONETAG_URL = "https://omg10.com/4/10852115";
+    private static final int MENU=0, PLAY=1, DEAD=2, CLEAR=3;
+    private static final int MAX_PARTICLES=260;
+    private static class Obj { float x,y,vx,vy,r; int type,hp,maxHp; boolean alive=true; Obj(float x,float y,float r,int type){this.x=x;this.y=y;this.r=r;this.type=type;} }
+    private static class Particle { float x,y,vx,vy,life,maxLife,size; int color; Particle(float x,float y,float vx,float vy,float life,float size,int color){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.life=life;this.maxLife=life;this.size=size;this.color=color;} }
+    private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Random rng=new Random();
+    private final ArrayList<Obj> enemies=new ArrayList<>(), bullets=new ArrayList<>(), enemyBullets=new ArrayList<>(), drops=new ArrayList<>();
+    private final ArrayList<Particle> particles=new ArrayList<>(); private final ArrayList<Obj> stars=new ArrayList<>();
+    private final String[] ships={"FALCON","VIPER","PHANTOM","TYPHOON","AEGIS"};
+    private final int[] shipColor={Color.rgb(45,218,255),Color.rgb(255,75,105),Color.rgb(255,184,45),Color.rgb(184,92,255),Color.rgb(210,248,255)};
+    private final int[] enemyColor={Color.rgb(255,65,100),Color.rgb(255,148,45),Color.rgb(190,72,255),Color.rgb(50,225,190),Color.rgb(65,150,255),Color.rgb(255,65,190)};
+    private int screen=MENU,stage=1,score=0,coins=0,gems=0,hp=100,power=1,shield=0,bomb=2,enemiesKilled=0,enemiesTarget=8,bossMaxHp=80;
+    private boolean bossSpawned=false,bossDefeated=false,adPending=false,dragging=false,bombFlash=false;
+    private long last,spawnTimer=0,shotTimer=0,enemyShotTimer=0,adLaunchedAt=0,bombFlashAt=0;
+    private float px=0,py=0; private int W,H,ship=0;
+    public GameView(Context context){super(context);setFocusable(true);setLayerType(View.LAYER_TYPE_SOFTWARE,null);last=System.currentTimeMillis();for(int i=0;i<130;i++){Obj s=new Obj(rng.nextInt(1000),rng.nextInt(1800),.5f+rng.nextFloat()*2.1f,0);s.vy=.35f+rng.nextFloat()*1.7f;stars.add(s);}}
+    private void text(Canvas c,String s,float x,float y,float size,int color,Paint.Align align){p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(color);p.setTextSize(size);p.setTextAlign(align);p.setTypeface(Typeface.create("sans",Typeface.BOLD));c.drawText(s,x,y,p);}
+    private void round(Canvas c,float l,float t,float r,float b,float rad,int color){p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(color);c.drawRoundRect(l,t,r,b,rad,rad,p);}
+    private void strokeRound(Canvas c,float l,float t,float r,float b,float rad,float sw,int color){p.setStyle(Paint.Style.STROKE);p.setShader(null);p.setStrokeWidth(sw);p.setColor(color);c.drawRoundRect(l,t,r,b,rad,rad,p);}
+    private void panel(Canvas c,float l,float t,float r,float b){round(c,l,t,r,b,24,Color.argb(230,5,12,31));strokeRound(c,l,t,r,b,24,2,Color.rgb(27,121,180));strokeRound(c,l+3,t+3,r-3,b-3,21,1,Color.argb(70,70,220,255));}
+    private void bg(Canvas c){LinearGradient g=new LinearGradient(0,0,0,H,Color.rgb(3,7,24),Color.rgb(8,2,25),Shader.TileMode.CLAMP);p.setStyle(Paint.Style.FILL);p.setShader(g);c.drawRect(0,0,W,H,p);p.setShader(null);for(Obj s:stars){float sx=s.x/1000f*W,sy=s.y/1800f*H;p.setColor(Color.argb(80+(int)(s.vy*50),120,205,255));p.setStyle(Paint.Style.FILL);c.drawCircle(sx,sy,s.r,p);}p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(Color.argb(20,80,170,255));for(int y=80;y<H;y+=120)c.drawLine(0,y,W,y,p);}
+    @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();if(screen==PLAY)drawGame(c);else if(screen==CLEAR)drawClear(c);else if(screen==DEAD)drawDead(c);else drawMenu(c);}
+    private void drawMenu(Canvas c){bg(c);text(c,"SKY WINGS",W/2,74,43,Color.WHITE,Paint.Align.CENTER);text(c,"1942  REBORN",W/2,105,18,Color.rgb(255,192,54),Paint.Align.CENTER);text(c,"NEON SKY  •  ORIGINAL ARCADE",W/2,127,10,Color.rgb(92,205,245),Paint.Align.CENTER);drawHeroShowcase(c,W/2,205);panel(c,12,285,W-12,468);text(c,"CHOOSE YOUR FIGHTER",W/2,315,15,Color.WHITE,Paint.Align.CENTER);float gap=5,left=17,cardW=(W-34-gap*4)/5f;for(int i=0;i<5;i++){float l=left+i*(cardW+gap),r=l+cardW;boolean selected=i==ship;round(c,l,330,r,432,12,selected?Color.argb(170,8,72,105):Color.argb(125,8,28,50));strokeRound(c,l,330,r,432,12,selected?2:1,selected?Color.rgb(65,225,255):Color.rgb(30,80,115));drawPlayerShip(c,(l+r)/2,375,.47f,i,false);text(c,ships[i],(l+r)/2,414,7.5f,Color.WHITE,Paint.Align.CENTER);}round(c,24,486,W-24,548,16,Color.rgb(8,104,145));strokeRound(c,24,486,W-24,548,16,2,Color.rgb(85,235,255));text(c,"START MISSION  •  STAGE "+stage,W/2,525,16,Color.WHITE,Paint.Align.CENTER);text(c,"BOSS EVERY STAGE  •  EASY TOUCH CONTROL  •  BIG DROPS",W/2,580,9.5f,Color.LTGRAY,Paint.Align.CENTER);text(c,"COINS  "+coins,W/2-10,610,13,Color.YELLOW,Paint.Align.RIGHT);text(c,"GEMS  "+gems,W/2+10,610,13,Color.CYAN,Paint.Align.LEFT);text(c,"Ads only after boss defeat",W/2,H-24,10,Color.rgb(105,170,205),Paint.Align.CENTER);}
+    private void drawHeroShowcase(Canvas c,float x,float y){p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(x,y,125,Color.argb(120,15,170,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawCircle(x,y,125,p);p.setShader(null);drawPlayerShip(c,x,y,1.15f,ship,true);text(c,"SELECTED // "+ships[ship],x,y+103,10,Color.rgb(115,225,255),Paint.Align.CENTER);}
+    private void startStage(){screen=PLAY;enemiesKilled=0;enemiesTarget=8+Math.min(12,stage/2);bossSpawned=false;bossDefeated=false;enemies.clear();bullets.clear();enemyBullets.clear();drops.clear();particles.clear();spawnTimer=0;shotTimer=0;enemyShotTimer=0;hp=Math.max(70,hp);shield=Math.min(2,shield);px=W/2f;py=H-155;last=System.currentTimeMillis();}
+    private void drawGame(Canvas c){bg(c);long now=System.currentTimeMillis();long elapsed=Math.min(50,now-last);last=now;float dt=elapsed/1000f;for(Obj s:stars){s.y+=80*s.vy*dt;if(s.y>1800)s.y=0;}spawnTimer+=elapsed;shotTimer+=elapsed;enemyShotTimer+=elapsed;if(!bossSpawned&&enemiesKilled<enemiesTarget&&spawnTimer>470&&enemies.size()<7){spawnTimer=0;spawnEnemy();}if(!bossSpawned&&enemiesKilled>=enemiesTarget&&enemies.isEmpty())spawnBoss();if(shotTimer>170){shotTimer=0;shoot();}if(enemyShotTimer>900){enemyShotTimer=0;enemyShoot();}update(dt);drawObjects(c);drawPlayer(c);hud(c);if(bombFlash){float a=1f-(System.currentTimeMillis()-bombFlashAt)/420f;if(a<=0)bombFlash=false;else{p.setStyle(Paint.Style.FILL);p.setColor(Color.argb((int)(80*a),80,220,255));c.drawRect(0,0,W,H,p);}}postInvalidateDelayed(16);}
+    private void spawnEnemy(){int t=rng.nextInt(6);Obj e=new Obj(45+rng.nextFloat()*(W-90),-70,20+rng.nextFloat()*10,t);e.vy=75+rng.nextFloat()*65;e.hp=1+stage/6;e.maxHp=e.hp;enemies.add(e);burst(e.x,e.y,8,enemyColor[t]);}
+    private void spawnBoss(){bossSpawned=true;bossMaxHp=90+stage*15;Obj b=new Obj(W/2f,-110,70,10);b.hp=bossMaxHp;b.maxHp=bossMaxHp;b.vy=62;enemies.add(b);burst(b.x,b.y,35,Color.rgb(180,70,255));}
+    private void update(float dt){for(Obj b:bullets){b.y-=820*dt;if(b.y<-80)b.alive=false;}for(Obj b:enemyBullets){b.x+=b.vx*dt;b.y+=b.vy*dt;if(b.x<-30||b.x>W+30||b.y>H+40)b.alive=false;}for(Obj e:enemies){e.y+=e.vy*dt;if(e.type==10){e.x=W/2f+(float)Math.sin(System.currentTimeMillis()*.0014)*W*.31f;e.vy=e.y<165?58:5;}else{e.x+=Math.sin(e.y*.017f+e.type*1.7f)*48*dt;if(e.y>H+90)e.alive=false;}}for(Obj d:drops){d.y+=135*dt;d.x+=Math.sin(d.y*.035f)*12*dt;if(d.y>H+50)d.alive=false;if(Math.hypot(d.x-px,d.y-py)<52){d.alive=false;collect(d.type);pickupBurst(d.x,d.y,d.type);}}for(Obj b:bullets)if(b.alive)for(Obj e:enemies)if(e.alive&&Math.hypot(b.x-e.x,b.y-e.y)<e.r+12){b.alive=false;e.hp--;hitBurst(e.x,e.y,e.type==10?Color.rgb(255,90,180):enemyColor[e.type%6]);if(e.hp<=0){e.alive=false;killEnemy(e);}}for(Obj b:enemyBullets)if(b.alive&&Math.hypot(b.x-px,b.y-py)<22){b.alive=false;if(shield>0)shield--;else hp-=8;hitBurst(px,py,Color.CYAN);}for(Obj e:enemies)if(e.alive&&Math.hypot(e.x-px,e.y-py)<e.r+27){e.alive=false;if(shield>0)shield--;else hp-=18;hitBurst(px,py,Color.rgb(255,90,120));}updateParticles(dt);clean(bullets);clean(enemyBullets);clean(enemies);clean(drops);if(bossSpawned&&enemies.isEmpty()&&!bossDefeated){bossDefeated=true;score+=stage*10000;coins+=stage*250;gems+=Math.max(1,stage/2);dropBossReward();screen=CLEAR;invalidate();}if(hp<=0&&screen==PLAY){screen=DEAD;invalidate();}}
+    private void killEnemy(Obj e){if(e.type==10){burst(e.x,e.y,60,Color.rgb(255,75,185));return;}enemiesKilled++;score+=100+stage*15;coins+=5+stage;burst(e.x,e.y,20,enemyColor[e.type%6]);if(rng.nextFloat()<.98f)drops.add(new Obj(e.x,e.y,17,rng.nextInt(12)));}
+    private void dropBossReward(){for(int i=0;i<6;i++)drops.add(new Obj(W/2f+(rng.nextFloat()-.5f)*180,H*.42f+(rng.nextFloat()-.5f)*100,20,i%12));}
+    private void collect(int t){if(t==0||t==2)power=Math.min(5,power+1);else if(t==1)power=Math.min(5,power+2);else if(t==3)shield=Math.min(3,shield+1);else if(t==5)hp=Math.min(100,hp+28);else if(t==6)coins+=100;else if(t==7)gems+=5;else if(t==8)score+=500;else if(t==9)bomb=Math.min(4,bomb+1);else if(t==10){for(Obj e:enemies)if(e.type!=10)e.hp-=5;}else if(t==11)power=5;}
+    private void clean(ArrayList<Obj>a){for(int i=a.size()-1;i>=0;i--)if(!a.get(i).alive)a.remove(i);}
+    private void shoot(){int n=power>=4?3:power>=2?2:1;for(int i=0;i<n;i++){float off=(i-(n-1)/2f)*17;bullets.add(new Obj(px+off,py-48,6,0));}burst(px,py-45,3,shipColor[ship]);}
+    private void enemyShoot(){if(enemies.isEmpty())return;Obj target=null;float best=-1;for(Obj e:enemies)if(e.type!=10&&e.y>0&&e.y>best){best=e.y;target=e;}if(target==null)for(Obj e:enemies)if(e.type==10){target=e;break;}if(target==null)return;float dx=px-target.x,dy=py-target.y,len=(float)Math.max(1,Math.sqrt(dx*dx+dy*dy));Obj b=new Obj(target.x,target.y+20,8,0);b.vx=dx/len*150;b.vy=dy/len*150;enemyBullets.add(b);if(bossSpawned){for(int i=-1;i<=1;i++){Obj q=new Obj(target.x,target.y+25,8,0);float a=(float)Math.atan2(dy,dx)+i*.22f;q.vx=(float)Math.cos(a)*170;q.vy=(float)Math.sin(a)*170;enemyBullets.add(q);}}}
+    private void drawObjects(Canvas c){for(Particle q:particles)drawParticle(c,q);for(Obj b:bullets)drawPlayerBullet(c,b);for(Obj b:enemyBullets)drawEnemyBullet(c,b);for(Obj e:enemies)drawEnemy(c,e);for(Obj d:drops)drawDrop(c,d);}
+    private void drawParticle(Canvas c,Particle q){float a=Math.max(0,Math.min(1,q.life/q.maxLife));p.setStyle(Paint.Style.FILL);p.setColor(Color.argb((int)(210*a),Color.red(q.color),Color.green(q.color),Color.blue(q.color)));c.drawCircle(q.x,q.y,q.size*a,p);}
+    private void drawPlayerBullet(Canvas c,Obj b){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(60,40,225,255));c.drawOval(b.x-9,b.y-25,b.x+9,b.y+25,p);p.setColor(Color.WHITE);c.drawRoundRect(b.x-3,b.y-17,b.x+3,b.y+17,3,3,p);}
+    private void drawEnemyBullet(Canvas c,Obj b){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(70,255,50,130));c.drawCircle(b.x,b.y,11,p);p.setColor(Color.rgb(255,95,155));c.drawCircle(b.x,b.y,5,p);}
+    private void drawPlayerShip(Canvas c,float x,float y,float sc,int variant,boolean large){int col=shipColor[Math.floorMod(variant,5)];p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(x,y+35*sc,55*sc,Color.argb(150,50,220,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawCircle(x,y+30*sc,55*sc,p);p.setShader(null);p.setColor(Color.argb(180,255,145,45));c.drawOval(x-7*sc,y+25*sc,x+7*sc,y+72*sc,p);Path wings=new Path();wings.moveTo(x,y-7*sc);wings.lineTo(x+58*sc,y+25*sc);wings.lineTo(x+28*sc,y+24*sc);wings.lineTo(x+15*sc,y+40*sc);wings.lineTo(x,y+28*sc);wings.lineTo(x-15*sc,y+40*sc);wings.lineTo(x-28*sc,y+24*sc);wings.lineTo(x-58*sc,y+25*sc);wings.close();p.setShader(new LinearGradient(x-55*sc,y,x+55*sc,y,Color.rgb(30,55,90),col,Shader.TileMode.CLAMP));c.drawPath(wings,p);p.setShader(null);Path body=new Path();body.moveTo(x,y-62*sc);body.cubicTo(x+15*sc,y-40*sc,x+16*sc,y+16*sc,x+8*sc,y+50*sc);body.lineTo(x,y+62*sc);body.lineTo(x-8*sc,y+50*sc);body.cubicTo(x-16*sc,y+16*sc,x-15*sc,y-40*sc,x,y-62*sc);body.close();p.setShader(new LinearGradient(x,y-60*sc,x,y+55*sc,Color.WHITE,Color.rgb(92,110,140),Shader.TileMode.CLAMP));c.drawPath(body,p);p.setShader(null);p.setColor(col);c.drawOval(x-8*sc,y-27*sc,x+8*sc,y+37*sc,p);p.setColor(Color.rgb(16,35,68));c.drawOval(x-8*sc,y-26*sc,x+8*sc,y-4*sc,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.2f*sc);p.setColor(Color.WHITE);c.drawLine(x-25*sc,y+20*sc,x-48*sc,y+27*sc,p);c.drawLine(x+25*sc,y+20*sc,x+48*sc,y+27*sc,p);p.setStrokeWidth(1.4f*sc);p.setColor(col);c.drawLine(x-7*sc,y+4*sc,x-24*sc,y+18*sc,p);c.drawLine(x+7*sc,y+4*sc,x+24*sc,y+18*sc,p);p.setStrokeWidth(1);if(large)text(c,ships[variant],x,y+92*sc,11,Color.WHITE,Paint.Align.CENTER);}
+    private void drawPlayer(Canvas c){drawPlayerShip(c,px,py,1,ship,false);if(shield>0){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(Color.argb(170,70,235,255));c.drawCircle(px,py,52,p);p.setStrokeWidth(1);}}
+    private void drawEnemy(Canvas c,Obj e){if(e.type==10){drawBoss(c,e);return;}float s=.78f;int col=enemyColor[e.type%6];p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(e.x,e.y,45*s,Color.argb(90,Color.red(col),Color.green(col),Color.blue(col)),Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawCircle(e.x,e.y,45*s,p);p.setShader(null);Path w=new Path();w.moveTo(e.x,e.y-38*s);w.lineTo(e.x+50*s,e.y+20*s);w.lineTo(e.x+20*s,e.y+17*s);w.lineTo(e.x+7*s,e.y+36*s);w.lineTo(e.x,e.y+29*s);w.lineTo(e.x-7*s,e.y+36*s);w.lineTo(e.x-20*s,e.y+17*s);w.lineTo(e.x-50*s,e.y+20*s);w.close();p.setShader(new LinearGradient(e.x,e.y-35*s,e.x,e.y+35*s,col,Color.rgb(25,30,58),Shader.TileMode.CLAMP));c.drawPath(w,p);p.setShader(null);p.setColor(Color.rgb(65,80,110));c.drawOval(e.x-10*s,e.y-25*s,e.x+10*s,e.y+18*s,p);p.setColor(col);c.drawOval(e.x-6*s,e.y-16*s,e.x+6*s,e.y+4*s,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2);p.setColor(Color.argb(210,255,255,255));c.drawPath(w,p);p.setStrokeWidth(1);}
+    private void drawBoss(Canvas c,Obj e){p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(e.x,e.y,110,Color.argb(100,210,40,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawCircle(e.x,e.y,110,p);p.setShader(null);Path wing=new Path();wing.moveTo(e.x,e.y-45);wing.lineTo(e.x+105,e.y-5);wing.lineTo(e.x+82,e.y+35);wing.lineTo(e.x+28,e.y+25);wing.lineTo(e.x,e.y+52);wing.lineTo(e.x-28,e.y+25);wing.lineTo(e.x-82,e.y+35);wing.lineTo(e.x-105,e.y-5);wing.close();p.setShader(new LinearGradient(e.x-100,e.y,e.x+100,e.y,Color.rgb(65,20,100),Color.rgb(190,45,150),Shader.TileMode.CLAMP));c.drawPath(wing,p);p.setShader(null);p.setColor(Color.rgb(38,28,68));c.drawOval(e.x-48,e.y-58,e.x+48,e.y+50,p);p.setColor(Color.rgb(28,210,220));c.drawOval(e.x-24,e.y-19,e.x+24,e.y+15,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(Color.rgb(255,205,65));c.drawPath(wing,p);p.setStrokeWidth(1);float ratio=Math.max(0,e.hp)/(float)bossMaxHp;round(c,e.x-90,e.y-92,e.x+90,e.y-80,6,Color.argb(180,30,30,40));round(c,e.x-90,e.y-92,e.x-90+180*ratio,e.y-80,6,Color.rgb(255,65,105));text(c,"BOSS // NEON WARDEN",e.x,e.y+88,11,Color.rgb(255,215,80),Paint.Align.CENTER);}
+    private void drawDrop(Canvas c,Obj d){int col=d.type==7?Color.CYAN:d.type==6?Color.YELLOW:Color.rgb(80,230,255);String[] s={"P1","+","P2","SH","X","HP","$","G","500","B","*","MAX"};p.setStyle(Paint.Style.FILL);p.setShader(new RadialGradient(d.x,d.y,27,Color.argb(100,Color.red(col),Color.green(col),Color.blue(col)),Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawCircle(d.x,d.y,27,p);p.setShader(null);p.setColor(Color.argb(225,8,25,48));c.drawCircle(d.x,d.y,19,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(2.5f);p.setColor(col);c.drawCircle(d.x,d.y,19,p);text(c,s[d.type%12],d.x,d.y+4,9,col,Paint.Align.CENTER);}
+    private void hud(Canvas c){round(c,8,8,W-8,66,16,Color.argb(205,3,10,25));text(c,"STAGE "+stage,16,28,13,Color.WHITE,Paint.Align.LEFT);text(c,bossSpawned?"BOSS FIGHT":"WAVE "+enemiesKilled+" / "+enemiesTarget,W/2,28,12,bossSpawned?Color.rgb(255,100,115):Color.LTGRAY,Paint.Align.CENTER);text(c,"S "+score,W-16,27,11,Color.WHITE,Paint.Align.RIGHT);text(c,"HP",16,51,10,Color.LTGRAY,Paint.Align.LEFT);round(c,39,43,145,55,6,Color.rgb(35,45,60));round(c,39,43,39+106*(Math.max(0,hp)/100f),55,6,Color.rgb(70,235,145));text(c,"PWR "+power,W-16,51,10,Color.rgb(120,225,255),Paint.Align.RIGHT);round(c,W-105,H-72,W-18,H-18,18,Color.argb(185,8,30,52));strokeRound(c,W-105,H-72,W-18,H-18,18,1.5f,Color.rgb(55,170,220));text(c,"BOMB  "+bomb,W-61,H-39,11,Color.WHITE,Paint.Align.CENTER);}
+    private void drawClear(Canvas c){bg(c);for(int i=0;i<8;i++)drawPlayerShip(c,W/2+(i-3.5f)*70,150+(i%2)*28,.42f,(ship+i)%5,false);panel(c,18,225,W-18,610);text(c,"STAGE CLEAR",W/2,285,35,Color.rgb(80,245,185),Paint.Align.CENTER);text(c,"NEON WARDEN DEFEATED",W/2,320,15,Color.WHITE,Paint.Align.CENTER);text(c,"STAGE "+stage+" COMPLETE",W/2,360,19,Color.rgb(255,205,70),Paint.Align.CENTER);text(c,"+"+(stage*250)+" COINS     +"+Math.max(1,stage/2)+" GEMS",W/2,400,13,Color.YELLOW,Paint.Align.CENTER);text(c,"Continue after the ad",W/2,448,12,Color.LTGRAY,Paint.Align.CENTER);round(c,35,475,W-35,538,16,Color.rgb(8,105,145));strokeRound(c,35,475,W-35,538,16,2,Color.rgb(80,230,255));text(c,"WATCH AD  •  NEXT STAGE",W/2,514,15,Color.WHITE,Paint.Align.CENTER);text(c,"No ads during shooting or boss battle",W/2,570,10,Color.rgb(110,180,210),Paint.Align.CENTER);}
+    private void drawDead(Canvas c){bg(c);panel(c,24,210,W-24,555);text(c,"MISSION FAILED",W/2,275,32,Color.rgb(255,80,105),Paint.Align.CENTER);text(c,"STAGE "+stage+"  •  SCORE "+score,W/2,315,14,Color.WHITE,Paint.Align.CENTER);round(c,45,365,W-45,425,15,Color.rgb(8,92,128));text(c,"RETRY STAGE",W/2,402,15,Color.WHITE,Paint.Align.CENTER);round(c,45,440,W-45,500,15,Color.rgb(8,38,65));text(c,"MAIN MENU",W/2,477,14,Color.WHITE,Paint.Align.CENTER);}
+    private void burst(float x,float y,int count,int color){for(int i=0;i<count&&particles.size()<MAX_PARTICLES;i++){double a=rng.nextDouble()*Math.PI*2;float sp=25+rng.nextFloat()*150;particles.add(new Particle(x,y,(float)Math.cos(a)*sp,(float)Math.sin(a)*sp,.25f+rng.nextFloat()*.45f,1.5f+rng.nextFloat()*4,color));}}
+    private void hitBurst(float x,float y,int color){for(int i=0;i<5;i++){double a=rng.nextDouble()*Math.PI*2;float sp=30+rng.nextFloat()*70;particles.add(new Particle(x,y,(float)Math.cos(a)*sp,(float)Math.sin(a)*sp,.18f+rng.nextFloat()*.2f,2,color));}}
+    private void pickupBurst(float x,float y,int type){burst(x,y,12,type==7?Color.CYAN:Color.rgb(80,230,255));}
+    private void updateParticles(float dt){for(int i=particles.size()-1;i>=0;i--){Particle q=particles.get(i);q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=.97f;q.vy*=.97f;q.life-=dt;if(q.life<=0)particles.remove(i);}}
+    private void launchAd(){if(adPending)return;adPending=true;adLaunchedAt=System.currentTimeMillis();try{Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse(MONETAG_URL));getContext().startActivity(i);}catch(Exception e){adPending=false;startNextStage();}}
+    public void onAdReturn(){if(!adPending)return;if(System.currentTimeMillis()-adLaunchedAt<600)return;adPending=false;startNextStage();}
+    private void startNextStage(){stage++;screen=MENU;bossSpawned=false;bossDefeated=false;invalidate();}
+    private void useBomb(){if(screen!=PLAY||bomb<=0)return;bomb--;bombFlash=true;bombFlashAt=System.currentTimeMillis();score+=250;for(Obj e:enemies){if(e.type==10)e.hp=Math.max(1,e.hp-30);else e.hp=0;}burst(px,py,55,Color.CYAN);}
+    @Override public boolean onTouchEvent(MotionEvent e){float x=e.getX(),y=e.getY();int a=e.getActionMasked();if(a==MotionEvent.ACTION_DOWN){if(screen==MENU){if(y>=325&&y<=440){float gap=5,left=17,cardW=(W-34-gap*4)/5f;int pick=(int)((x-left)/(cardW+gap));if(pick>=0&&pick<5){float l=left+pick*(cardW+gap);if(x>=l&&x<=l+cardW){ship=pick;invalidate();return true;}}}if(y>=480&&y<=560){startStage();return true;}}else if(screen==CLEAR&&y>=465&&y<=555){launchAd();return true;}else if(screen==DEAD){if(y>=350&&y<=435){startStage();return true;}if(y>=435&&y<=515){screen=MENU;invalidate();return true;}}else if(screen==PLAY){if(x>W-120&&y>H-95){useBomb();return true;}dragging=true;px=Math.max(38,Math.min(W-38,x));py=Math.max(90,Math.min(H-95,y));return true;}}if(screen==PLAY&&dragging&&(a==MotionEvent.ACTION_MOVE||a==MotionEvent.ACTION_DOWN)){px=Math.max(38,Math.min(W-38,x));py=Math.max(90,Math.min(H-95,y));return true;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)dragging=false;return true;}
 }
