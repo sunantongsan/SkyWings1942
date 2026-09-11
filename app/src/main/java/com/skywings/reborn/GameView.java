@@ -61,9 +61,12 @@ public class GameView extends View {
     private long last, spawnClock, shotClock, enemyShotClock, bombClock, bossDeathClock, lastBossBurstClock;
     private float touchAnchorX,touchAnchorY,shipAnchorX,shipAnchorY;
     private Bitmap playerAtlas, enemyBossAtlas, menuHd;
-    private static final int[][] PLAYER_SRC={{5,0,93,140},{93,0,180,140},{180,0,267,140},{267,0,354,140},{354,0,442,140}};
-    private static final int[][] ENEMY_SRC={{7,144,77,249},{79,144,148,249},{150,144,220,249},{222,144,292,249},{293,144,363,249},{365,144,435,249}};
-    private static final int[][] BOSS_SRC={{2,258,148,445},{150,258,297,445},{299,258,445,445}};
+    // Source coordinates are defined against the original 1024x1024 HD atlas.
+    // They are scaled automatically at runtime, so a lower-resolution Canva fallback
+    // still crops the correct ships/enemies/bosses.
+    private static final int[][] PLAYER_SRC={{0,0,170,220},{170,0,355,220},{350,0,590,240},{585,0,805,220},{790,0,1024,220}};
+    private static final int[][] ENEMY_SRC={{0,245,108,365},{108,245,215,365},{215,245,340,365},{340,245,455,365},{450,245,575,365},{570,245,710,365}};
+    private static final int[][] BOSS_SRC={{0,390,210,665},{230,390,455,665},{470,390,720,665}};
 
     public GameView(Context c){
         super(c);
@@ -175,17 +178,28 @@ public class GameView extends View {
             RectF dst=new RectF(0,0,W,H);
             p.setStyle(Paint.Style.FILL);
             c.drawBitmap(menuHd,src,dst,p);
-            // Interactive overlays follow the artwork: ship row and START MISSION.
-            float selectTop=H*.22f, selectBottom=H*.46f;
-            float gap=W*.012f,left=W*.04f,cw=(W*.92f-gap*4)/5f;
+            // Interactive overlays follow the artwork: five fighters and the START button.
+            float selectTop=H*.22f, selectBottom=H*.43f;
+            float gap=W*.010f,left=W*.025f,cw=(W*.95f-gap*4)/5f;
             for(int i=0;i<5;i++){
                 float l=left+i*(cw+gap),r=l+cw;
                 if(i==ship){
-                    p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3f);
-                    p.setColor(Color.argb(235,100,245,255));
-                    c.drawRoundRect(l,selectTop,r,selectBottom,16,16,p);
+                    p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(4f);
+                    p.setColor(Color.argb(245,100,245,255));
+                    c.drawRoundRect(l,selectTop,r,selectBottom,18,18,p);
                 }
             }
+
+            // Native overlay guarantees that START is visible and touchable on every phone,
+            // even if Android/Canva scales the background artwork differently.
+            float bt=H*.445f, bb=H*.535f;
+            p.setStyle(Paint.Style.FILL);
+            p.setShader(new LinearGradient(W*.12f,bt,W*.88f,bb,
+                    Color.argb(235,255,110,0),Color.argb(235,255,45,0),Shader.TileMode.CLAMP));
+            c.drawRoundRect(W*.10f,bt,W*.90f,bb,24,24,p); p.setShader(null);
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3f); p.setColor(Color.rgb(255,225,80));
+            c.drawRoundRect(W*.10f,bt,W*.90f,bb,24,24,p);
+            text(c,"START MISSION",W/2,H*.502f,20,Color.WHITE,Paint.Align.CENTER);
             return;
         }
         drawSpace(c,false);
@@ -414,7 +428,8 @@ public class GameView extends View {
         if(playerAtlas==null||playerAtlas.isRecycled())return false;
         int idx=Math.floorMod(v,5);
         int[] a=PLAYER_SRC[idx];
-        Rect src=new Rect(a[0],a[1],a[2],a[3]);
+        float sx=playerAtlas.getWidth()/1024f, sy=playerAtlas.getHeight()/1024f;
+        Rect src=new Rect((int)(a[0]*sx),(int)(a[1]*sy),(int)(a[2]*sx),(int)(a[3]*sy));
         float ratio=(a[2]-a[0])/(float)Math.max(1,a[3]-a[1]);
         float h=142f*sc;
         float w=h*ratio;
@@ -436,7 +451,8 @@ public class GameView extends View {
         if(e.type==10){
             int bossIdx=Math.floorMod(stage-1,3);
             int[] a=BOSS_SRC[bossIdx];
-            src=new Rect(a[0],a[1],a[2],a[3]);
+            float sx=enemyBossAtlas.getWidth()/1024f, sy=enemyBossAtlas.getHeight()/1024f;
+            src=new Rect((int)(a[0]*sx),(int)(a[1]*sy),(int)(a[2]*sx),(int)(a[3]*sy));
             float h=e.r*2.9f,w=h*((a[2]-a[0])/(float)(a[3]-a[1]));
             p.setStyle(Paint.Style.FILL);
             p.setShader(new RadialGradient(e.x,e.y,e.r*1.95f,Color.argb(165,235,55,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));
@@ -447,7 +463,8 @@ public class GameView extends View {
         }
         int idx=Math.floorMod(e.type,6);
         int[] a=ENEMY_SRC[idx];
-        src=new Rect(a[0],a[1],a[2],a[3]);
+        float sx=enemyBossAtlas.getWidth()/1024f, sy=enemyBossAtlas.getHeight()/1024f;
+        src=new Rect((int)(a[0]*sx),(int)(a[1]*sy),(int)(a[2]*sx),(int)(a[3]*sy));
         float h=e.r*3.2f,w=h*((a[2]-a[0])/(float)(a[3]-a[1]));
         p.setAlpha(255); p.setFilterBitmap(true);
         c.drawBitmap(enemyBossAtlas,src,new RectF(e.x-w/2,e.y-h/2,e.x+w/2,e.y+h/2),p);
@@ -661,8 +678,8 @@ public class GameView extends View {
 
             if(mode==MENU){
                 // HD menu artwork: fighters occupy the middle ship row.
-                if(y>=H*.22f&&y<=H*.47f){
-                    float gap=W*.012f,left=W*.04f,cw=(W*.92f-gap*4)/5f;
+                if(y>=H*.22f&&y<=H*.43f){
+                    float gap=W*.010f,left=W*.025f,cw=(W*.95f-gap*4)/5f;
                     int pick=(int)((x-left)/(cw+gap));
                     if(pick>=0&&pick<5){
                         float l=left+pick*(cw+gap);
@@ -670,7 +687,7 @@ public class GameView extends View {
                     }
                 }
                 // Large orange START MISSION button in the generated artwork.
-                if(y>=H*.44f&&y<=H*.56f){startStage();return true;}
+                if(y>=H*.43f&&y<=H*.56f){startStage();return true;}
                 return true;
             }
 
