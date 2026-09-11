@@ -26,9 +26,63 @@ public class GameView extends View {
     private void txt(Canvas c,String s,float x,float y,float z,int col,Paint.Align a){p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(col);p.setTextSize(z);p.setTextAlign(a);p.setTypeface(Typeface.create("sans",Typeface.BOLD));c.drawText(s,x,y,p);}
     private void box(Canvas c,float l,float t,float r,float b,float rad,int col){p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(col);c.drawRoundRect(l,t,r,b,rad,rad,p);}
     private void outline(Canvas c,float l,float t,float r,float b,float rad,float sw,int col){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sw);p.setShader(null);p.setColor(col);c.drawRoundRect(l,t,r,b,rad,rad,p);}
-    private void background(Canvas c){p.setShader(new LinearGradient(0,0,0,H,Color.rgb(2,7,24),Color.rgb(15,2,31),Shader.TileMode.CLAMP));c.drawRect(0,0,W,H,p);p.setShader(null);for(O s:stars){float x=s.x/1000f*W,y=s.y/1800f*H;p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(90+(int)(s.vy*45),100,205,255));c.drawCircle(x,y,s.r,p);}p.setStyle(Paint.Style.STROKE);p.setColor(Color.argb(22,80,190,255));for(int y=80;y<H;y+=110)c.drawLine(0,y,W,y,p);}
+    private void background(Canvas c){
+        p.setStyle(Paint.Style.FILL);
+        p.setShader(new LinearGradient(0,0,0,H,Color.rgb(2,7,24),Color.rgb(19,3,38),Shader.TileMode.CLAMP));
+        c.drawRect(0,0,W,H,p); p.setShader(null);
+        p.setShader(new RadialGradient(W*.18f,H*.20f,W*.55f,Color.argb(95,22,90,190),Color.TRANSPARENT,Shader.TileMode.CLAMP));
+        c.drawCircle(W*.18f,H*.20f,W*.55f,p); p.setShader(null);
+        p.setShader(new RadialGradient(W*.88f,H*.12f,W*.50f,Color.argb(80,160,35,220),Color.TRANSPARENT,Shader.TileMode.CLAMP));
+        c.drawCircle(W*.88f,H*.12f,W*.50f,p); p.setShader(null);
+        for(O st:stars){
+            float x=st.x/1000f*W,y=st.y/1800f*H;
+            p.setColor(Color.argb(90+(int)(st.vy*45),120,210,255));
+            c.drawCircle(x,y,st.r,p);
+        }
+    }
+    private void drawWelcomeScene(Canvas c){
+        float px=W*.83f, py=H*.20f, pr=Math.min(W,H)*.17f;
+        p.setStyle(Paint.Style.FILL);
+        p.setShader(new RadialGradient(px-pr*.25f,py-pr*.35f,pr*1.25f,
+                Color.rgb(86,165,255),Color.rgb(28,45,110),Shader.TileMode.CLAMP));
+        c.drawCircle(px,py,pr,p); p.setShader(null);
+        p.setColor(Color.argb(110,110,230,255));
+        c.drawOval(px-pr*1.45f,py-pr*.24f,px+pr*1.45f,py+pr*.24f,p);
+        p.setColor(Color.argb(120,18,10,48));
+        c.drawCircle(px+pr*.28f,py+pr*.18f,pr*.22f,p);
+        p.setShader(new LinearGradient(0,H*.62f,0,H,Color.argb(0,20,90,150),Color.argb(190,5,18,38),Shader.TileMode.CLAMP));
+        c.drawRect(0,H*.62f,W,H,p); p.setShader(null);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(1.4f); p.setColor(Color.argb(45,80,200,255));
+        for(int y=(int)(H*.66f);y<H;y+=36)c.drawLine(0,y,W,y,p);
+    }
     @Override protected void onDraw(Canvas c){W=getWidth();H=getHeight();if(mode==PLAY)game(c);else if(mode==CLEAR)clear(c);else if(mode==DEAD)dead(c);else menu(c);}
-    private void menu(Canvas c){background(c);txt(c,"SKY WINGS",W/2,62,40,Color.WHITE,Paint.Align.CENTER);txt(c,"1942 REBORN",W/2,92,17,Color.rgb(255,194,55),Paint.Align.CENTER);txt(c,"NEON SKY • ORIGINAL ARCADE",W/2,114,10,Color.rgb(90,215,255),Paint.Align.CENTER);drawShow(c,W/2,190,ship);box(c,10,270,W-10,455,22,Color.argb(225,5,13,34));outline(c,10,270,W-10,455,22,2,Color.rgb(25,125,185));txt(c,"CHOOSE YOUR FIGHTER",W/2,299,15,Color.WHITE,Paint.Align.CENTER);float gap=5,left=15,cw=(W-30-gap*4)/5f;for(int i=0;i<5;i++){float l=left+i*(cw+gap),r=l+cw;boolean sel=i==ship;box(c,l,315,r,412,12,sel?Color.argb(185,8,82,115):Color.argb(130,8,27,48));outline(c,l,315,r,412,12,sel?3:1,sel?Color.rgb(70,235,255):Color.rgb(30,80,115));drawShip(c,(l+r)/2,358,.42f,i,false);txt(c,ships[i],(l+r)/2,398,7.2f,Color.WHITE,Paint.Align.CENTER);}box(c,24,472,W-24,540,17,Color.rgb(7,110,150));outline(c,24,472,W-24,540,17,2,Color.rgb(90,240,255));txt(c,"START MISSION  •  STAGE "+stage,W/2,515,16,Color.WHITE,Paint.Align.CENTER);txt(c,"TOUCH TO SELECT  •  DRAG TO FLY  •  AUTO FIRE",W/2,570,9.5f,Color.LTGRAY,Paint.Align.CENTER);txt(c,"COINS "+coins,W/2-12,603,13,Color.YELLOW,Paint.Align.RIGHT);txt(c,"GEMS "+gems,W/2+12,603,13,Color.CYAN,Paint.Align.LEFT);txt(c,"Ads only after boss defeat",W/2,H-22,10,Color.rgb(100,170,205),Paint.Align.CENTER);}
+    private void menu(Canvas c){
+        background(c); drawWelcomeScene(c);
+        txt(c,"SKY WINGS",W/2,58,38,Color.WHITE,Paint.Align.CENTER);
+        txt(c,"1942  REBORN",W/2,88,16,Color.rgb(255,205,78),Paint.Align.CENTER);
+        txt(c,"ENTER THE NEON WARZONE",W/2,111,10,Color.rgb(115,225,255),Paint.Align.CENTER);
+        drawShow(c,W*.36f,190,ship);
+        txt(c,"WELCOME, PILOT",W*.36f,286,12,Color.WHITE,Paint.Align.CENTER);
+        box(c,10,304,W-10,470,22,Color.argb(218,5,13,34));
+        outline(c,10,304,W-10,470,22,2,Color.rgb(28,132,190));
+        txt(c,"SELECT YOUR FIGHTER",W/2,331,14,Color.WHITE,Paint.Align.CENTER);
+        float gap=5,left=15,cw=(W-30-gap*4)/5f;
+        for(int i=0;i<5;i++){
+            float l=left+i*(cw+gap),r=l+cw; boolean sel=i==ship;
+            box(c,l,345,r,438,12,sel?Color.argb(195,8,92,125):Color.argb(140,8,27,48));
+            outline(c,l,345,r,438,12,sel?3:1,sel?Color.rgb(80,240,255):Color.rgb(35,85,120));
+            drawShip(c,(l+r)/2,382,.40f,i,sel);
+            txt(c,ships[i],(l+r)/2,425,7.1f,Color.WHITE,Paint.Align.CENTER);
+        }
+        box(c,24,492,W-24,562,18,Color.rgb(6,117,160));
+        outline(c,24,492,W-24,562,18,2.5f,Color.rgb(100,245,255));
+        txt(c,"START MISSION",W/2,525,18,Color.WHITE,Paint.Align.CENTER);
+        txt(c,"STAGE "+stage+"  •  READY",W/2,547,10,Color.rgb(190,245,255),Paint.Align.CENTER);
+        txt(c,"DRAG TO FLY  •  AUTO FIRE  •  BOSS EVERY STAGE",W/2,596,9.5f,Color.LTGRAY,Paint.Align.CENTER);
+        txt(c,"COINS "+coins,W/2-12,626,12,Color.YELLOW,Paint.Align.RIGHT);
+        txt(c,"GEMS "+gems,W/2+12,626,12,Color.CYAN,Paint.Align.LEFT);
+        txt(c,"Ads only after boss defeat",W/2,H-20,9.5f,Color.rgb(105,175,205),Paint.Align.CENTER);
+    }
     private void drawShow(Canvas c,float x,float y,int v){p.setShader(new RadialGradient(x,y,130,Color.argb(130,20,180,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));p.setStyle(Paint.Style.FILL);c.drawCircle(x,y,130,p);p.setShader(null);drawShip(c,x,y,1.12f,v,true);txt(c,"SELECTED // "+ships[v],x,y+102,10,Color.rgb(120,230,255),Paint.Align.CENTER);}
     private void start(){mode=PLAY;kills=0;target=8+Math.min(14,stage/2);boss=false;enemies.clear();shots.clear();enemyShots.clear();drops.clear();particles.clear();hp=Math.max(70,hp);px=W/2f;py=H-150;spawnClock=shotClock=enemyClock=0;last=System.currentTimeMillis();invalidate();}
     private void game(Canvas c){background(c);long now=System.currentTimeMillis(),el=Math.min(50,now-last);last=now;float dt=el/1000f;for(O s:stars){s.y+=75*s.vy*dt;if(s.y>1800)s.y=0;}spawnClock+=el;shotClock+=el;enemyClock+=el;if(!boss&&kills<target&&spawnClock>450&&enemies.size()<7){spawnClock=0;spawnEnemy();}if(!boss&&kills>=target&&enemies.isEmpty())spawnBoss();if(shotClock>165){shotClock=0;fire();}if(enemyClock>850){enemyClock=0;enemyFire();}update(dt);for(P q:particles)drawParticle(c,q);for(O s:shots)drawShot(c,s);for(O s:enemyShots)drawEnemyShot(c,s);for(O e:enemies)drawEnemy(c,e);for(O d:drops)drawDrop(c,d);drawShip(c,px,py,.9f,ship,true);hud(c);if(bombFlash){float a=1-(System.currentTimeMillis()-bombClock)/350f;if(a>0){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb((int)(80*a),80,225,255));c.drawRect(0,0,W,H,p);}else bombFlash=false;}postInvalidateDelayed(16);}
@@ -51,6 +105,87 @@ public class GameView extends View {
     private void hud(Canvas c){box(c,8,8,W-8,58,16,Color.argb(185,4,12,30));txt(c,"STAGE "+stage,18,29,12,Color.WHITE,Paint.Align.LEFT);txt(c,"SCORE "+score,W/2,29,12,Color.WHITE,Paint.Align.CENTER);txt(c,"HP",18,49,9,Color.WHITE,Paint.Align.LEFT);box(c,42,40,145,51,5,Color.DKGRAY);box(c,42,40,42+103*hp/100f,51,5,Color.rgb(40,225,125));txt(c,"POWER "+power,158,49,9,Color.CYAN,Paint.Align.LEFT);txt(c,"BOMB "+bomb,W-18,29,11,Color.YELLOW,Paint.Align.RIGHT);if(boss){txt(c,"NEON WARDEN",W/2,80,11,Color.rgb(255,90,220),Paint.Align.CENTER);O b=enemies.isEmpty()?null:enemies.get(0);if(b!=null){box(c,35,88,W-35,98,5,Color.DKGRAY);box(c,35,88,(W-35)-(W-70)*(1-b.hp/(float)(90+stage*16)),98,5,Color.MAGENTA);}}box(c,16,H-82,112,H-20,20,Color.argb(175,5,20,42));outline(c,16,H-82,112,H-20,20,2,Color.rgb(40,145,190));txt(c,"BOMB",64,H-43,12,Color.YELLOW,Paint.Align.CENTER);txt(c,"TAP",64,H-26,8,Color.LTGRAY,Paint.Align.CENTER);}
     private void clear(Canvas c){background(c);txt(c,"STAGE CLEAR",W/2,180,34,Color.WHITE,Paint.Align.CENTER);txt(c,"NEON WARDEN DESTROYED",W/2,215,13,Color.rgb(255,100,220),Paint.Align.CENTER);txt(c,"SCORE  "+score,W/2,260,16,Color.YELLOW,Paint.Align.CENTER);box(c,25,320,W-25,390,18,Color.rgb(7,105,145));outline(c,25,320,W-25,390,18,2,Color.CYAN);txt(c,"WATCH AD • NEXT STAGE",W/2,363,16,Color.WHITE,Paint.Align.CENTER);box(c,55,420,W-55,480,16,Color.rgb(18,45,65));txt(c,"CONTINUE WITHOUT AD",W/2,458,12,Color.LTGRAY,Paint.Align.CENTER);txt(c,"Ad appears only after the boss.",W/2,530,10,Color.rgb(110,175,205),Paint.Align.CENTER);}
     private void dead(Canvas c){background(c);txt(c,"MISSION FAILED",W/2,230,32,Color.WHITE,Paint.Align.CENTER);txt(c,"SCORE "+score,W/2,270,15,Color.YELLOW,Paint.Align.CENTER);box(c,45,330,W-45,395,17,Color.rgb(115,35,65));txt(c,"RETRY STAGE",W/2,370,15,Color.WHITE,Paint.Align.CENTER);}
-    @Override public boolean onTouchEvent(MotionEvent e){float x=e.getX(),y=e.getY();switch(e.getActionMasked()){case MotionEvent.ACTION_DOWN:performClick();if(mode==MENU){if(y>=310&&y<=425){float gap=5,left=15,cw=(W-30-gap*4)/5f;int pick=(int)((x-left)/(cw+gap));if(pick>=0&&pick<5){float l=left+pick*(cw+gap);if(x>=l&&x<=l+cw){ship=pick;invalidate();return true;}}}if(y>=455&&y<=560){start();return true;}}else if(mode==PLAY){if(y>H-115&&x<135){if(bomb>0){bomb--;bombFlash=true;bombClock=System.currentTimeMillis();for(O en:enemies)if(en.type!=10){en.hp-=5;if(en.hp<=0){en.alive=false;kill(en);}}burst(px,py,35,Color.CYAN);}return true;}px=Math.max(30,Math.min(W-30,x));py=Math.max(90,Math.min(H-90,y));return true;}else if(mode==DEAD){if(y>300&&y<430){hp=100;power=1;shield=1;start();return true;}}else if(mode==CLEAR){if(y>290&&y<410){try{Intent i=new Intent(Intent.ACTION_VIEW, Uri.parse(MONETAG_URL));i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);getContext().startActivity(i);}catch(Exception ignored){}stage++;mode=MENU;invalidate();return true;}if(y>410&&y<500){stage++;mode=MENU;invalidate();return true;}return true;case MotionEvent.ACTION_MOVE:if(mode==PLAY){px=Math.max(30,Math.min(W-30,x));py=Math.max(90,Math.min(H-90,y));return true;}return true;case MotionEvent.ACTION_UP:if(mode==PLAY){px=Math.max(30,Math.min(W-30,x));py=Math.max(90,Math.min(H-90,y));}return true;}return true;}
+    @Override
+    public boolean onTouchEvent(MotionEvent e){
+        float x=e.getX(), y=e.getY();
+        int action=e.getActionMasked();
+
+        if(action==MotionEvent.ACTION_DOWN){
+            performClick();
+
+            if(mode==MENU){
+                if(y>=340 && y<=450){
+                    float gap=5f,left=15f,cw=(W-30f-gap*4f)/5f;
+                    int pick=(int)((x-left)/(cw+gap));
+                    if(pick>=0 && pick<5){
+                        float l=left+pick*(cw+gap);
+                        if(x>=l && x<=l+cw){
+                            ship=pick; invalidate(); return true;
+                        }
+                    }
+                }
+                if(y>=475 && y<=585){
+                    start(); return true;
+                }
+                return true;
+            }
+
+            if(mode==PLAY){
+                if(y>H-120 && x<140){
+                    if(bomb>0){
+                        bomb--; bombFlash=true; bombClock=System.currentTimeMillis();
+                        for(O en:enemies){
+                            if(en.type!=10){
+                                en.hp-=5;
+                                if(en.hp<=0){en.alive=false;kill(en);}
+                            }
+                        }
+                        burst(px,py,35,Color.CYAN);
+                    }
+                    return true;
+                }
+                px=Math.max(30,Math.min(W-30,x));
+                py=Math.max(90,Math.min(H-90,y));
+                return true;
+            }
+
+            if(mode==DEAD){
+                if(y>300 && y<440){
+                    hp=100; power=1; shield=1; start(); return true;
+                }
+                return true;
+            }
+
+            if(mode==CLEAR){
+                if(y>300 && y<410){
+                    try{
+                        Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse(MONETAG_URL));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getContext().startActivity(i);
+                    }catch(Exception ignored){}
+                    stage++; mode=MENU; invalidate(); return true;
+                }
+                if(y>410 && y<510){
+                    stage++; mode=MENU; invalidate(); return true;
+                }
+                return true;
+            }
+        }
+
+        if(action==MotionEvent.ACTION_MOVE && mode==PLAY){
+            px=Math.max(30,Math.min(W-30,x));
+            py=Math.max(90,Math.min(H-90,y));
+            return true;
+        }
+
+        if(action==MotionEvent.ACTION_UP && mode==PLAY){
+            px=Math.max(30,Math.min(W-30,x));
+            py=Math.max(90,Math.min(H-90,y));
+            return true;
+        }
+
+        return true;
+    }
+
     @Override public boolean performClick(){super.performClick();return true;}
 }
