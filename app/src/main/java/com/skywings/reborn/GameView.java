@@ -61,9 +61,9 @@ public class GameView extends View {
     private long last, spawnClock, shotClock, enemyShotClock, bombClock, bossDeathClock, lastBossBurstClock;
     private float touchAnchorX,touchAnchorY,shipAnchorX,shipAnchorY;
     private Bitmap playerAtlas, enemyBossAtlas, menuHd;
-    private static final int[][] PLAYER_SRC={{3,0,53,80},{53,0,103,80},{103,0,153,80},{153,0,203,80},{203,0,253,80}};
-    private static final int[][] ENEMY_SRC={{4,83,44,143},{45,83,85,143},{86,83,126,143},{127,83,167,143},{168,83,208,143},{209,83,249,143}};
-    private static final int[][] BOSS_SRC={{1,148,85,255},{86,148,170,255},{171,148,255,255}};
+    private static final int[][] PLAYER_SRC={{5,0,93,140},{93,0,180,140},{180,0,267,140},{267,0,354,140},{354,0,442,140}};
+    private static final int[][] ENEMY_SRC={{7,144,77,249},{79,144,148,249},{150,144,220,249},{222,144,292,249},{293,144,363,249},{365,144,435,249}};
+    private static final int[][] BOSS_SRC={{2,258,148,445},{150,258,297,445},{299,258,445,445}};
 
     public GameView(Context c){
         super(c);
