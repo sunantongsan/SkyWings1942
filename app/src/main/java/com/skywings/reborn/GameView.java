@@ -61,7 +61,9 @@ public class GameView extends View {
     private long last, spawnClock, shotClock, enemyShotClock, bombClock, bossDeathClock, lastBossBurstClock;
     private float touchAnchorX,touchAnchorY,shipAnchorX,shipAnchorY;
     private Bitmap playerAtlas, enemyBossAtlas, menuHd;
-    private static final int[][] PLAYER_SRC={{0,0,45,90},{45,0,90,90},{90,0,146,90},{146,0,191,90},{191,0,240,90}};
+    private static final int[][] PLAYER_SRC={{6,0,106,160},{106,0,206,160},{206,0,306,160},{306,0,406,160},{406,0,506,160}};
+    private static final int[][] ENEMY_SRC={{8,165,88,285},{90,165,170,285},{172,165,252,285},{254,165,334,285},{336,165,416,285},{418,165,498,285}};
+    private static final int[][] BOSS_SRC={{2,295,170,510},{172,295,340,510},{342,295,510,510}};
 
     public GameView(Context c){
         super(c);
@@ -433,21 +435,21 @@ public class GameView extends View {
         Rect src;
         if(e.type==10){
             int bossIdx=Math.floorMod(stage-1,3);
-            int l=8+bossIdx*75;
-            src=new Rect(l,56,Math.min(233,l+75),154);
-            float h=e.r*2.65f,w=h*0.95f;
+            int[] a=BOSS_SRC[bossIdx];
+            src=new Rect(a[0],a[1],a[2],a[3]);
+            float h=e.r*2.9f,w=h*((a[2]-a[0])/(float)(a[3]-a[1]));
             p.setStyle(Paint.Style.FILL);
-            p.setShader(new RadialGradient(e.x,e.y,e.r*1.8f,Color.argb(150,235,55,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));
-            c.drawCircle(e.x,e.y,e.r*1.8f,p);p.setShader(null);
-            p.setFilterBitmap(true);
+            p.setShader(new RadialGradient(e.x,e.y,e.r*1.95f,Color.argb(165,235,55,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));
+            c.drawCircle(e.x,e.y,e.r*1.95f,p);p.setShader(null);
+            p.setAlpha(255); p.setFilterBitmap(true);
             c.drawBitmap(enemyBossAtlas,src,new RectF(e.x-w/2,e.y-h/2,e.x+w/2,e.y+h/2),p);
             return true;
         }
-        int idx=Math.floorMod(e.type,6),col=idx%3,row=idx/3;
-        int l=col*37,t=row*41;
-        src=new Rect(l,t,Math.min(113,l+38),Math.min(83,t+42));
-        float h=e.r*2.9f,w=h*0.92f;
-        p.setFilterBitmap(true);
+        int idx=Math.floorMod(e.type,6);
+        int[] a=ENEMY_SRC[idx];
+        src=new Rect(a[0],a[1],a[2],a[3]);
+        float h=e.r*3.2f,w=h*((a[2]-a[0])/(float)(a[3]-a[1]));
+        p.setAlpha(255); p.setFilterBitmap(true);
         c.drawBitmap(enemyBossAtlas,src,new RectF(e.x-w/2,e.y-h/2,e.x+w/2,e.y+h/2),p);
         return true;
     }
