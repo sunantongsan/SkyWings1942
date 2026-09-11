@@ -32,6 +32,23 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Rebuild verified HD art resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/res/drawable-nodpi
+          cat app/src/main/assets/hd/menu_*.b64 | tr -d '\n\r ' | base64 -d > app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp
+          cat app/src/main/assets/hd/atlas_*.b64 | tr -d '\n\r ' | base64 -d > app/src/main/res/drawable-nodpi/player_atlas.webp
+          cp app/src/main/res/drawable-nodpi/player_atlas.webp app/src/main/res/drawable-nodpi/enemyboss_atlas.webp
+          MENU_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp)
+          ATLAS_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/player_atlas.webp)
+          echo "Verified menu bytes: $MENU_SIZE"
+          echo "Verified atlas bytes: $ATLAS_SIZE"
+          test "$MENU_SIZE" -gt 20000
+          test "$ATLAS_SIZE" -gt 30000
+          file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp
+          file app/src/main/res/drawable-nodpi/player_atlas.webp
+
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
@@ -41,7 +58,7 @@ jobs:
       - name: Upload Android builds
         uses: actions/upload-artifact@v4
         with:
-          name: SkyWings1942-Android-Build
+          name: Galaxy1942-v1.5-HD-Verified
           if-no-files-found: error
           path: |
             app/build/outputs/apk/debug/*.apk
