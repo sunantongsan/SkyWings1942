@@ -1,4 +1,4 @@
-name: SkyWings1942 Android Build
+name: GALAXY 1942 Android Build
 
 on:
   workflow_dispatch:
@@ -32,22 +32,38 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Rebuild verified HD art resources
+      - name: Download and verify real HD artwork
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p app/src/main/res/drawable-nodpi
-          cat app/src/main/assets/hd/menu_*.b64 | tr -d '\n\r ' | base64 -d > app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp
-          cat app/src/main/assets/hd/atlas_*.b64 | tr -d '\n\r ' | base64 -d > app/src/main/res/drawable-nodpi/player_atlas.webp
-          cp app/src/main/res/drawable-nodpi/player_atlas.webp app/src/main/res/drawable-nodpi/enemyboss_atlas.webp
-          MENU_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp)
-          ATLAS_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/player_atlas.webp)
-          echo "Verified menu bytes: $MENU_SIZE"
-          echo "Verified atlas bytes: $ATLAS_SIZE"
-          test "$MENU_SIZE" -gt 20000
-          test "$ATLAS_SIZE" -gt 30000
-          file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp
-          file app/src/main/res/drawable-nodpi/player_atlas.webp
+          rm -f app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp
+          rm -f app/src/main/res/drawable-nodpi/player_atlas.webp
+          rm -f app/src/main/res/drawable-nodpi/enemyboss_atlas.webp
+          rm -f app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
+          rm -f app/src/main/res/drawable-nodpi/player_atlas.png
+          rm -f app/src/main/res/drawable-nodpi/enemyboss_atlas.png
+
+          curl -fL --retry 3 --retry-delay 2 \
+            'https://s3.amazonaws.com/document-export.canva.com/Bkl9c/DAHU5-Bkl9c/1/thumbnail/0001.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH4GDRW44L%2F20260910%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260910T225119Z&X-Amz-Expires=62096&X-Amz-Signature=0f7561f88b89238f0d3cd340ec110fe24b42113467c0de318e6d805ee4bedf78&X-Amz-SignedHeaders=host&response-expires=Fri%2C%2011%20Sep%202026%2016%3A06%3A15%20GMT' \
+            -o app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
+
+          curl -fL --retry 3 --retry-delay 2 \
+            'https://s3.amazonaws.com/document-export.canva.com/M1BsE/DAHU57M1BsE/1/thumbnail/0001.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH4GDRW44L%2F20260911%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260911T142834Z&X-Amz-Expires=5901&X-Amz-Signature=d958eb66a76152d0788ed5469da2c8b7e4d1e399ca26137489244dd9c924442d&X-Amz-SignedHeaders=host&response-expires=Fri%2C%2011%20Sep%202026%2016%3A06%3A55%20GMT' \
+            -o app/src/main/res/drawable-nodpi/player_atlas.png
+
+          cp app/src/main/res/drawable-nodpi/player_atlas.png app/src/main/res/drawable-nodpi/enemyboss_atlas.png
+
+          MENU_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png)
+          ATLAS_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/player_atlas.png)
+          echo "MENU_BYTES=$MENU_SIZE"
+          echo "ATLAS_BYTES=$ATLAS_SIZE"
+          file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
+          file app/src/main/res/drawable-nodpi/player_atlas.png
+          test "$MENU_SIZE" -gt 50000
+          test "$ATLAS_SIZE" -gt 50000
+          file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png | grep -q 'PNG image data'
+          file app/src/main/res/drawable-nodpi/player_atlas.png | grep -q 'PNG image data'
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
@@ -58,7 +74,7 @@ jobs:
       - name: Upload Android builds
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy1942-v1.5-HD-Verified
+          name: Galaxy1942-v1.5-HD-Playable
           if-no-files-found: error
           path: |
             app/build/outputs/apk/debug/*.apk
