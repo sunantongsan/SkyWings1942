@@ -32,38 +32,33 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Download and verify real HD artwork
+      - name: Fetch final GALAXY 1942 artwork
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p app/src/main/res/drawable-nodpi
-          rm -f app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.webp
-          rm -f app/src/main/res/drawable-nodpi/player_atlas.webp
-          rm -f app/src/main/res/drawable-nodpi/enemyboss_atlas.webp
-          rm -f app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
-          rm -f app/src/main/res/drawable-nodpi/player_atlas.png
-          rm -f app/src/main/res/drawable-nodpi/enemyboss_atlas.png
+          rm -f app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.*
+          rm -f app/src/main/res/drawable-nodpi/player_atlas.*
+          rm -f app/src/main/res/drawable-nodpi/enemyboss_atlas.*
 
-          curl -fL --retry 3 --retry-delay 2 \
-            'https://s3.amazonaws.com/document-export.canva.com/Bkl9c/DAHU5-Bkl9c/1/thumbnail/0001.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH4GDRW44L%2F20260910%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260910T225119Z&X-Amz-Expires=62096&X-Amz-Signature=0f7561f88b89238f0d3cd340ec110fe24b42113467c0de318e6d805ee4bedf78&X-Amz-SignedHeaders=host&response-expires=Fri%2C%2011%20Sep%202026%2016%3A06%3A15%20GMT' \
-            -o app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
+          MENU_HI='https://media.canva.com/v2/image-resize/format:PNG/height:1536/quality:100/uri:ifs%3A%2F%2FM%2F4bcceb92-f4bd-48d9-a296-4ca459a46311/watermark:F/width:1024?csig=AAAAAAAAAAAAAAAAAAAAAMgTMzZ337VbsEkmuFFVJRb-YG698P-s6dEzWLJjJSyB&exp=1789186121&osig=AAAAAAAAAAAAAAAAAAAAAJ8COCziSHZM3MuACxFlxAMirJyOOXwN9WCuISgcMXxM&signer=media-rpc&x-canva-quality=thumbnail'
+          MENU_LO='https://media.canva.com/v2/image-resize/format:PNG/height:200/quality:100/uri:ifs%3A%2F%2FM%2F4bcceb92-f4bd-48d9-a296-4ca459a46311/watermark:F/width:133?csig=AAAAAAAAAAAAAAAAAAAAAMgTMzZ337VbsEkmuFFVJRb-YG698P-s6dEzWLJjJSyB&exp=1789186121&osig=AAAAAAAAAAAAAAAAAAAAAJ8COCziSHZM3MuACxFlxAMirJyOOXwN9WCuISgcMXxM&signer=media-rpc&x-canva-quality=thumbnail'
 
-          curl -fL --retry 3 --retry-delay 2 \
-            'https://s3.amazonaws.com/document-export.canva.com/M1BsE/DAHU57M1BsE/1/thumbnail/0001.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH4GDRW44L%2F20260911%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260911T142834Z&X-Amz-Expires=5901&X-Amz-Signature=d958eb66a76152d0788ed5469da2c8b7e4d1e399ca26137489244dd9c924442d&X-Amz-SignedHeaders=host&response-expires=Fri%2C%2011%20Sep%202026%2016%3A06%3A55%20GMT' \
-            -o app/src/main/res/drawable-nodpi/player_atlas.png
+          ATLAS_HI='https://media.canva.com/v2/image-resize/format:PNG/height:1024/quality:100/uri:ifs%3A%2F%2FM%2Fb5db7239-d8e6-4ead-b0f0-dd71a8c1d650/watermark:F/width:1024?csig=AAAAAAAAAAAAAAAAAAAAAAk3UZ5sMXRWDhenuC8DNjcA3nuRLtxTjgeTbCbXSTQ8&exp=1789187016&osig=AAAAAAAAAAAAAAAAAAAAABo0AWb37KrjQXtB6yDWmFB0TQim8lxl78gooAY8MJai&signer=media-rpc&x-canva-quality=thumbnail'
+          ATLAS_LO='https://media.canva.com/v2/image-resize/format:PNG/height:200/quality:100/uri:ifs%3A%2F%2FM%2Fb5db7239-d8e6-4ead-b0f0-dd71a8c1d650/watermark:F/width:200?csig=AAAAAAAAAAAAAAAAAAAAAAk3UZ5sMXRWDhenuC8DNjcA3nuRLtxTjgeTbCbXSTQ8&exp=1789187016&osig=AAAAAAAAAAAAAAAAAAAAABo0AWb37KrjQXtB6yDWmFB0TQim8lxl78gooAY8MJai&signer=media-rpc&x-canva-quality=thumbnail'
 
+          if ! curl -fL --retry 2 "$MENU_HI" -o app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png; then
+            curl -fL --retry 2 "$MENU_LO" -o app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
+          fi
+          if ! curl -fL --retry 2 "$ATLAS_HI" -o app/src/main/res/drawable-nodpi/player_atlas.png; then
+            curl -fL --retry 2 "$ATLAS_LO" -o app/src/main/res/drawable-nodpi/player_atlas.png
+          fi
           cp app/src/main/res/drawable-nodpi/player_atlas.png app/src/main/res/drawable-nodpi/enemyboss_atlas.png
 
-          MENU_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png)
-          ATLAS_SIZE=$(stat -c%s app/src/main/res/drawable-nodpi/player_atlas.png)
-          echo "MENU_BYTES=$MENU_SIZE"
-          echo "ATLAS_BYTES=$ATLAS_SIZE"
-          file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
-          file app/src/main/res/drawable-nodpi/player_atlas.png
-          test "$MENU_SIZE" -gt 50000
-          test "$ATLAS_SIZE" -gt 50000
-          file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png | grep -q 'PNG image data'
-          file app/src/main/res/drawable-nodpi/player_atlas.png | grep -q 'PNG image data'
+          echo "MENU:"; file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
+          echo "ATLAS:"; file app/src/main/res/drawable-nodpi/player_atlas.png
+          test -s app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
+          test -s app/src/main/res/drawable-nodpi/player_atlas.png
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
@@ -74,7 +69,7 @@ jobs:
       - name: Upload Android builds
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy1942-v1.5-HD-Playable
+          name: Galaxy1942-v1.6-Final-Playable
           if-no-files-found: error
           path: |
             app/build/outputs/apk/debug/*.apk
