@@ -60,7 +60,7 @@ public class GameView extends View {
     private boolean bossActive=false, bombFlash=false, dragging=false, bossDying=false;
     private long last, spawnClock, shotClock, enemyShotClock, bombClock, bossDeathClock, lastBossBurstClock;
     private float touchAnchorX,touchAnchorY,shipAnchorX,shipAnchorY;
-    private Bitmap playerAtlas, enemyBossAtlas;
+    private Bitmap playerAtlas, enemyBossAtlas, menuHd;
     private static final int[][] PLAYER_SRC={{0,0,45,90},{45,0,90,90},{90,0,146,90},{146,0,191,90},{191,0,240,90}};
 
     public GameView(Context c){
@@ -75,6 +75,7 @@ public class GameView extends View {
         }
         playerAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.player_atlas);
         enemyBossAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.enemyboss_atlas);
+        menuHd=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_menu_hd);
         last=System.currentTimeMillis();
     }
 
@@ -167,46 +168,28 @@ public class GameView extends View {
     }
 
     private void drawMenu(Canvas c){
+        if(menuHd!=null){
+            Rect src=new Rect(0,0,menuHd.getWidth(),menuHd.getHeight());
+            RectF dst=new RectF(0,0,W,H);
+            p.setStyle(Paint.Style.FILL);
+            c.drawBitmap(menuHd,src,dst,p);
+            // Interactive overlays follow the artwork: ship row and START MISSION.
+            float selectTop=H*.22f, selectBottom=H*.46f;
+            float gap=W*.012f,left=W*.04f,cw=(W*.92f-gap*4)/5f;
+            for(int i=0;i<5;i++){
+                float l=left+i*(cw+gap),r=l+cw;
+                if(i==ship){
+                    p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(3f);
+                    p.setColor(Color.argb(235,100,245,255));
+                    c.drawRoundRect(l,selectTop,r,selectBottom,16,16,p);
+                }
+            }
+            return;
+        }
         drawSpace(c,false);
         drawPlanetBackdrop(c);
-
-        float heroY=H*.28f;
-        text(c,"GALAXY",W/2,H*.075f,44,Color.WHITE,Paint.Align.CENTER);
-        text(c,"1942",W/2,H*.112f,23,Color.rgb(255,205,75),Paint.Align.CENTER);
-        text(c,"RISE BEYOND THE STARS",W/2,H*.142f,10,Color.rgb(115,225,255),Paint.Align.CENTER);
-
-        drawShip(c,W*.34f,heroY,1.28f,ship,true);
-        text(c,shipNames[ship]+" // ELITE FIGHTER",W*.34f,heroY+H*.095f,10,Color.rgb(165,235,255),Paint.Align.CENTER);
-
-        float cardTop=H*.43f, cardBottom=H*.62f;
-        fillRound(c,W*.025f,cardTop,W*.975f,cardBottom,24,Color.argb(218,4,12,30));
-        strokeRound(c,W*.025f,cardTop,W*.975f,cardBottom,24,2,Color.rgb(35,150,205));
-        text(c,"CHOOSE YOUR STARFIGHTER",W/2,cardTop+28,14,Color.WHITE,Paint.Align.CENTER);
-
-        float gap=W*.012f,left=W*.04f,cw=(W*.92f-gap*4)/5f;
-        float tileTop=cardTop+42,tileBottom=cardBottom-18;
-        for(int i=0;i<5;i++){
-            float l=left+i*(cw+gap),r=l+cw;
-            boolean sel=i==ship;
-            fillRound(c,l,tileTop,r,tileBottom,12,sel?Color.argb(205,9,90,125):Color.argb(150,7,24,48));
-            strokeRound(c,l,tileTop,r,tileBottom,12,sel?2.5f:1f,sel?Color.rgb(85,240,255):Color.rgb(34,82,118));
-            drawShip(c,(l+r)/2,tileTop+(tileBottom-tileTop)*.46f,.43f,i,sel);
-            text(c,shipNames[i],(l+r)/2,tileBottom-8,7.2f,Color.WHITE,Paint.Align.CENTER);
-        }
-
-        float startTop=H*.655f,startBottom=H*.745f;
-        p.setStyle(Paint.Style.FILL);
-        p.setShader(new LinearGradient(W*.08f,startTop,W*.92f,startBottom,
-                Color.rgb(0,125,185),Color.rgb(115,42,200),Shader.TileMode.CLAMP));
-        c.drawRoundRect(W*.07f,startTop,W*.93f,startBottom,22,22,p); p.setShader(null);
-        strokeRound(c,W*.07f,startTop,W*.93f,startBottom,22,2.5f,Color.rgb(120,245,255));
-        text(c,"START MISSION",W/2,startTop+(startBottom-startTop)*.46f,19,Color.WHITE,Paint.Align.CENTER);
-        text(c,"STAGE "+stage+"  •  BOSS HUNT",W/2,startTop+(startBottom-startTop)*.73f,10,Color.rgb(220,245,255),Paint.Align.CENTER);
-
-        text(c,"AUTO FIRE  •  DRAG TO FLY  •  POWER DROPS",W/2,H*.79f,10,Color.LTGRAY,Paint.Align.CENTER);
-        text(c,"COINS "+coins,W/2-12,H*.835f,12,Color.YELLOW,Paint.Align.RIGHT);
-        text(c,"GEMS "+gems,W/2+12,H*.835f,12,Color.CYAN,Paint.Align.LEFT);
-        text(c,"NO ADS DURING BATTLE",W/2,H*.94f,9.5f,Color.rgb(105,180,210),Paint.Align.CENTER);
+        text(c,"GALAXY 1942",W/2,H*.12f,38,Color.WHITE,Paint.Align.CENTER);
+        text(c,"HD ART ASSET MISSING",W/2,H*.18f,12,Color.RED,Paint.Align.CENTER);
     }
 
     private void startStage(){
@@ -675,9 +658,8 @@ public class GameView extends View {
             performClick();
 
             if(mode==MENU){
-                float cardTop=H*.43f,cardBottom=H*.62f;
-                float tileTop=cardTop+42,tileBottom=cardBottom-18;
-                if(y>=tileTop&&y<=tileBottom){
+                // HD menu artwork: fighters occupy the middle ship row.
+                if(y>=H*.22f&&y<=H*.47f){
                     float gap=W*.012f,left=W*.04f,cw=(W*.92f-gap*4)/5f;
                     int pick=(int)((x-left)/(cw+gap));
                     if(pick>=0&&pick<5){
@@ -685,7 +667,8 @@ public class GameView extends View {
                         if(x>=l&&x<=l+cw){ship=pick;invalidate();return true;}
                     }
                 }
-                if(y>=H*.63f&&y<=H*.78f){startStage();return true;}
+                // Large orange START MISSION button in the generated artwork.
+                if(y>=H*.44f&&y<=H*.56f){startStage();return true;}
                 return true;
             }
 
