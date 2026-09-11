@@ -57,8 +57,11 @@ public class GameView extends View {
     private int hp=100, power=1, shield=1, bombs=2, kills=0, target=10;
     private int W,H;
     private float px,py;
-    private boolean bossActive=false, bombFlash=false;
-    private long last, spawnClock, shotClock, enemyShotClock, bombClock;
+    private boolean bossActive=false, bombFlash=false, dragging=false, bossDying=false;
+    private long last, spawnClock, shotClock, enemyShotClock, bombClock, bossDeathClock, lastBossBurstClock;
+    private float touchAnchorX,touchAnchorY,shipAnchorX,shipAnchorY;
+    private Bitmap playerAtlas, enemyBossAtlas;
+    private static final int[][] PLAYER_SRC={{0,0,45,90},{45,0,90,90},{90,0,146,90},{146,0,191,90},{191,0,240,90}};
 
     public GameView(Context c){
         super(c);
@@ -70,6 +73,8 @@ public class GameView extends View {
             s.vy=.35f+rnd.nextFloat()*1.7f;
             stars.add(s);
         }
+        playerAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.player_atlas);
+        enemyBossAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.enemyboss_atlas);
         last=System.currentTimeMillis();
     }
 
@@ -205,7 +210,7 @@ public class GameView extends View {
     }
 
     private void startStage(){
-        mode=PLAY; kills=0; target=10+Math.min(15,stage/2); bossActive=false;
+        mode=PLAY; kills=0; target=10+Math.min(15,stage/2); bossActive=false; bossDying=false; dragging=false;
         enemies.clear(); shots.clear(); enemyShots.clear(); drops.clear(); fx.clear();
         hp=100; power=Math.max(1,power); shield=Math.max(1,shield);
         px=W/2f; py=H*.80f;
@@ -224,12 +229,12 @@ public class GameView extends View {
         for(Obj s:stars){s.y+=90*s.vy*dt;if(s.y>1800)s.y=0;}
         spawnClock+=elapsed; shotClock+=elapsed; enemyShotClock+=elapsed;
 
-        if(!bossActive && kills<target && spawnClock>430 && enemies.size()<8){
+        if(!bossDying && !bossActive && kills<target && spawnClock>430 && enemies.size()<8){
             spawnClock=0; spawnEnemy();
         }
         if(!bossActive && kills>=target && enemies.isEmpty()) spawnBoss();
-        if(shotClock>150){shotClock=0;fire();}
-        if(enemyShotClock>800){enemyShotClock=0;enemyFire();}
+        if(!bossDying && shotClock>150){shotClock=0;fire();}
+        if(!bossDying && enemyShotClock>800){enemyShotClock=0;enemyFire();}
 
         update(dt);
         for(Fx q:fx)drawFx(c,q);
@@ -306,17 +311,39 @@ public class GameView extends View {
         updateFx(dt);
         clean(shots); clean(enemyShots); clean(enemies); clean(drops);
 
-        if(bossActive && enemies.isEmpty()){
-            score+=stage*15000; coins+=stage*300; gems+=Math.max(1,stage);
-            mode=CLEAR; invalidate(); return;
+        if(bossDying){
+            long now=System.currentTimeMillis();
+            if(now-lastBossBurstClock>115){
+                lastBossBurstClock=now;
+                float bx=W/2f+(rnd.nextFloat()-.5f)*170;
+                float by=H*.20f+(rnd.nextFloat()-.5f)*135;
+                burst(bx,by,20,rnd.nextBoolean()?Color.rgb(255,150,35):Color.rgb(255,70,220));
+                burst(bx,by,8,Color.WHITE);
+            }
+            if(now-bossDeathClock>1050){
+                bossDying=false; score+=stage*15000; coins+=stage*300; gems+=Math.max(1,stage);
+                mode=CLEAR; invalidate(); return;
+            }
         }
         if(hp<=0 && mode==PLAY){mode=DEAD;invalidate();}
     }
 
     private void kill(Obj e){
-        if(e.type==10){burst(e.x,e.y,90,Color.rgb(255,70,220));return;}
+        if(e.type==10){
+            bossDying=true; bossDeathClock=System.currentTimeMillis(); lastBossBurstClock=0;
+            bombFlash=true; bombClock=System.currentTimeMillis();
+            for(int i=0;i<7;i++){
+                float bx=e.x+(rnd.nextFloat()-.5f)*150;
+                float by=e.y+(rnd.nextFloat()-.5f)*120;
+                burst(bx,by,24,i%2==0?Color.rgb(255,150,35):Color.rgb(255,65,220));
+                burst(bx,by,8,Color.WHITE);
+            }
+            return;
+        }
         kills++; score+=140+stage*25; coins+=6+stage;
-        burst(e.x,e.y,28,enemyColors[e.type%6]);
+        burst(e.x,e.y,38,enemyColors[e.type%6]);
+        burst(e.x,e.y,14,Color.rgb(255,180,45));
+        burst(e.x,e.y,8,Color.WHITE);
         if(rnd.nextFloat()<.92f)drops.add(new Obj(e.x,e.y,19,rnd.nextInt(10)));
     }
 
@@ -398,7 +425,52 @@ public class GameView extends View {
         p.setColor(Color.WHITE); c.drawCircle(s.x,s.y,4,p);
     }
 
+    private boolean drawPlayerSprite(Canvas c,float x,float y,float sc,int v,boolean glow){
+        if(playerAtlas==null||playerAtlas.isRecycled())return false;
+        int idx=Math.floorMod(v,5);
+        int[] a=PLAYER_SRC[idx];
+        Rect src=new Rect(a[0],a[1],a[2],a[3]);
+        float ratio=(a[2]-a[0])/(float)Math.max(1,a[3]-a[1]);
+        float h=142f*sc;
+        float w=h*ratio;
+        if(glow){
+            int col=shipColors[idx];
+            p.setStyle(Paint.Style.FILL);
+            p.setShader(new RadialGradient(x,y+8*sc,82*sc,Color.argb(120,Color.red(col),Color.green(col),Color.blue(col)),Color.TRANSPARENT,Shader.TileMode.CLAMP));
+            c.drawCircle(x,y+8*sc,82*sc,p); p.setShader(null);
+        }
+        p.setAlpha(255);
+        p.setFilterBitmap(true);
+        c.drawBitmap(playerAtlas,src,new RectF(x-w/2,y-h/2,x+w/2,y+h/2),p);
+        return true;
+    }
+
+    private boolean drawEnemySprite(Canvas c,Obj e){
+        if(enemyBossAtlas==null||enemyBossAtlas.isRecycled())return false;
+        Rect src;
+        if(e.type==10){
+            int bossIdx=Math.floorMod(stage-1,3);
+            int l=8+bossIdx*75;
+            src=new Rect(l,56,Math.min(233,l+75),154);
+            float h=e.r*2.65f,w=h*0.95f;
+            p.setStyle(Paint.Style.FILL);
+            p.setShader(new RadialGradient(e.x,e.y,e.r*1.8f,Color.argb(150,235,55,255),Color.TRANSPARENT,Shader.TileMode.CLAMP));
+            c.drawCircle(e.x,e.y,e.r*1.8f,p);p.setShader(null);
+            p.setFilterBitmap(true);
+            c.drawBitmap(enemyBossAtlas,src,new RectF(e.x-w/2,e.y-h/2,e.x+w/2,e.y+h/2),p);
+            return true;
+        }
+        int idx=Math.floorMod(e.type,6),col=idx%3,row=idx/3;
+        int l=col*37,t=row*41;
+        src=new Rect(l,t,Math.min(113,l+38),Math.min(83,t+42));
+        float h=e.r*2.9f,w=h*0.92f;
+        p.setFilterBitmap(true);
+        c.drawBitmap(enemyBossAtlas,src,new RectF(e.x-w/2,e.y-h/2,e.x+w/2,e.y+h/2),p);
+        return true;
+    }
+
     private void drawShip(Canvas c,float x,float y,float sc,int v,boolean glow){
+        if(drawPlayerSprite(c,x,y,sc,v,glow))return;
         int col=shipColors[Math.floorMod(v,5)];
         if(glow){
             p.setStyle(Paint.Style.FILL);
@@ -455,6 +527,7 @@ public class GameView extends View {
     }
 
     private void drawEnemy(Canvas c,Obj e){
+        if(drawEnemySprite(c,e))return;
         if(e.type==10){drawBoss(c,e);return;}
         int col=enemyColors[e.type%6];
         p.setStyle(Paint.Style.FILL);
@@ -630,7 +703,10 @@ public class GameView extends View {
                     }
                     return true;
                 }
-                px=clamp(x,32,W-32); py=clamp(y,100,H-90); return true;
+                dragging=true;
+                touchAnchorX=x; touchAnchorY=y;
+                shipAnchorX=px; shipAnchorY=py;
+                return true;
             }
 
             if(mode==DEAD){
@@ -654,8 +730,20 @@ public class GameView extends View {
             }
         }
 
-        if((action==MotionEvent.ACTION_MOVE||action==MotionEvent.ACTION_UP)&&mode==PLAY){
-            px=clamp(x,32,W-32); py=clamp(y,100,H-90); return true;
+        if(action==MotionEvent.ACTION_MOVE&&mode==PLAY&&dragging){
+            float dx=x-touchAnchorX,dy=y-touchAnchorY;
+            px=clamp(shipAnchorX+dx,32,W-32);
+            py=clamp(shipAnchorY+dy,100,H-150);
+            return true;
+        }
+        if(action==MotionEvent.ACTION_UP&&mode==PLAY){
+            if(dragging){
+                float dx=x-touchAnchorX,dy=y-touchAnchorY;
+                px=clamp(shipAnchorX+dx,32,W-32);
+                py=clamp(shipAnchorY+dy,100,H-150);
+            }
+            dragging=false;
+            return true;
         }
         return true;
     }
