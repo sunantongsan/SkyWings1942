@@ -23,8 +23,13 @@ public class GameView extends View {
     private int baseLevel=1, wingmen=0;
 
     private float playerX=260, playerY=1100, camX=0, camY=0;
-    private float touchX,touchY;
-    private boolean dragging=false;
+    private float cameraYaw=0f, cameraPitch=.78f, cameraZoom=.88f;
+    private float camTouchX,camTouchY;
+    private int joystickPointer=-1, cameraPointer=-1, firePointer=-1;
+    private float joyX=0f, joyY=0f;
+    private boolean fireHeld=false;
+    private long lastShot=0L;
+    private final ArrayList<Bullet> bullets=new ArrayList<>();
 
     private final String[] names={"OCEAN WORLD","DESERT WORLD","ICE WORLD","FOREST WORLD"};
     private final ArrayList<Site> sites=new ArrayList<>();
@@ -33,6 +38,10 @@ public class GameView extends View {
     private static class Site {
         float x,y,r; int type,hp; boolean destroyed=false, discovered=false;
         Site(float x,float y,float r,int type,int hp){this.x=x;this.y=y;this.r=r;this.type=type;this.hp=hp;}
+    }
+    private static class Bullet {
+        float x,y,vx,vy; int life=120;
+        Bullet(float x,float y,float vx,float vy){this.x=x;this.y=y;this.vx=vx;this.vy=vy;}
     }
 
     public GameView(Context c){
@@ -150,20 +159,75 @@ public class GameView extends View {
         else {playerX=120;playerY=WORLD_H*.50f;}
         camX=playerX-getWidth()/2f;camY=playerY-getHeight()/2f;
         explored.clear(); explored.add(new PointF(playerX,playerY));
-        dragging=false;
+        joystickPointer=cameraPointer=firePointer=-1;
+        joyX=joyY=0f; fireHeld=false; bullets.clear();
+        cameraYaw=0f; cameraPitch=.78f; cameraZoom=.88f;
         invalidate();
     }
 
     private void drawAssault(Canvas c){
-        int W=getWidth(),H=getHeight();
+        updateGameplay();
         updateCamera();
+        int W=getWidth(),H=getHeight();
+        c.save();
+        float cx=W/2f, cy=H/2f;
+        c.rotate(cameraYaw,cx,cy);
+        c.scale(cameraZoom,cameraZoom*cameraPitch,cx,cy);
         drawWorld(c);
         drawSites(c);
+        drawBullets(c);
         drawWingmen(c);
         drawPlayer(c);
         drawFog(c);
+        c.restore();
         drawHud(c);
+        drawControls(c);
         postInvalidateDelayed(16);
+    }
+
+    private void updateGameplay(){
+        float speed=9.0f;
+        if(Math.abs(joyX)>.02f||Math.abs(joyY)>.02f){
+            // Joystick movement is relative to the current camera angle, like an MMO.
+            double a=Math.toRadians(cameraYaw);
+            float wx=(float)(joyX*Math.cos(a)-joyY*Math.sin(a));
+            float wy=(float)(joyX*Math.sin(a)+joyY*Math.cos(a));
+            playerX=clamp(playerX+wx*speed,40,WORLD_W-40);
+            playerY=clamp(playerY+wy*speed,40,WORLD_H-40);
+            if(explored.isEmpty()||Math.hypot(playerX-explored.get(explored.size()-1).x,playerY-explored.get(explored.size()-1).y)>180)
+                explored.add(new PointF(playerX,playerY));
+        }
+        if(fireHeld && System.currentTimeMillis()-lastShot>145) fireWeapon();
+        for(int i=bullets.size()-1;i>=0;i--){
+            Bullet b=bullets.get(i); b.x+=b.vx; b.y+=b.vy; b.life--;
+            for(Site s:sites){
+                if(!s.destroyed && s.discovered && Math.hypot(b.x-s.x,b.y-s.y)<s.r+18){
+                    s.hp-=24; b.life=0;
+                    if(s.hp<=0){
+                        s.destroyed=true;
+                        if(s.type==1)oil+=250; else if(s.type==2)metal+=220; else if(s.type==3)crystal+=80; else credits+=120;
+                    }
+                    break;
+                }
+            }
+            if(b.life<=0||b.x<0||b.y<0||b.x>WORLD_W||b.y>WORLD_H) bullets.remove(i);
+        }
+    }
+
+    private void fireWeapon(){
+        lastShot=System.currentTimeMillis();
+        // Fire toward the top of the current camera view.
+        double a=Math.toRadians(cameraYaw-90f);
+        float sp=24f;
+        bullets.add(new Bullet(playerX,playerY,(float)Math.cos(a)*sp,(float)Math.sin(a)*sp));
+    }
+
+    private void drawBullets(Canvas c){
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(6);p.setColor(0xffffc144);
+        for(Bullet b:bullets){
+            float x=b.x-camX,y=b.y-camY;
+            c.drawLine(x,y,x-b.vx*.65f,y-b.vy*.65f,p);
+        }
     }
 
     private void updateCamera(){
@@ -265,7 +329,30 @@ public class GameView extends View {
         box(c,W-235,12,W-12,76,15,0xcc03101f);
         txt(c,"MAP "+(int)playerX+","+(int)playerY,W-24,39,15,Color.WHITE,Paint.Align.RIGHT);
         txt(c,"Wingmen "+wingmen+"/3",W-24,62,13,0xffffd45a,Paint.Align.RIGHT);
-        menuButton(c,18,H-74,150,H-18,"RETREAT",0xff4d5964);
+        txt(c,"View "+(int)cameraYaw+"°  Tilt "+(int)(cameraPitch*100)+"%",W-24,82,12,0xff9fdcff,Paint.Align.RIGHT);
+        menuButton(c,W-155,90,W-18,140,"RETREAT",0xff4d5964);
+    }
+
+    private void drawControls(Canvas c){
+        int W=getWidth(),H=getHeight();
+        float jx=118, jy=H-118, jr=78;
+        // translucent left joystick - deliberately low opacity so it does not hide the battlefield
+        p.setStyle(Paint.Style.FILL);p.setColor(0x442fdcff);c.drawCircle(jx,jy,jr,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(3);p.setColor(0x995eeaff);c.drawCircle(jx,jy,jr,p);
+        p.setStyle(Paint.Style.FILL);p.setColor(0x8869eaff);
+        c.drawCircle(jx+joyX*jr*.72f,jy+joyY*jr*.72f,31,p);
+        txt(c,"MOVE",jx,jy+jr+22,12,0xbbbdefff,Paint.Align.CENTER);
+
+        float fx=W-105, fy=H-112;
+        p.setStyle(Paint.Style.FILL);p.setColor(fireHeld?0xccff5a28:0x88ff5a28);c.drawCircle(fx,fy,58,p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(0xddffd0a0);c.drawCircle(fx,fy,58,p);
+        txt(c,"FIRE",fx,fy+7,18,Color.WHITE,Paint.Align.CENTER);
+
+        float mx=W-205,my=H-92;
+        p.setStyle(Paint.Style.FILL);p.setColor(0x6651a8ff);c.drawCircle(mx,my,38,p);
+        txt(c,"MISSILE",mx,my+5,10,Color.WHITE,Paint.Align.CENTER);
+
+        txt(c,"Drag empty area to rotate / tilt camera",W/2f,H-18,12,0xaaaadfff,Paint.Align.CENTER);
     }
 
     private void menuButton(Canvas c,float l,float t,float r,float b,String s,int col){
@@ -280,40 +367,74 @@ public class GameView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent e){
-        float x=e.getX(),y=e.getY();int W=getWidth(),H=getHeight();
-        int a=e.getActionMasked();
+        int W=getWidth(),H=getHeight();
+        int action=e.getActionMasked();
+        int ai=e.getActionIndex();
+        float x=e.getX(ai), y=e.getY(ai);
 
-        if(mode==ORIGIN && a==MotionEvent.ACTION_DOWN){
-            if(y>H*.14f&&y<H*.74f){int i=(int)(x/(W/4f));selectedPlanet=Math.max(0,Math.min(3,i));invalidate();return true;}
-            if(y>H*.78f&&y<H*.88f){askPlanetName();return true;}
-            if(y>H*.88f){mode=BASE;invalidate();return true;}
-        }else if(mode==BASE && a==MotionEvent.ACTION_DOWN){
-            if(x>W*.77f&&y>H*.80f){mode=LANDING;invalidate();return true;}
-            if(x>W*.56f&&x<W*.76f&&y>H*.80f){
-                if(credits>=1000&&metal>=500){credits-=1000;metal-=500;baseLevel++;wingmen=Math.min(3,wingmen+1);}
-                invalidate();return true;
+        if(mode!=ASSAULT){
+            if(action!=MotionEvent.ACTION_DOWN)return true;
+            if(mode==ORIGIN){
+                if(y>H*.14f&&y<H*.74f){int i=(int)(x/(W/4f));selectedPlanet=Math.max(0,Math.min(3,i));invalidate();return true;}
+                if(y>H*.78f&&y<H*.88f){askPlanetName();return true;}
+                if(y>H*.88f){mode=BASE;invalidate();return true;}
+            }else if(mode==BASE){
+                if(x>W*.77f&&y>H*.80f){mode=LANDING;invalidate();return true;}
+                if(x>W*.56f&&x<W*.76f&&y>H*.80f){
+                    if(credits>=1000&&metal>=500){credits-=1000;metal-=500;baseLevel++;wingmen=Math.min(3,wingmen+1);}
+                    invalidate();return true;
+                }
+            }else if(mode==LANDING){
+                float cx=W*.5f,cy=H*.48f,rr=Math.min(W,H)*.36f;
+                float[][] z={{cx,cy-rr*.78f},{cx+rr*.78f,cy},{cx,cy+rr*.78f},{cx-rr*.78f,cy}};
+                for(int i=0;i<4;i++)if(Math.hypot(x-z[i][0],y-z[i][1])<70){landingZone=i;invalidate();return true;}
+                if(y>H*.82f&&x>W*.35f&&x<W*.65f){startAssault();return true;}
+                if(x<170&&y>H*.82f){mode=BASE;invalidate();return true;}
             }
-        }else if(mode==LANDING && a==MotionEvent.ACTION_DOWN){
-            float cx=W*.5f,cy=H*.48f,rr=Math.min(W,H)*.36f;
-            float[][] z={{cx,cy-rr*.78f},{cx+rr*.78f,cy},{cx,cy+rr*.78f},{cx-rr*.78f,cy}};
-            for(int i=0;i<4;i++)if(Math.hypot(x-z[i][0],y-z[i][1])<70){landingZone=i;invalidate();return true;}
-            if(y>H*.82f&&x>W*.35f&&x<W*.65f){startAssault();return true;}
-            if(x<170&&y>H*.82f){mode=BASE;invalidate();return true;}
-        }else if(mode==ASSAULT){
-            if(a==MotionEvent.ACTION_DOWN){
-                if(x<170&&y>H-90){mode=BASE;invalidate();return true;}
-                dragging=true;touchX=x;touchY=y;return true;
-            }else if(a==MotionEvent.ACTION_MOVE&&dragging){
-                float dx=x-touchX,dy=y-touchY;touchX=x;touchY=y;
-                // MMO-like relative drag: ship moves in world, camera follows
-                playerX=clamp(playerX+dx*1.55f,40,WORLD_W-40);
-                playerY=clamp(playerY+dy*1.55f,40,WORLD_H-40);
-                if(explored.isEmpty()||Math.hypot(playerX-explored.get(explored.size()-1).x,playerY-explored.get(explored.size()-1).y)>180)
-                    explored.add(new PointF(playerX,playerY));
-                invalidate();return true;
-            }else if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){dragging=false;return true;}
+            return true;
+        }
+
+        int pid=e.getPointerId(ai);
+        float jcx=118f,jcy=H-118f,jr=92f;
+        float fcx=W-105f,fcy=H-112f;
+
+        if(action==MotionEvent.ACTION_DOWN || action==MotionEvent.ACTION_POINTER_DOWN){
+            if(x>W-165&&y<155){mode=BASE;joystickPointer=cameraPointer=firePointer=-1;fireHeld=false;joyX=joyY=0;invalidate();return true;}
+            if(Math.hypot(x-jcx,y-jcy)<jr*1.25f && joystickPointer==-1){
+                joystickPointer=pid; updateJoystick(x,y,jcx,jcy,jr); return true;
+            }
+            if(Math.hypot(x-fcx,y-fcy)<76 && firePointer==-1){
+                firePointer=pid;fireHeld=true;fireWeapon();invalidate();return true;
+            }
+            // Empty central/right-upper area controls the MMO camera, not the aircraft.
+            if(cameraPointer==-1 && y>95 && y<H-185 && x>210 && x<W-190){
+                cameraPointer=pid;camTouchX=x;camTouchY=y;return true;
+            }
+        }else if(action==MotionEvent.ACTION_MOVE){
+            for(int i=0;i<e.getPointerCount();i++){
+                int id=e.getPointerId(i);float px=e.getX(i),py=e.getY(i);
+                if(id==joystickPointer)updateJoystick(px,py,jcx,jcy,jr);
+                else if(id==cameraPointer){
+                    float dx=px-camTouchX,dy=py-camTouchY;camTouchX=px;camTouchY=py;
+                    cameraYaw=(cameraYaw+dx*.22f)%360f;
+                    cameraPitch=clamp(cameraPitch-dy*.0022f,.58f,1.0f);
+                }
+            }
+            invalidate();return true;
+        }else if(action==MotionEvent.ACTION_UP || action==MotionEvent.ACTION_POINTER_UP || action==MotionEvent.ACTION_CANCEL){
+            if(pid==joystickPointer){joystickPointer=-1;joyX=joyY=0f;}
+            if(pid==cameraPointer)cameraPointer=-1;
+            if(pid==firePointer){firePointer=-1;fireHeld=false;}
+            if(action==MotionEvent.ACTION_CANCEL){joystickPointer=cameraPointer=firePointer=-1;joyX=joyY=0;fireHeld=false;}
+            invalidate();return true;
         }
         return true;
+    }
+
+    private void updateJoystick(float x,float y,float cx,float cy,float r){
+        float dx=x-cx,dy=y-cy,d=(float)Math.hypot(dx,dy);
+        if(d>r){dx=dx/d*r;dy=dy/d*r;}
+        joyX=dx/r;joyY=dy/r;
     }
 
     @Override public boolean performClick(){super.performClick();return true;}
