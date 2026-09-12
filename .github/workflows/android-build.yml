@@ -32,14 +32,20 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Fetch verified strategy artwork
+      - name: Fetch verified RTS artwork
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p app/src/main/res/drawable-nodpi
+
           curl -fL --retry 3 --retry-delay 2 'https://export-download.canva.com/e6f51dd3-1659-4e26-986f-215519ac7b88/0/0001-4398280661133552483.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH5AO7UJ26%2F20260911%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260911T234008Z&X-Amz-Expires=24080&X-Amz-Signature=3bb53f7fccbedc748082dbee7c258ec8c6ac2f9144b03ed0ea452c3439342891&X-Amz-SignedHeaders=host%3Bx-amz-expected-bucket-owner&response-expires=Sat%2C%2012%20Sep%202026%2006%3A21%3A28%20GMT' -o app/src/main/res/drawable-nodpi/galaxy1942_strategy_art.png
+
+          curl -fL --retry 3 --retry-delay 2 'https://export-download.canva.com/74245aa4-54d0-4150-a36f-9c869ca75a9c/0/0001-450875587694367359.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAQYCGKMUH5AO7UJ26%2F20260911%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260911T075617Z&X-Amz-Expires=84554&X-Amz-Signature=2aa2904125c58c80fca7151ce4467d09bd4ee97f4c63bda43f2419a8c6db4671&X-Amz-SignedHeaders=host%3Bx-amz-expected-bucket-owner&response-expires=Sat%2C%2012%20Sep%202026%2007%3A25%3A31%20GMT' -o app/src/main/res/drawable-nodpi/galaxy1942_buildings.png
+
           file app/src/main/res/drawable-nodpi/galaxy1942_strategy_art.png
+          file app/src/main/res/drawable-nodpi/galaxy1942_buildings.png
           test $(stat -c%s app/src/main/res/drawable-nodpi/galaxy1942_strategy_art.png) -gt 100000
+          test $(stat -c%s app/src/main/res/drawable-nodpi/galaxy1942_buildings.png) -gt 100000
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
@@ -50,7 +56,7 @@ jobs:
       - name: Upload Android builds
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy1942-v2.0-Planet-Assault
+          name: Galaxy1942-v3.0-RTS-Alpha1
           if-no-files-found: error
           path: |
             app/build/outputs/apk/debug/*.apk
