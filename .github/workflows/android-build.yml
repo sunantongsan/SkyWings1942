@@ -32,34 +32,6 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Fetch final GALAXY 1942 artwork
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p app/src/main/res/drawable-nodpi
-          rm -f app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.*
-          rm -f app/src/main/res/drawable-nodpi/player_atlas.*
-          rm -f app/src/main/res/drawable-nodpi/enemyboss_atlas.*
-
-          MENU_HI='https://media.canva.com/v2/image-resize/format:PNG/height:1536/quality:100/uri:ifs%3A%2F%2FM%2F4bcceb92-f4bd-48d9-a296-4ca459a46311/watermark:F/width:1024?csig=AAAAAAAAAAAAAAAAAAAAAMgTMzZ337VbsEkmuFFVJRb-YG698P-s6dEzWLJjJSyB&exp=1789186121&osig=AAAAAAAAAAAAAAAAAAAAAJ8COCziSHZM3MuACxFlxAMirJyOOXwN9WCuISgcMXxM&signer=media-rpc&x-canva-quality=thumbnail'
-          MENU_LO='https://media.canva.com/v2/image-resize/format:PNG/height:200/quality:100/uri:ifs%3A%2F%2FM%2F4bcceb92-f4bd-48d9-a296-4ca459a46311/watermark:F/width:133?csig=AAAAAAAAAAAAAAAAAAAAAMgTMzZ337VbsEkmuFFVJRb-YG698P-s6dEzWLJjJSyB&exp=1789186121&osig=AAAAAAAAAAAAAAAAAAAAAJ8COCziSHZM3MuACxFlxAMirJyOOXwN9WCuISgcMXxM&signer=media-rpc&x-canva-quality=thumbnail'
-
-          ATLAS_HI='https://media.canva.com/v2/image-resize/format:PNG/height:1024/quality:100/uri:ifs%3A%2F%2FM%2Fb5db7239-d8e6-4ead-b0f0-dd71a8c1d650/watermark:F/width:1024?csig=AAAAAAAAAAAAAAAAAAAAAAk3UZ5sMXRWDhenuC8DNjcA3nuRLtxTjgeTbCbXSTQ8&exp=1789187016&osig=AAAAAAAAAAAAAAAAAAAAABo0AWb37KrjQXtB6yDWmFB0TQim8lxl78gooAY8MJai&signer=media-rpc&x-canva-quality=thumbnail'
-          ATLAS_LO='https://media.canva.com/v2/image-resize/format:PNG/height:200/quality:100/uri:ifs%3A%2F%2FM%2Fb5db7239-d8e6-4ead-b0f0-dd71a8c1d650/watermark:F/width:200?csig=AAAAAAAAAAAAAAAAAAAAAAk3UZ5sMXRWDhenuC8DNjcA3nuRLtxTjgeTbCbXSTQ8&exp=1789187016&osig=AAAAAAAAAAAAAAAAAAAAABo0AWb37KrjQXtB6yDWmFB0TQim8lxl78gooAY8MJai&signer=media-rpc&x-canva-quality=thumbnail'
-
-          if ! curl -fL --retry 2 "$MENU_HI" -o app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png; then
-            curl -fL --retry 2 "$MENU_LO" -o app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
-          fi
-          if ! curl -fL --retry 2 "$ATLAS_HI" -o app/src/main/res/drawable-nodpi/player_atlas.png; then
-            curl -fL --retry 2 "$ATLAS_LO" -o app/src/main/res/drawable-nodpi/player_atlas.png
-          fi
-          cp app/src/main/res/drawable-nodpi/player_atlas.png app/src/main/res/drawable-nodpi/enemyboss_atlas.png
-
-          echo "MENU:"; file app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
-          echo "ATLAS:"; file app/src/main/res/drawable-nodpi/player_atlas.png
-          test -s app/src/main/res/drawable-nodpi/galaxy1942_menu_hd.png
-          test -s app/src/main/res/drawable-nodpi/player_atlas.png
-
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
@@ -69,7 +41,7 @@ jobs:
       - name: Upload Android builds
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy1942-v1.6-Final-Playable
+          name: Galaxy1942-v2.0-Planet-Assault
           if-no-files-found: error
           path: |
             app/build/outputs/apk/debug/*.apk
