@@ -25,7 +25,8 @@ public class GameView extends View {
     public GameView(Context c){
         super(c);
         setFocusable(true); setClickable(true);
-        welcome=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_origin_hd);\n        playerAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.player_atlas);
+        welcome=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_origin_hd);
+        playerAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.player_atlas);
     }
     private void txt(Canvas c,String s,float x,float y,float z,int color,Paint.Align a){
         p.setShader(null);p.setStyle(Paint.Style.FILL);p.setColor(color);p.setTextAlign(a);
@@ -62,7 +63,8 @@ public class GameView extends View {
         if(welcome!=null){ p.setAlpha(255); p.setFilterBitmap(true); c.drawBitmap(welcome,null,new RectF(0,0,W,H),p); }
         else c.drawColor(0xff06101c);
         box(c,0,0,W,H,0,0x77020814);
-        box(c,16,14,W-16,74,16,0xaa03101f);\n        txt(c,planetName+"  •  HOME PLANET",30,50,28,Color.WHITE,Paint.Align.LEFT);
+        box(c,16,14,W-16,74,16,0xaa03101f);
+        txt(c,planetName+"  •  HOME PLANET",30,50,28,Color.WHITE,Paint.Align.LEFT);
         txt(c,"Credits "+credits+"   Metal "+metal+"   Crystal "+crystal+"   Oil "+oil,W-30,45,17,0xffffd45a,Paint.Align.RIGHT);
         // terrain grid
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(0x3344ddaa);
@@ -97,7 +99,8 @@ public class GameView extends View {
         // player and wingmen
         drawFighter(c,playerX,playerY,0xff65e8ff,1.2f);
         for(int i=0;i<wingmen;i++)drawFighter(c,playerX-55-i*45,playerY+50,0xff9effff,.7f);
-        box(c,16,10,W*.48f,78,16,0xaa03101f);\n        txt(c,"ASSAULT "+names[selectedPlanet],25,35,22,Color.WHITE,Paint.Align.LEFT);
+        box(c,16,10,W*.48f,78,16,0xaa03101f);
+        txt(c,"ASSAULT "+names[selectedPlanet],25,35,22,Color.WHITE,Paint.Align.LEFT);
         txt(c,"Loot: Credits / Metal / Crystal / Oil",25,62,14,0xffffdc68,Paint.Align.LEFT);
         menuButton(c,20,H-74,150,H-18,"RETREAT",0xff4d5964);
         invalidate();
