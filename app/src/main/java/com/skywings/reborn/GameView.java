@@ -13,7 +13,7 @@ public class GameView extends View {
     private static final int ORIGIN=0, BASE=1, ASSAULT=2;
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Random rnd=new Random();
-    private Bitmap welcome, playerAtlas;
+    private Bitmap strategyArt, playerAtlas;
     private int mode=ORIGIN, selectedPlanet=0;
     private String planetName="MyPlanet";
     private int credits=5000, metal=2500, crystal=800, oil=3000;
@@ -25,7 +25,7 @@ public class GameView extends View {
     public GameView(Context c){
         super(c);
         setFocusable(true); setClickable(true);
-        welcome=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_origin_hd);
+        strategyArt=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_strategy_art);
         playerAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.player_atlas);
     }
     private void txt(Canvas c,String s,float x,float y,float z,int color,Paint.Align a){
@@ -38,13 +38,26 @@ public class GameView extends View {
     private void stroke(Canvas c,float l,float t,float r,float b,float rad,float sw,int color){
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(sw);p.setColor(color);c.drawRoundRect(l,t,r,b,rad,rad,p);
     }
+    private void drawArtPanel(Canvas c,int panel){
+        int W=getWidth(),H=getHeight();
+        if(strategyArt==null || strategyArt.isRecycled()){
+            c.drawColor(0xff030814);
+            txt(c,"ARTWORK LOAD FAILED",W/2,H/2,32,Color.RED,Paint.Align.CENTER);
+            return;
+        }
+        int sw=strategyArt.getWidth()/2, sh=strategyArt.getHeight()/2;
+        int sx=(panel%2)*sw, sy=(panel/2)*sh;
+        Rect src=new Rect(sx,sy,sx+sw,sy+sh);
+        p.setAlpha(255); p.setFilterBitmap(true); p.setStyle(Paint.Style.FILL);
+        c.drawBitmap(strategyArt,src,new RectF(0,0,W,H),p);
+    }
     @Override protected void onDraw(Canvas c){
         if(mode==ORIGIN) drawOrigin(c); else if(mode==BASE) drawBase(c); else drawAssault(c);
     }
     private void drawOrigin(Canvas c){
         int W=getWidth(),H=getHeight();
         p.setStyle(Paint.Style.FILL);
-        if(welcome!=null){ p.setAlpha(255); p.setFilterBitmap(true); c.drawBitmap(welcome,null,new RectF(0,0,W,H),p); } else { c.drawColor(0xff030814); txt(c,"ARTWORK LOAD FAILED",W/2,H/2,32,Color.RED,Paint.Align.CENTER); }
+        drawArtPanel(c,0);
         box(c,0,H*.79f,W,H,0,0xbb030814);
         float gap=W*.015f,left=W*.025f,cw=(W*.95f-gap*3)/4f;
         for(int i=0;i<4;i++){
@@ -60,19 +73,18 @@ public class GameView extends View {
     }
     private void drawBase(Canvas c){
         int W=getWidth(),H=getHeight();
-        if(welcome!=null){ p.setAlpha(255); p.setFilterBitmap(true); c.drawBitmap(welcome,null,new RectF(0,0,W,H),p); }
-        else c.drawColor(0xff06101c);
-        box(c,0,0,W,H,0,0x77020814);
+        drawArtPanel(c,1);
+        box(c,0,0,W,H,0,0x33020814);
         box(c,16,14,W-16,74,16,0xaa03101f);
         txt(c,planetName+"  •  HOME PLANET",30,50,28,Color.WHITE,Paint.Align.LEFT);
         txt(c,"Credits "+credits+"   Metal "+metal+"   Crystal "+crystal+"   Oil "+oil,W-30,45,17,0xffffd45a,Paint.Align.RIGHT);
         // terrain grid
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(0x3344ddaa);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1);p.setColor(0x1844ddaa);
         for(int x=0;x<W;x+=48)c.drawLine(x,80,x,H,p); for(int y=80;y<H;y+=48)c.drawLine(0,y,W,y,p);
-        drawBuilding(c,W*.22f,H*.40f,"COMMAND",0xff40bfff);
-        drawBuilding(c,W*.42f,H*.32f,"HANGAR",0xff8d7cff);
-        drawBuilding(c,W*.62f,H*.43f,"REFINERY",0xffffa43a);
-        drawBuilding(c,W*.80f,H*.30f,"DEFENSE",0xffff5a63);
+        drawBuilding(c,W*.50f,H*.45f,"COMMAND",0xff40bfff);
+        drawBuilding(c,W*.33f,H*.31f,"HANGAR",0xff8d7cff);
+        drawBuilding(c,W*.70f,H*.31f,"REFINERY",0xffffa43a);
+        drawBuilding(c,W*.28f,H*.56f,"DEFENSE",0xffff5a63);
         txt(c,"Base Lv."+baseLevel+"   Wingmen "+wingmen+"/3",30,H-34,18,Color.WHITE,Paint.Align.LEFT);
         menuButton(c,W*.58f,H*.82f,W*.76f,H*.94f,"UPGRADE",0xff1b7e9f);
         menuButton(c,W*.78f,H*.82f,W*.97f,H*.94f,"INVADE",0xffb6531c);
@@ -86,9 +98,8 @@ public class GameView extends View {
     }
     private void drawAssault(Canvas c){
         int W=getWidth(),H=getHeight();
-        if(welcome!=null){ p.setAlpha(255); p.setFilterBitmap(true); c.drawBitmap(welcome,null,new RectF(0,0,W,H),p); }
-        else c.drawColor(0xff17311d);
-        box(c,0,0,W,H,0,0x88031216);
+        drawArtPanel(c,3);
+        box(c,0,0,W,H,0,0x22031216);
         p.setStyle(Paint.Style.FILL);p.setColor(0x99396b39);c.drawRect(0,H*.18f,W,H*.62f,p);
         p.setColor(0xaa255b7a);c.drawRect(0,H*.63f,W,H,p);
         // roads and enemy city
