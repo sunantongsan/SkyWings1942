@@ -40,8 +40,8 @@ public class GameView extends View {
         super(c);
         setFocusable(true); setClickable(true);
         prefs=c.getSharedPreferences("galaxy1942_rts31",Context.MODE_PRIVATE);
-        uiAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_ui_atlas);
-        buildingAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_buildings);
+        uiAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_ui_atlas_hd);
+        buildingAtlas=BitmapFactory.decodeResource(getResources(),R.drawable.galaxy1942_buildings_hd);
         credits=prefs.getLong("credits",credits); metal=prefs.getLong("metal",metal);
         oil=prefs.getLong("oil",oil); crystal=prefs.getLong("crystal",crystal);
         lastTick=System.currentTimeMillis();
