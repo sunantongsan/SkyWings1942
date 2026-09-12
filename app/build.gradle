@@ -8,8 +8,8 @@ android {
         applicationId 'com.skywings.reborn'
         minSdk 23
         targetSdk 36
-        versionCode 13
-        versionName '3.0-rts-alpha1'
+        versionCode 14
+        versionName '3.1-rts-playable'
     }
 
     compileOptions {
