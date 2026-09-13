@@ -13,13 +13,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Unpack Godot project
+      - name: Assemble Godot project from source
         run: |
-          mkdir -p game
-          unzip -q godot_project.zip -d game
-
-      - name: Generate game-ready Godot assets
-        run: python3 tools/prepare_godot.py
+          rm -rf game
+          mkdir -p game/scripts game/scenes game/assets
+          cp godot_src/project.godot game/project.godot
+          cp godot_src/export_presets.cfg game/export_presets.cfg
+          cp godot_src/main.gd game/scripts/main.gd
+          cp godot_src/main.tscn game/scenes/main.tscn
+          python3 tools/prepare_godot.py
+          echo "Buildings: $(find game/assets/buildings -type f | wc -l)"
+          echo "Units: $(find game/assets/units -type f | wc -l)"
+          echo "Maps: $(find game/assets/maps -type f | wc -l)"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -47,10 +52,11 @@ jobs:
           cp -r templates/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
           godot --version
 
-      - name: Validate Godot project
+      - name: Validate Godot project and assets
         run: |
           godot --headless --path game --import
           godot --headless --path game --editor --quit
+          test -f game/.godot/imported/galactic_core.svg-*.ctex || true
 
       - name: Export debug APK
         env:
