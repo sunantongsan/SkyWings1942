@@ -95,19 +95,19 @@ func _setup_camera()->void:
 
 func _setup_ui()->void:
 	ui=CanvasLayer.new();add_child(ui)
-	var top:=PanelContainer.new();top.position=Vector2(18,14);top.size=Vector2(1884,72);top.add_theme_stylebox_override("panel",_style(Color(.02,.055,.10,.95),16,Color("239eda"),1));ui.add_child(top)
-	top_label=Label.new();top_label.add_theme_font_size_override("font_size",19);top_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;top.add_child(top_label)
-	var left:=VBoxContainer.new();left.position=Vector2(20,112);left.add_theme_constant_override("separation",10);ui.add_child(left)
-	left.add_child(_button("BUILD",func():_toggle_build(),Vector2(165,54)))
-	left.add_child(_button("UNITS",func():_toggle_units(),Vector2(165,54)))
-	left.add_child(_button("GALAXY",func():_toggle_galaxy(),Vector2(165,54)))
-	left.add_child(_button("CENTER",func():_center_camera(),Vector2(165,48)))
-	left.add_child(_button("ZOOM +",func():_zoom(-2.0),Vector2(165,46)))
-	left.add_child(_button("ZOOM -",func():_zoom(2.0),Vector2(165,46)))
-	var info:=PanelContainer.new();info.position=Vector2(1475,120);info.size=Vector2(410,230);info.add_theme_stylebox_override("panel",_style(Color(.02,.06,.11,.94),16,Color("2acfff"),1));ui.add_child(info)
+	var top:=PanelContainer.new();top.position=Vector2(18,14);top.size=Vector2(1884,88);top.add_theme_stylebox_override("panel",_style(Color(.02,.055,.10,.95),16,Color("239eda"),1));ui.add_child(top)
+	top_label=Label.new();top_label.add_theme_font_size_override("font_size",24);top_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;top.add_child(top_label)
+	var left:=VBoxContainer.new();left.position=Vector2(20,122);left.add_theme_constant_override("separation",10);ui.add_child(left)
+	left.add_child(_button("BUILD",func():_toggle_build(),Vector2(190,72)))
+	left.add_child(_button("UNITS",func():_toggle_units(),Vector2(190,72)))
+	left.add_child(_button("GALAXY",func():_toggle_galaxy(),Vector2(190,72)))
+	left.add_child(_button("CENTER",func():_center_camera(),Vector2(190,64)))
+	left.add_child(_button("ZOOM +",func():_zoom(-2.0),Vector2(190,64)))
+	left.add_child(_button("ZOOM -",func():_zoom(2.0),Vector2(190,64)))
+	var info:=PanelContainer.new();info.position=Vector2(1450,122);info.size=Vector2(435,255);info.add_theme_stylebox_override("panel",_style(Color(.02,.06,.11,.94),16,Color("2acfff"),1));ui.add_child(info)
 	var iv:=VBoxContainer.new();iv.add_theme_constant_override("separation",8);info.add_child(iv)
 	selected_label=Label.new();selected_label.text="SELECT A BUILDING";selected_label.add_theme_font_size_override("font_size",22);iv.add_child(selected_label)
-	selected_detail=Label.new();selected_detail.text="Tap a structure to inspect and upgrade.";selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",15);iv.add_child(selected_detail)
+	selected_detail=Label.new();selected_detail.text="Tap a structure to inspect and upgrade.";selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",20);iv.add_child(selected_detail)
 	iv.add_child(_button("UPGRADE",func():_upgrade_selected(),Vector2(0,50)))
 	build_panel=_make_build_panel();ui.add_child(build_panel);build_panel.visible=false
 	units_panel=_make_units_panel();ui.add_child(units_panel);units_panel.visible=false
@@ -123,7 +123,7 @@ func _make_build_panel()->PanelContainer:
 	var panel:=PanelContainer.new();panel.position=Vector2(220,675);panel.size=Vector2(1235,385);panel.add_theme_stylebox_override("panel",_style(Color(.02,.06,.11,.97),18,Color("2acfff"),2))
 	var grid:=GridContainer.new();grid.columns=5;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);panel.add_child(grid)
 	for i in 10:
-		var b:=Button.new();b.custom_minimum_size=Vector2(230,170);b.text="%s\nMetal %d"%[BUILDING_NAMES[i],BUILDING_COST[i]];b.add_theme_font_size_override("font_size",15)
+		var b:=Button.new();b.custom_minimum_size=Vector2(230,170);b.text="%s\nMetal %d"%[BUILDING_NAMES[i],BUILDING_COST[i]];b.add_theme_font_size_override("font_size",20)
 		var path:="res://assets/buildings/%s.png"%_building_file(i)
 		if ResourceLoader.exists(path):b.icon=load(path);b.expand_icon=true;b.icon_max_width=92
 		b.add_theme_stylebox_override("normal",_style(Color(.025,.10,.17,.95),14,Color(.1,.30,.43),1));b.add_theme_stylebox_override("hover",_style(Color(.04,.17,.26,.98),14,Color("2acfff"),2))
@@ -134,7 +134,7 @@ func _make_units_panel()->PanelContainer:
 	var panel:=PanelContainer.new();panel.position=Vector2(220,610);panel.size=Vector2(1235,450);panel.add_theme_stylebox_override("panel",_style(Color(.02,.06,.11,.97),18,Color("8b7cff"),2))
 	var grid:=GridContainer.new();grid.columns=5;grid.add_theme_constant_override("h_separation",8);grid.add_theme_constant_override("v_separation",8);panel.add_child(grid)
 	for i in 20:
-		var b:=Button.new();b.custom_minimum_size=Vector2(230,100);b.text="%02d  %s\nStock %d"%[i+1,UNIT_NAMES[i],unit_stock[i]];b.add_theme_font_size_override("font_size",14)
+		var b:=Button.new();b.custom_minimum_size=Vector2(230,100);b.text="%02d  %s\nStock %d"%[i+1,UNIT_NAMES[i],unit_stock[i]];b.add_theme_font_size_override("font_size",19)
 		b.add_theme_stylebox_override("normal",_style(Color(.025,.09,.16,.96),12,Color(.18,.24,.45),1));b.add_theme_stylebox_override("hover",_style(Color(.07,.12,.26,.98),12,Color("8b7cff"),2))
 		b.pressed.connect(func(idx=i):_train_unit(idx));grid.add_child(b)
 	return panel
@@ -145,7 +145,7 @@ func _make_galaxy_panel()->PanelContainer:
 	var title:=Label.new();title.text="GALAXY MAP • 15 WORLDS";title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;title.add_theme_font_size_override("font_size",30);outer.add_child(title)
 	var grid:=GridContainer.new();grid.columns=5;grid.add_theme_constant_override("h_separation",12);grid.add_theme_constant_override("v_separation",12);outer.add_child(grid)
 	for i in 15:
-		var b:=Button.new();b.custom_minimum_size=Vector2(250,190);b.text="%02d\n%s\nThreat Lv.%d\nATTACK"%[i+1,MAP_NAMES[i],2+i*2];b.add_theme_font_size_override("font_size",15)
+		var b:=Button.new();b.custom_minimum_size=Vector2(250,190);b.text="%02d\n%s\nThreat Lv.%d\nATTACK"%[i+1,MAP_NAMES[i],2+i*2];b.add_theme_font_size_override("font_size",20)
 		var col:Color=MAP_ACCENT[i];b.add_theme_stylebox_override("normal",_style(Color(col.r*.12,col.g*.12,col.b*.12,.96),20,col,2));b.add_theme_stylebox_override("hover",_style(Color(col.r*.22,col.g*.22,col.b*.22,.98),20,Color.WHITE,2))
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
@@ -388,6 +388,6 @@ func _mat(color:Color,emit:=Color.TRANSPARENT,energy:=0.0,alpha:=1.0)->StandardM
 	if alpha<.999:m.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
 	return m
 func _button(text:String,cb:Callable,size:Vector2)->Button:
-	var b:=Button.new();b.text=text;b.custom_minimum_size=size;b.add_theme_font_size_override("font_size",16);b.add_theme_stylebox_override("normal",_style(Color(.025,.10,.17,.96),14,Color(.10,.32,.48),1));b.add_theme_stylebox_override("hover",_style(Color(.04,.18,.28,.98),14,Color("2acfff"),2));b.pressed.connect(cb);return b
+	var b:=Button.new();b.text=text;b.custom_minimum_size=size;b.add_theme_font_size_override("font_size",23);b.add_theme_stylebox_override("normal",_style(Color(.025,.10,.17,.96),14,Color(.10,.32,.48),1));b.add_theme_stylebox_override("hover",_style(Color(.04,.18,.28,.98),14,Color("2acfff"),2));b.pressed.connect(cb);return b
 func _style(bg:Color,radius:int,border:Color,width:int)->StyleBoxFlat:
 	var s:=StyleBoxFlat.new();s.bg_color=bg;s.border_color=border;s.set_border_width_all(width);s.corner_radius_top_left=radius;s.corner_radius_top_right=radius;s.corner_radius_bottom_left=radius;s.corner_radius_bottom_right=radius;s.content_margin_left=14;s.content_margin_right=14;s.content_margin_top=10;s.content_margin_bottom=10;return s
