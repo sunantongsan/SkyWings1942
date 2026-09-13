@@ -373,6 +373,8 @@ func _ground_hit(screen_pos:Vector2)->Variant:
 	var origin:=camera.project_ray_origin(screen_pos);var dir:=camera.project_ray_normal(screen_pos);return Plane(Vector3.UP,0).intersects_ray(origin,dir)
 
 func _unhandled_input(event:InputEvent)->void:
+	# Keep touch-to-mouse emulation for Control buttons; world gestures use raw touches.
+	if event is InputEventMouse and event.device==-1:return
 	if galaxy_panel.visible or build_panel.visible or units_panel.visible or victory_panel.visible:return
 	if event is InputEventMouseButton:
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP and event.pressed:_zoom(-2);return

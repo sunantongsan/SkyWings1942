@@ -26,6 +26,23 @@ func run() -> void:
 	assert(game.buildings.size()==10,"Ten GLB buildings must be loaded")
 	for building in game.buildings:
 		assert(building.node.find_children("*","MeshInstance3D",true,false).size()>0)
+	# The same ScreenTouch events used by Android must activate native UI buttons.
+	var press:=InputEventScreenTouch.new();press.index=0;press.position=Vector2(270,670);press.pressed=true;Input.parse_input_event(press)
+	await process_frame
+	var release:=InputEventScreenTouch.new();release.index=0;release.position=Vector2(270,670);release.pressed=false;Input.parse_input_event(release)
+	await process_frame
+	assert(game.build_panel.visible,"Touch must activate the BUILD button")
+	game.build_panel.hide();game.touch_points.clear()
+	var start_focus:Vector3=game.camera_focus
+	press=InputEventScreenTouch.new();press.index=0;press.position=Vector2(600,380);press.pressed=true;Input.parse_input_event(press)
+	await process_frame
+	var drag:=InputEventScreenDrag.new();drag.index=0;drag.position=Vector2(640,400);drag.relative=Vector2(40,20);Input.parse_input_event(drag)
+	await process_frame
+	release=InputEventScreenTouch.new();release.index=0;release.position=Vector2(640,400);release.pressed=false;Input.parse_input_event(release)
+	await process_frame
+	assert(game.camera_focus.distance_to(start_focus)>0.1,"Drag must pan the camera")
+	assert(game.selected_building==-1,"Releasing a drag must not select a building")
+	game._center_camera()
 	game._select_building_at(Vector3.ZERO)
 	await shot("02-building-selected")
 	var old_level:int=game.buildings[0].level
