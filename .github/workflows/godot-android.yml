@@ -95,6 +95,12 @@ jobs:
           mkdir -p game/build
           godot --verbose --headless --path game --export-debug "Android" build/GALAXY1942-Godot-debug.apk
 
+      - name: Verify APK landscape manifest
+        run: |
+          AAPT="$ANDROID_SDK_ROOT/build-tools/35.0.1/aapt"
+          "$AAPT" dump xmltree game/build/GALAXY1942-Godot-debug.apk AndroidManifest.xml > manifest.txt
+          grep -E "screenOrientation.*0x0|screenOrientation.*landscape|screenOrientation.*0x6" manifest.txt
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
