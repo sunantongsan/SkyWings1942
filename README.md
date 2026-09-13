@@ -3,6 +3,22 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
+## New commander flow (v0.4)
+
+Welcome → choose one of 15 homeworlds → confirm an empty colony → follow 13 missions.
+Build Galactic Core, Fusion Reactor, Metal Extractor, Resource Vault,
+Oil Processor, Crystal Mine, Star Hangar, Laser Tower, Research Lab and
+Shield Generator in that order. Then upgrade the Core, train 8 Fighters and
+win a first raid. Guided landing sites and locked future buildings prevent
+accidental sequence skips. All worlds receive the same landing supplies.
+
+Production requires the relevant building. Power comes from reactors and is
+used by the colony. Returning from a raid restores the selected homeworld.
+Progress, resources, buildings, levels, units and tutorial state save locally
+on actions, every 10 seconds and when the app pauses. A last-good backup
+allows recovery if the primary save is damaged. Saves are on this device;
+uninstalling/clearing app data removes them. There is no cloud sync.
+
 ## Current visual build
 
 - Ten original GLB building designs with separated moving parts and PBR materials.
@@ -30,7 +46,7 @@ screenshots, the APK and the complete editable project as separate artifacts.
 ## Scope and performance
 
 This is a visual vertical slice, not a completed online game. Multiplayer,
-server validation and durable player progress are not implemented. Ten flight
+server validation and cloud saves are not implemented. Ten flight
 unit types currently share the original fighter mesh; ground troop art remains
 prototype quality. Check frame rate and heat on a physical Android device.
 

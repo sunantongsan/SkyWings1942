@@ -1,92 +1,143 @@
 extends SceneTree
-## Capture the real production scene, and exercise the existing gameplay loop.
-var game: Node3D
-var output := "res://build/review"
-func _initialize() -> void:
-	call_deferred("run")
+## Test the shipped new-player flow using an isolated save, then raid and reload.
+var game:Node3D
+var output:="res://build/review"
+const QA_SAVE:="user://qa_first_colony.json"
+func _initialize()->void:call_deferred("run")
 
-func shot(name: String) -> void:
+func shot(name:String)->void:
 	await process_frame
 	await process_frame
+	if DisplayServer.get_name()=="headless":return
 	await RenderingServer.frame_post_draw
-	var image := root.get_texture().get_image()
-	var error := image.save_png(output+"/"+name+".png")
-	assert(error == OK, "Screenshot must be saved")
+	assert(root.get_texture().get_image().save_png(output+"/"+name+".png")==OK)
 
-func run() -> void:
+func touch_at(position:Vector2)->void:
+	var press:=InputEventScreenTouch.new();press.index=0;press.position=position;press.pressed=true;Input.parse_input_event(press)
+	await process_frame
+	var release:=InputEventScreenTouch.new();release.index=0;release.position=position;release.pressed=false;Input.parse_input_event(release)
+	await process_frame
+
+func open_game()->void:
+	game=load("res://scenes/main.tscn").instantiate();game.profile_path=QA_SAVE;root.add_child(game)
+	await process_frame
+	await process_frame
+
+func run()->void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(output))
-	root.size = Vector2i(1280,720)
-	game = load("res://scenes/main.tscn").instantiate()
-	root.add_child(game)
+	for suffix in ["",".bak",".tmp"]:
+		if FileAccess.file_exists(QA_SAVE+suffix):DirAccess.remove_absolute(QA_SAVE+suffix)
+	root.size=Vector2i(1280,720)
+	await open_game()
+	assert(game.onboarding.page=="welcome" and not game.has_colony)
+	assert(game.buildings.is_empty() and game.unit_stock[0]==0)
+	assert(not FileAccess.file_exists(QA_SAVE),"Opening welcome must not create a colony")
+	await shot("00-welcome")
+	game.onboarding.show_help();await shot("00a-field-guide");game.onboarding.welcome()
+	game.onboarding.choose_world()
+	assert(game.onboarding.planet_buttons.size()==15 and game.onboarding.confirm_button.disabled)
+	game.onboarding.select_world(2)
+	assert(not FileAccess.file_exists(QA_SAVE),"Preview must not settle a planet")
+	await shot("00b-choose-homeworld")
+	game.onboarding._confirm_world()
+	assert(game.has_colony and game.home_planet==2 and game.mode=="base")
+	assert(game.buildings.is_empty() and game.power==0)
+	var initial_metal:float=game.metal
+	var initial_credits:float=game.credits
+	game._economy_tick(1)
+	assert(game.metal==initial_metal and game.credits==initial_credits,"An empty colony produces nothing")
+	game._begin_build(1);game._place_building(Vector3.ZERO)
+	assert(game.buildings.is_empty(),"A reactor cannot precede the Core")
+	game._toggle_units();assert(not game.units_panel.visible)
+	game._toggle_galaxy();assert(not game.galaxy_panel.visible)
+	await shot("00c-empty-colony")
+	# The mission button and terrain placement receive Android ScreenTouch events.
 	await process_frame
-	await create_timer(0.8).timeout
-	game.toast.hide()
-	await shot("01-home-planet")
-	print("HOME_DRAW_CALLS=",RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
-	assert(game.buildings.size()==10,"Ten GLB buildings must be loaded")
-	for building in game.buildings:
-		assert(building.node.find_children("*","MeshInstance3D",true,false).size()>0)
-	# The same ScreenTouch events used by Android must activate native UI buttons.
-	var press:=InputEventScreenTouch.new();press.index=0;press.position=Vector2(270,670);press.pressed=true;Input.parse_input_event(press)
-	await process_frame
-	var release:=InputEventScreenTouch.new();release.index=0;release.position=Vector2(270,670);release.pressed=false;Input.parse_input_event(release)
-	await process_frame
-	assert(game.build_panel.visible,"Touch must activate the BUILD button")
-	game.build_panel.hide();game.touch_points.clear()
+	await touch_at(game.onboarding.guide_action.get_global_rect().get_center())
+	assert(game.build_type==0,"Touch must activate the mission action")
+	await touch_at(game.camera.unproject_position(Vector3.ZERO))
+	assert(game.buildings.size()==1 and game.buildings[0].type==0 and game.buildings[0].level==1)
+	assert(game.tutorial_step==1 and game.building_levels[1]==0)
+	var metal_before:float=game.metal
+	game._economy_tick(1)
+	assert(game.metal==metal_before,"Metal requires an Extractor")
+	await shot("00d-first-core")
+	for step in range(1,10):
+		var kind:int=game.BUILD_ORDER[step]
+		assert(game.tutorial_step==step)
+		game._begin_build(kind)
+		game._place_building(game.LANDING_SITES[kind])
+		assert(game.buildings.size()==step+1 and game.building_levels[kind]==1,"Build one required structure at a time")
+		assert(game.tutorial_step==step+1 and game.power>=0)
+		if step==1:await shot("00e-first-reactor")
+		if step==3:
+			# Resume halfway through the tutorial without reseeding or reselecting.
+			game._save_profile();game.queue_free();await process_frame
+			await open_game()
+			assert(game.has_colony and game.home_planet==2 and game.tutorial_step==4)
+			assert(game.buildings.size()==4 and game.onboarding.page=="welcome")
+			await shot("00f-welcome-back")
+			game.onboarding.enter_colony()
+	assert(game.buildings.size()==10 and game.tutorial_step==10)
+	assert(game._build_lock_reason(0)!="","Only one Core is allowed")
+	game.toast.hide();await shot("01-home-planet")
+	# A drag must pan rather than place or select an object on release.
 	var start_focus:Vector3=game.camera_focus
-	press=InputEventScreenTouch.new();press.index=0;press.position=Vector2(600,380);press.pressed=true;Input.parse_input_event(press)
+	var press:=InputEventScreenTouch.new();press.index=0;press.position=Vector2(600,380);press.pressed=true;Input.parse_input_event(press)
 	await process_frame
 	var drag:=InputEventScreenDrag.new();drag.index=0;drag.position=Vector2(640,400);drag.relative=Vector2(40,20);Input.parse_input_event(drag)
 	await process_frame
-	release=InputEventScreenTouch.new();release.index=0;release.position=Vector2(640,400);release.pressed=false;Input.parse_input_event(release)
+	var release:=InputEventScreenTouch.new();release.index=0;release.position=Vector2(640,400);release.pressed=false;Input.parse_input_event(release)
 	await process_frame
-	assert(game.camera_focus.distance_to(start_focus)>0.1,"Drag must pan the camera")
-	assert(game.selected_building==-1,"Releasing a drag must not select a building")
-	game._center_camera()
-	game._select_building_at(Vector3.ZERO)
+	assert(game.camera_focus.distance_to(start_focus)>0.1 and game.selected_building==-1)
+	game._center_camera();game._select_building_at(Vector3.ZERO)
 	await shot("02-building-selected")
-	var old_level:int=game.buildings[0].level
 	var old_metal:float=game.metal
 	game._upgrade_selected()
-	assert(game.buildings[0].level==old_level+1)
-	assert(game.metal<old_metal)
+	assert(game.buildings[0].level==2 and game.metal<old_metal and game.tutorial_step==11)
 	game.info_panel.hide();game.selection_ring.hide()
-	game._toggle_build()
-	await shot("03-build-menu")
-	game.build_panel.hide()
-	var old_count:int=game.buildings.size()
-	game.build_type=8
-	game._place_building(Vector3(-16,0,14))
-	assert(game.buildings.size()==old_count+1,"Construction must place a GLB building")
-	var stock:int=game.unit_stock[0]
-	game._train_unit(0)
-	assert(game.unit_stock[0]==stock+1)
+	game._toggle_build();await shot("03-build-menu");game.build_panel.hide()
+	for i in 8:game._train_unit(0)
+	assert(game.unit_stock[0]==8 and game.tutorial_step==12)
 	await shot("04-fleet-menu")
-	game.units_panel.hide()
-	game._toggle_galaxy()
+	game.units_panel.hide();game._toggle_galaxy()
 	await shot("05-galaxy-map")
+	game._start_battle(game.home_planet)
+	assert(game.mode=="base","The player cannot raid their own homeworld")
 	game._start_battle(1)
-	await create_timer(1.2).timeout
+	await create_timer(0.4).timeout
 	await shot("06-battle")
 	game.set_process(false)
 	for u in game.battle_units:u["last_shot"]=100000.0
 	for i in 1800:
 		if game.mode!="battle":break
-		game._battle_tick(.1)
-		game._visual_tick(.1)
+		game._battle_tick(.1);game._visual_tick(.1)
 		if i%20==0:await process_frame
-	assert(game.mode=="victory","Existing raid must be winnable")
-	var credits_after:float=game.credits
-	game._process(.1)
-	assert(game.credits==credits_after,"Rewards may only be granted once")
+	assert(game.mode=="victory" and game.tutorial_step==13,"The tutorial fleet must win the first raid")
+	var settled:float=game.credits
+	game._process(.1);assert(game.credits==settled,"Victory rewards must settle only once")
 	await shot("07-victory")
 	game._return_home()
-	assert(game.home_root.visible and not game.battle_root.visible)
-	# Wider phones must retain all UI and an expanded world view.
-	root.size=Vector2i(1600,720)
-	await process_frame
-	game._layout_ui()
+	assert(game.map_index==2,"Returning from battle must restore the chosen world")
+	game._save_profile()
+	var saved:Dictionary=game.profile_store.read_profile(QA_SAVE)
+	assert(saved.tutorial_step==13 and saved.home_planet==2 and saved.buildings.size()==10)
+	game.queue_free();await process_frame
+	await open_game();game.onboarding.enter_colony()
+	assert(game.tutorial_step==13 and game.home_planet==2 and game.unit_stock[0]==8)
+	assert(game.buildings[0].level==2)
+	game.tutorial_dismissed=true;game._refresh_progress()
+	root.size=Vector2i(1600,720);await process_frame;game._layout_ui()
 	assert(game.header.get_rect().end.x<=1600)
 	await shot("08-wide-phone")
+	# Verify the last-good backup can recover an invalid primary file.
+	game._save_profile();game._save_profile()
+	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()
+	var recovered:Dictionary=game.profile_store.read_profile(QA_SAVE)
+	assert(not recovered.is_empty() and game.profile_store.recovered_backup)
+	game.profile_ready=false;game.queue_free();await process_frame
+	for suffix in ["",".bak",".tmp"]:
+		if FileAccess.file_exists(QA_SAVE+suffix):DirAccess.remove_absolute(QA_SAVE+suffix)
 	print("GALAXY_VISUAL_AND_GAMEPLAY_CHECKS_PASSED")
+	print("NEW_COLONY_TOUCH_ORDER_SAVE_RELOAD_AND_RAID_PASSED")
 	quit(0)

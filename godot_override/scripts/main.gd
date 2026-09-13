@@ -21,19 +21,19 @@ var build_panel:PanelContainer
 var units_panel:PanelContainer
 var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
-var credits:=125600.0
-var metal:=230400.0
-var oil:=98200.0
-var crystal:=56100.0
-var power:=1200.0
+var credits:=3000.0
+var metal:=10000.0
+var oil:=1000.0
+var crystal:=500.0
+var power:=0.0
 var mode:="base"
 var map_index:=0
 var selected_building:=-1
 var build_type:=-1
 var selected_unit:=0
 var buildings:Array[Dictionary]=[]
-var building_levels:=PackedInt32Array([5,4,4,4,4,3,4,3,3,2])
-var unit_stock:=PackedInt32Array([20,16,12,9,8,7,6,5,4,2,12,8,6,6,5,5,8,8,10,2])
+var building_levels:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0])
+var unit_stock:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])
 var drag_camera:=false
 var touch_points:={}
 var pinch_last:=0.0
@@ -64,21 +64,41 @@ var camera_focus := Vector3.ZERO
 var top_refresh := 0.0
 var toast_tween: Tween
 var battle_cooldown := 0.0
+const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
+const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
+const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35]
+var home_planet := -1
+var has_colony := false
+var tutorial_step := 0
+var tutorial_dismissed := false
+var profile_path := "user://colony_v1.json"
+var profile_store = preload("res://scripts/profile_store.gd").new()
+var onboarding:RefCounted
+var autosave_time := 0.0
+var profile_ready := false
+var roads_root:Node3D
+var landing_marker:MeshInstance3D
+var landing_label:Label3D
 
 func _ready()->void:
 	_setup_environment()
 	_setup_world()
 	_setup_camera()
 	_setup_ui()
-	_seed_home_base()
-	_apply_map_theme(0)
+	onboarding=preload("res://scripts/onboarding.gd").new(self)
+	_load_profile()
+	_apply_map_theme(home_planet if has_colony else 0)
 	_setup_life()
-	_toast("Welcome, Commander. Your homeworld awaits.")
+	profile_ready=true
+	_refresh_progress()
+	onboarding.welcome()
 
 func _process(delta:float)->void:
 	if mode=="base": _economy_tick(delta)
 	elif mode=="battle": _battle_tick(delta)
 	_visual_tick(delta)
+	autosave_time+=delta
+	if autosave_time>=10.0:_save_profile();autosave_time=0.0
 	top_refresh += delta
 	if top_refresh > 0.15:
 		_update_top_bar()
@@ -117,7 +137,6 @@ func _setup_world()->void:
 	ground=art.terrain()
 	terrain_material=ground.material_override
 	world_root.add_child(ground)
-	art.roads(home_root)
 	selection_ring=MeshInstance3D.new()
 	var ring:=TorusMesh.new()
 	ring.inner_radius=3.2;ring.outer_radius=3.3
@@ -126,6 +145,10 @@ func _setup_world()->void:
 	selection_ring.material_override=art.mat(Color("8ff9d5"),true)
 	selection_ring.visible=false
 	world_root.add_child(selection_ring)
+	landing_marker=MeshInstance3D.new()
+	var landing_mesh:=TorusMesh.new();landing_mesh.inner_radius=2.8;landing_mesh.outer_radius=2.95;landing_mesh.rings=40;landing_mesh.ring_segments=6
+	landing_marker.mesh=landing_mesh;landing_marker.material_override=art.mat(Color("ffe19b"),true);world_root.add_child(landing_marker);landing_marker.hide()
+	landing_label=Label3D.new();landing_label.font_size=32;landing_label.pixel_size=.009;landing_label.outline_size=8;landing_label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;landing_label.modulate=Color("ffe7a5");world_root.add_child(landing_label);landing_label.hide()
 
 func _setup_camera()->void:
 	camera=Camera3D.new()
@@ -162,6 +185,7 @@ func _setup_ui()->void:
 	dock.add_child(_button("HOME",_home_action,Vector2(120,64)))
 	dock.add_child(_button("+",func():_zoom(-3),Vector2(64,64)))
 	dock.add_child(_button("−",func():_zoom(3),Vector2(64,64)))
+	dock.add_child(_button("GUIDE",func():onboarding.show_help(),Vector2(104,64)))
 	info_panel=PanelContainer.new();info_panel.custom_minimum_size=Vector2(286,0);info_panel.visible=false
 	info_panel.add_theme_stylebox_override("panel",_style(Color("112a36"),14,Color("75cabb"),1));ui_root.add_child(info_panel)
 	var iv:=VBoxContainer.new();iv.add_theme_constant_override("separation",12);info_panel.add_child(iv)
@@ -185,8 +209,14 @@ func _setup_ui()->void:
 func _make_build_panel()->PanelContainer:
 	var panel:=_panel("CONSTRUCTION  /  DEVELOP YOUR HOMEWORLD")
 	var grid:=_scroll_grid(panel,5)
-	for i in 10:
+	for i in BUILD_ORDER:
 		var b:=_asset_button(BUILDING_NAMES[i],"%s METAL"%_fmt(BUILDING_COST[i]),"buildings/"+_building_file(i),Vector2(200,158))
+		var reason:=_build_lock_reason(i)
+		b.disabled=not reason.is_empty()
+		if b.disabled:
+			b.get_child(0).modulate=Color(.45,.55,.6)
+			b.tooltip_text=reason
+			b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text="CORE ALREADY BUILT" if i==0 and building_levels[0]>0 else ("LOCKED • STEP %02d"%(BUILD_ORDER.find(i)+1) if tutorial_step<10 else "MORE POWER REQUIRED")
 		b.pressed.connect(func(idx=i):_begin_build(idx));grid.add_child(b)
 	return panel
 
@@ -196,6 +226,8 @@ func _make_units_panel()->PanelContainer:
 	for i in 20:
 		var cost:=180+i*35
 		var b:=_asset_button(UNIT_NAMES[i],"Stock %d  •  %d C / %d O"%[unit_stock[i],cost,int(cost*.4)],"",Vector2(230,100))
+		b.disabled=building_levels[6]==0 or tutorial_step<11 or (tutorial_step<13 and i!=0)
+		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
 		b.pressed.connect(func(idx=i):_train_unit(idx));grid.add_child(b)
 	return panel
 
@@ -205,14 +237,13 @@ func _make_galaxy_panel()->PanelContainer:
 	for i in 15:
 		var b:=_asset_button(MAP_NAMES[i],"Threat %02d  /  ATTACK"%(2+i*2),"",Vector2(200,130))
 		b.add_theme_stylebox_override("normal",_style(MAP_ACCENT[i].darkened(0.82),12,MAP_ACCENT[i].darkened(0.35),1))
+		if i==home_planet:
+			b.disabled=true
+			b.get_child(0).get_child(1).text="YOUR HOMEWORLD"
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
 
 func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator"][i]
-
-func _seed_home_base()->void:
-	var pos=[Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
-	for i in 10:_spawn_building(home_root,i,pos[i],building_levels[i],false)
 
 func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->Dictionary:
 	var root:Node3D=art.building(type,enemy)
@@ -242,26 +273,6 @@ func _apply_map_theme(idx:int)->void:
 	sun.light_color=MAP_ACCENT[idx].lerp(Color("fff0d1"),.88)
 	_create_decor(decor_root,idx)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 func _unit_model(type:int,enemy:=false)->Node3D:
 	if type<=9:
 		var ship:Node3D=art.model("fighter")
@@ -276,26 +287,61 @@ func _unit_model(type:int,enemy:=false)->Node3D:
 		var body:=_box(Vector3(.7,1.1,.45),_mat(base));body.position.y=1.1;r.add_child(body);var head:=_sphere(.35,_mat(accent.darkened(.2)));head.position.y=1.95;r.add_child(head)
 	return r
 
-func _begin_build(idx:int)->void:build_type=idx;build_panel.visible=false;units_panel.visible=false;galaxy_panel.visible=false;_toast("TAP THE TERRAIN TO PLACE %s"%BUILDING_NAMES[idx].to_upper())
+func _begin_build(idx:int)->void:
+	if mode!="base" or not has_colony:return
+	var reason:=_build_lock_reason(idx)
+	if not reason.is_empty():_toast(reason);return
+	build_type=idx;build_panel.hide();units_panel.hide();galaxy_panel.hide();info_panel.hide();selection_ring.hide()
+	_toast("Tap the glowing landing site." if tutorial_step<10 else "Tap clear terrain to place "+BUILDING_NAMES[idx]+".")
+	onboarding.refresh_guide()
+	_update_landing_marker()
+
 func _upgrade_selected()->void:
+	if mode!="base" or not has_colony:return
+	if tutorial_step<10:_toast("Complete the construction missions before upgrading.");return
 	if selected_building<0 or selected_building>=buildings.size():_toast("SELECT A BUILDING FIRST");return
-	var b:Dictionary=buildings[selected_building];var cost:int=500+int(b.type)*120+int(b.level)*360
+	var b:Dictionary=buildings[selected_building]
+	if tutorial_step==10 and b.type!=0:_toast("Upgrade the Galactic Core first.");return
+	if b.level>=100:_toast("Maximum level reached.");return
+	var cost:int=500+int(b.type)*120+int(b.level)*360
 	if metal<cost:_toast("NOT ENOUGH METAL");return
-	metal-=cost;b.level+=1;building_levels[b.type]=max(building_levels[b.type],b.level);b.node.scale*=1.045;buildings[selected_building]=b;_select_building_at(b.pos);_toast("%s UPGRADED TO LV.%d"%[BUILDING_NAMES[b.type].to_upper(),b.level])
+	metal-=cost;b.level+=1;b.node.scale=Vector3.ONE*(1.0+(b.level-1)*.025)
+	b.max_hp=350.0+b.level*120.0;b.hp=b.max_hp
+	_refresh_progress();_save_profile();_select_building_at(b.pos)
+	_toast("%s upgraded to Level %d."%[BUILDING_NAMES[b.type],b.level])
 
 func _train_unit(idx:int)->void:
+	if mode!="base" or building_levels[6]==0 or tutorial_step<11:_toast("Build your colony and upgrade the Core first.");return
+	if idx<0 or idx>=20:return
+	if tutorial_step<13 and idx!=0:_toast("Train Fighters for your first mission.");return
 	var c:=180+idx*35
 	if credits<c or oil<c*.4:_toast("NOT ENOUGH RESOURCES");return
-	credits-=c;oil-=c*.4;unit_stock[idx]+=1;selected_unit=idx;_toast("%s TRAINED • STOCK %d"%[UNIT_NAMES[idx].to_upper(),unit_stock[idx]])
-	units_panel.queue_free();units_panel=_make_units_panel();ui_root.add_child(units_panel);_layout_ui()
+	credits-=c;oil-=c*.4;unit_stock[idx]+=1;selected_unit=idx
+	_refresh_progress();_setup_life();_save_profile()
+	units_panel.show();onboarding.refresh_guide()
+	_toast("%s trained. Fleet ready: %d"%[UNIT_NAMES[idx],unit_stock[idx]])
 
 func _toggle_build()->void:
-	if mode!="base":_toast("Return home to build your base.");return
-	build_panel.visible=not build_panel.visible;units_panel.visible=false;galaxy_panel.visible=false
-func _toggle_units()->void:units_panel.visible=not units_panel.visible;build_panel.visible=false;galaxy_panel.visible=false
-func _toggle_galaxy()->void:galaxy_panel.visible=not galaxy_panel.visible;build_panel.visible=false;units_panel.visible=false
+	if mode!="base" or not has_colony:return
+	build_panel.visible=not build_panel.visible;units_panel.hide();galaxy_panel.hide();info_panel.hide()
+	onboarding.refresh_guide()
+
+func _toggle_units()->void:
+	if mode!="base" or building_levels[6]==0 or tutorial_step<11:_toast("Complete construction and upgrade your Core to unlock training.");return
+	units_panel.visible=not units_panel.visible;build_panel.hide();galaxy_panel.hide();info_panel.hide()
+	onboarding.refresh_guide()
+
+func _toggle_galaxy()->void:
+	if mode!="base" or tutorial_step<12:_toast("Train 8 Fighters before your first raid.");return
+	galaxy_panel.visible=not galaxy_panel.visible;units_panel.hide();build_panel.hide();info_panel.hide()
+	onboarding.refresh_guide()
 
 func _start_battle(idx:int)->void:
+	if mode!="base" or tutorial_step<12 or idx<0 or idx>=15:return
+	if idx==home_planet:_toast("This world is your home. Choose a rival outpost.");return
+	if unit_stock[0]+unit_stock[1]+unit_stock[2]<=0:_toast("Train a fleet before attacking.");return
+	build_type=-1;landing_marker.hide();landing_label.hide()
+	_save_profile()
 	mode="battle";battle_map=idx;galaxy_panel.visible=false;info_panel.hide();selection_ring.hide();home_root.visible=false;battle_root.visible=true
 	for c in battle_root.get_children():c.queue_free()
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
@@ -304,7 +350,7 @@ func _start_battle(idx:int)->void:
 	var count:int=min(24,unit_stock[0]+unit_stock[1]+unit_stock[2])
 	for i in count:
 		var t:int=i%6;var n:Node3D=_unit_model(t,false);n.position=Vector3(-10+(i%8)*2.6,3.2,17+(i/8)*2);battle_root.add_child(n);battle_units.append({"node":n,"type":t,"damage":8.0+t*1.5,"speed":2.7+t*.08})
-	camera_focus=Vector3.ZERO;_position_camera();camera.size=38;_toast("ATTACKING %s"%MAP_NAMES[idx].to_upper())
+	camera_focus=Vector3.ZERO;_position_camera();camera.size=38;_toast("ATTACKING %s"%MAP_NAMES[idx].to_upper());_refresh_progress()
 
 func _battle_tick(delta:float)->void:
 	battle_elapsed+=delta;var total:=0.0;var alive_hp:=0.0;var alive:Array=[]
@@ -335,15 +381,29 @@ func _finish_battle(win:bool)->void:
 		mode="victory"
 		var reward:=Vector4(8000+battle_map*700,4200+battle_map*350,2600+battle_map*220,900+battle_map*90);credits+=reward.x;metal+=reward.y;oil+=reward.z;crystal+=reward.w
 		var l:Label=victory_panel.find_child("Reward",true,false);l.text="%s conquered\nDamage 100%%\n+%d Credits   +%d Metal   +%d Oil   +%d Crystal"%[MAP_NAMES[battle_map],int(reward.x),int(reward.y),int(reward.z),int(reward.w)];victory_panel.visible=true
+		if tutorial_step==12:tutorial_step=13
+		_save_profile()
 	else:_return_home();_toast("FLEET WITHDREW")
 
-func _return_home()->void:mode="base";victory_panel.visible=false;battle_root.visible=false;home_root.visible=true;_apply_map_theme(0);_center_camera();_update_top_bar();_toast("RETURNED TO HOME PLANET")
-func _economy_tick(delta:float)->void:credits+=delta*3.5;metal+=delta*(2.0+building_levels[2]*.7);oil+=delta*(1.5+building_levels[3]*.5);crystal+=delta*(.6+building_levels[4]*.22);power=800+building_levels[1]*160
+func _return_home()->void:
+	if not has_colony:return
+	mode="base";victory_panel.hide();battle_root.hide();home_root.show()
+	_apply_map_theme(home_planet);_center_camera();_refresh_progress();_save_profile();_toast("Returned to "+MAP_NAMES[home_planet]+".")
+
+func _economy_tick(delta:float)->void:
+	if not has_colony:return
+	for b in buildings:
+		match int(b.type):
+			0:credits=minf(1e12,credits+delta*3.5*b.level)
+			2:metal=minf(1e12,metal+delta*2.7*b.level)
+			3:oil=minf(1e12,oil+delta*2.0*b.level)
+			4:crystal=minf(1e12,crystal+delta*.9*b.level)
+
 func _update_top_bar()->void:
 	if resource_labels.size()!=5:return
 	var values:=[credits,metal,oil,crystal,power]
 	for i in 5:resource_labels[i].text=_fmt(values[i])
-	status_label.text="TERRA  /  HOME PLANET" if mode=="base" else "%s  /  %d%%"%[MAP_NAMES[battle_map].to_upper(),int(battle_damage)]
+	status_label.text=(MAP_NAMES[maxi(home_planet,0)].to_upper()+"  /  HOME PLANET") if mode in ["base","welcome"] else "%s  /  %d%%"%[MAP_NAMES[battle_map].to_upper(),int(battle_damage)]
 
 func _fmt(v:float)->String:
 	if v>=1000000:return "%.2fM"%(v/1000000.0)
@@ -361,13 +421,23 @@ func _select_building_at(pos:Vector3)->void:
 	var b:Dictionary=buildings[best];selected_label.text="%s • Lv.%d"%[BUILDING_NAMES[b.type],b.level];selected_detail.text="HP %d/%d\nUpgrade cost %d Metal\nMap theme: %s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,MAP_NAMES[map_index]]
 
 func _place_building(pos:Vector3)->void:
-	if build_type<0:return
+	if mode!="base" or not has_colony or build_type<0:return
+	var reason:=_build_lock_reason(build_type)
+	if not reason.is_empty():_toast(reason);return
+	if tutorial_step<10:
+		var site:Vector3=LANDING_SITES[build_type]
+		if pos.distance_to(site)>3.0:_toast("Use the glowing landing site for this mission.");return
+		pos=site
+	pos.y=0
 	if abs(pos.x)>18 or abs(pos.z)>15:_toast("BUILD INSIDE THE BASE AREA");return
 	for b in buildings:
 		if b.pos.distance_to(pos)<6.1:_toast("TOO CLOSE TO ANOTHER BUILDING");return
-	var cost=BUILDING_COST[build_type]
+	var cost:int=BUILDING_COST[build_type]
 	if metal<cost:_toast("NOT ENOUGH METAL");return
-	metal-=cost;_spawn_building(home_root,build_type,pos,1,false);_toast("%s CONSTRUCTION COMPLETE"%BUILDING_NAMES[build_type].to_upper());build_type=-1
+	var kind:=build_type
+	metal-=cost;_spawn_building(home_root,kind,pos,1,false);build_type=-1
+	_ensure_roads();_refresh_progress();_save_profile()
+	_toast(BUILDING_NAMES[kind]+" complete. Next mission unlocked.")
 
 func _ground_hit(screen_pos:Vector2)->Variant:
 	var origin:=camera.project_ray_origin(screen_pos);var dir:=camera.project_ray_normal(screen_pos);return Plane(Vector3.UP,0).intersects_ray(origin,dir)
@@ -375,6 +445,7 @@ func _ground_hit(screen_pos:Vector2)->Variant:
 func _unhandled_input(event:InputEvent)->void:
 	# Keep touch-to-mouse emulation for Control buttons; world gestures use raw touches.
 	if event is InputEventMouse and event.device==-1:return
+	if onboarding and onboarding.screen.visible:return
 	if galaxy_panel.visible or build_panel.visible or units_panel.visible or victory_panel.visible:return
 	if event is InputEventMouseButton:
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP and event.pressed:_zoom(-2);return
@@ -477,6 +548,7 @@ func _panel(title:String)->PanelContainer:
 	row.add_child(_button("CLOSE",func():
 		if p==victory_panel:_return_home()
 		else:p.hide()
+		if onboarding:onboarding.refresh_guide()
 	,Vector2(104,48)))
 	return p
 
@@ -506,17 +578,19 @@ func _layout_ui()->void:
 		if screen.x>0:
 			margin=maxf(margin,maxf(safe.position.x,screen.x-safe.end.x)*size.x/float(screen.x)+8)
 	header.position=Vector2(margin,14);header.size=Vector2(size.x-margin*2,76)
-	dock.position=Vector2((size.x-882)/2,size.y-80)
+	dock.position=Vector2((size.x-996)/2,size.y-80)
 	info_panel.position=Vector2(size.x-margin-286,110);info_panel.size=Vector2(286,260)
 	for panel in [build_panel,units_panel,galaxy_panel]:
 		if panel:panel.position=Vector2(margin,105);panel.size=Vector2(size.x-margin*2,size.y-200)
 	victory_panel.position=Vector2((size.x-720)/2,170);victory_panel.size=Vector2(720,330)
 	toast.position=Vector2(margin,size.y-114);toast.size=Vector2(size.x-margin*2,28)
+	if onboarding:onboarding.layout()
 
 func _setup_life()->void:
-	for i in 3:
-		var ship:Node3D=art.model("fighter")
-		ship.scale=Vector3.ONE*0.48
+	if building_levels[6]==0:return
+	var count:=mini(3,unit_stock[0]+unit_stock[1]+unit_stock[2])
+	for i in range(scouts.size(),count):
+		var ship:Node3D=art.model("fighter");ship.scale=Vector3.ONE*.48
 		home_root.add_child(ship);scouts.append(ship)
 
 func _visual_tick(delta:float)->void:
@@ -533,6 +607,7 @@ func _visual_tick(delta:float)->void:
 		scouts[i].position=Vector3(cos(a)*18,5.3+sin(a*2)*.35,sin(a)*13)
 		scouts[i].rotation.y=-a+PI
 	if selection_ring.visible:selection_ring.rotation.y+=delta*.25
+	if landing_marker.visible:landing_marker.scale=Vector3.ONE*(1.0+.025*sin(visual_time*3.0))
 
 func _laser(from:Vector3,to:Vector3)->void:
 	var beam:=MeshInstance3D.new()
@@ -545,5 +620,85 @@ func _laser(from:Vector3,to:Vector3)->void:
 	var tw:=create_tween();tw.tween_interval(.09);tw.tween_callback(beam.queue_free)
 
 func _home_action()->void:
+	if not has_colony:return
 	if mode=="base":_center_camera()
-	else:_return_home()
+	elif mode in ["battle","victory"]:_return_home()
+
+
+func _found_colony(planet:int)->void:
+	if has_colony or planet<0 or planet>=15:return
+	home_planet=planet;has_colony=true;tutorial_step=0;tutorial_dismissed=false
+	credits=3000;metal=10000;oil=1000;crystal=500;power=0
+	_save_profile();onboarding.enter_colony()
+
+func _build_lock_reason(kind:int)->String:
+	if kind<0 or kind>=10:return "Unknown structure."
+	if kind==0 and building_levels[0]>0:return "Your colony already has a Galactic Core."
+	if tutorial_step<10 and kind!=BUILD_ORDER[tutorial_step]:return "Next: "+BUILDING_NAMES[BUILD_ORDER[tutorial_step]]
+	if kind!=0 and building_levels[0]==0:return "Build the Galactic Core first."
+	if kind not in [0,1] and building_levels[1]==0:return "Build a Fusion Reactor first."
+	if POWER_DEMAND[kind]>power:return "Upgrade or build a Fusion Reactor for more Power."
+	return ""
+
+func _recalculate_colony()->void:
+	building_levels.fill(0);power=0
+	for b in buildings:
+		building_levels[b.type]=maxi(building_levels[b.type],b.level)
+		if b.type==1:power+=300*b.level
+		else:power-=POWER_DEMAND[b.type]
+
+func _refresh_progress()->void:
+	_recalculate_colony()
+	while tutorial_step<10 and building_levels[BUILD_ORDER[tutorial_step]]>0:tutorial_step+=1
+	if tutorial_step==10 and building_levels[0]>=2:tutorial_step=11
+	if tutorial_step==11 and unit_stock[0]>=8:tutorial_step=12
+	var build_open:=build_panel.visible
+	var units_open:=units_panel.visible
+	var galaxy_open:=galaxy_panel.visible
+	for p in [build_panel,units_panel,galaxy_panel]:p.hide();p.queue_free()
+	build_panel=_make_build_panel();ui_root.add_child(build_panel);build_panel.visible=build_open
+	units_panel=_make_units_panel();ui_root.add_child(units_panel);units_panel.visible=units_open
+	galaxy_panel=_make_galaxy_panel();ui_root.add_child(galaxy_panel);galaxy_panel.visible=galaxy_open
+	dock.get_child(0).disabled=mode!="base"
+	dock.get_child(1).disabled=mode!="base" or tutorial_step<11
+	dock.get_child(2).disabled=mode!="base" or tutorial_step<12
+	_layout_ui();_update_top_bar();_update_landing_marker()
+	if onboarding:
+		# Modal onboarding stays above rebuilt menus.
+		ui_root.move_child(onboarding.screen,-1)
+		ui_root.move_child(onboarding.guide,-1)
+		onboarding.refresh_guide()
+
+func _update_landing_marker()->void:
+	var active:=has_colony and mode=="base" and tutorial_step<10
+	landing_marker.visible=active;landing_label.visible=active
+	if not active:return
+	var kind:int=BUILD_ORDER[tutorial_step]
+	landing_marker.position=LANDING_SITES[kind]+Vector3(0,.14,0)
+	landing_label.position=LANDING_SITES[kind]+Vector3(0,1.2,0)
+	landing_label.text=BUILDING_NAMES[kind].to_upper()+"\n"+("TAP HERE TO BUILD" if build_type==kind else "LANDING SITE")
+
+func _ensure_roads()->void:
+	if roads_root or buildings.is_empty():return
+	roads_root=Node3D.new();home_root.add_child(roads_root);art.roads(roads_root)
+
+func _save_profile()->void:
+	if not has_colony or not profile_ready:return
+	var records:Array=[]
+	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z]})
+	var data:Dictionary={"schema":1,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.")
+
+func _load_profile()->void:
+	var data:Dictionary=profile_store.read_profile(profile_path)
+	if data.is_empty():return
+	has_colony=true;home_planet=int(data.home_planet);tutorial_step=int(data.tutorial_step);tutorial_dismissed=bool(data.get("tutorial_dismissed",false))
+	credits=float(data.resources[0]);metal=float(data.resources[1]);oil=float(data.resources[2]);crystal=float(data.resources[3]);unit_stock=PackedInt32Array(data.unit_stock)
+	for b in data.buildings:_spawn_building(home_root,int(b.type),Vector3(b.pos[0],0,b.pos[2]),int(b.level),false)
+	_recalculate_colony();_ensure_roads()
+
+func _notification(what:int)->void:
+	if what==NOTIFICATION_APPLICATION_PAUSED or what==NOTIFICATION_WM_CLOSE_REQUEST:_save_profile()
+
+func _exit_tree()->void:
+	_save_profile()
