@@ -79,12 +79,21 @@ jobs:
           echo "Units: $(find game/assets/units -type f | wc -l)"
           echo "Maps: $(find game/assets/maps -type f | wc -l)"
 
+      - name: Create Android debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          test -f "$HOME/.android/debug.keystore"
+
       - name: Export debug APK
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p game/build
-          godot --headless --path game --export-debug "Android" game/build/GALAXY1942-Godot-debug.apk
+          godot --verbose --headless --path game --export-debug "Android" game/build/GALAXY1942-Godot-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
