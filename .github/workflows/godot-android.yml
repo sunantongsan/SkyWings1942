@@ -18,6 +18,9 @@ jobs:
           mkdir -p game
           unzip -q godot_project.zip -d game
 
+      - name: Generate game-ready Godot assets
+        run: python3 tools/prepare_godot.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
