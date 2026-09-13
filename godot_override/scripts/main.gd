@@ -251,7 +251,7 @@ func _unit_model(type:int,enemy:=false)->Node3D:
 func _begin_build(idx:int)->void:build_type=idx;build_panel.visible=false;units_panel.visible=false;galaxy_panel.visible=false;_toast("TAP THE TERRAIN TO PLACE %s"%BUILDING_NAMES[idx].to_upper())
 func _upgrade_selected()->void:
 	if selected_building<0 or selected_building>=buildings.size():_toast("SELECT A BUILDING FIRST");return
-	var b:Dictionary=buildings[selected_building];var cost:=500+b.type*120+b.level*360
+	var b:Dictionary=buildings[selected_building];var cost:int=500+int(b.type)*120+int(b.level)*360
 	if metal<cost:_toast("NOT ENOUGH METAL");return
 	metal-=cost;b.level+=1;building_levels[b.type]=max(building_levels[b.type],b.level);b.node.scale*=1.045;buildings[selected_building]=b;_select_building_at(b.pos);_toast("%s UPGRADED TO LV.%d"%[BUILDING_NAMES[b.type].to_upper(),b.level])
 
@@ -271,9 +271,9 @@ func _start_battle(idx:int)->void:
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
 	var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[0,8,8,9,6,2,3]
 	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],2+idx/4,true))
-	var count:=min(24,unit_stock[0]+unit_stock[1]+unit_stock[2])
+	var count:int=min(24,unit_stock[0]+unit_stock[1]+unit_stock[2])
 	for i in count:
-		var t:=i%6;var n:=_unit_model(t,false);n.position=Vector3(-10+(i%8)*2.6,.25,17+(i/8)*2);battle_root.add_child(n);battle_units.append({"node":n,"type":t,"damage":8.0+t*1.5,"speed":2.7+t*.08})
+		var t:int=i%6;var n:Node3D=_unit_model(t,false);n.position=Vector3(-10+(i%8)*2.6,.25,17+(i/8)*2);battle_root.add_child(n);battle_units.append({"node":n,"type":t,"damage":8.0+t*1.5,"speed":2.7+t*.08})
 	camera.position=Vector3(25,34,34);camera.size=34;_toast("ATTACKING %s"%MAP_NAMES[idx].to_upper())
 
 func _battle_tick(delta:float)->void:
