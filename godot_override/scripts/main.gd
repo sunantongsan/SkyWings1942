@@ -43,8 +43,27 @@ var battle_damage:=0.0
 var battle_elapsed:=0.0
 var battle_map:=1
 var ground:MeshInstance3D
-var terrain_material:StandardMaterial3D
+var terrain_material:ShaderMaterial
 var sun:DirectionalLight3D
+var art = preload("res://scripts/planet_art.gd").new()
+var ui_root: Control
+var header: HBoxContainer
+var dock: HBoxContainer
+var info_panel: PanelContainer
+var resource_labels: Array[Label] = []
+var status_label: Label
+var animators: Array[Dictionary] = []
+var scouts: Array[Node3D] = []
+var selection_ring: MeshInstance3D
+var visual_time := 0.0
+var mouse_start := Vector2.ZERO
+var pointer_moved := false
+var touch_start := Vector2.ZERO
+var gesture_multi := false
+var camera_focus := Vector3.ZERO
+var top_refresh := 0.0
+var toast_tween: Tween
+var battle_cooldown := 0.0
 
 func _ready()->void:
 	_setup_environment()
@@ -53,197 +72,206 @@ func _ready()->void:
 	_setup_ui()
 	_seed_home_base()
 	_apply_map_theme(0)
-	_toast("GODOT 3D HOME PLANET ONLINE")
+	_setup_life()
+	_toast("Welcome, Commander. Your homeworld awaits.")
 
 func _process(delta:float)->void:
 	if mode=="base": _economy_tick(delta)
 	elif mode=="battle": _battle_tick(delta)
-	_update_top_bar()
+	_visual_tick(delta)
+	top_refresh += delta
+	if top_refresh > 0.15:
+		_update_top_bar()
+		top_refresh = 0.0
 
 func _setup_environment()->void:
 	var env:=WorldEnvironment.new()
 	var e:=Environment.new()
 	e.background_mode=Environment.BG_COLOR
-	e.background_color=Color("07111f")
+	e.background_color=Color("172b39")
 	e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color=Color("819bb8")
-	e.ambient_light_energy=0.48
+	e.ambient_light_color=Color("b3d6dc")
+	e.ambient_light_energy=0.35
 	e.tonemap_mode=Environment.TONE_MAPPER_FILMIC
-	e.glow_enabled=true
 	env.environment=e
 	add_child(env)
 	sun=DirectionalLight3D.new()
-	sun.rotation_degrees=Vector3(-58,-38,0)
-	sun.light_energy=1.35
+	sun.rotation_degrees=Vector3(-52,-28,0)
+	sun.light_color=Color("fff0d1")
+	sun.light_energy=0.8
 	sun.shadow_enabled=true
+	sun.directional_shadow_max_distance=100
+	sun.shadow_bias=0.04
 	add_child(sun)
+	var fill:=DirectionalLight3D.new()
+	fill.rotation_degrees=Vector3(-32,140,0)
+	fill.light_color=Color("8ecee5")
+	fill.light_energy=0.18
+	add_child(fill)
 
 func _setup_world()->void:
 	world_root=Node3D.new();add_child(world_root)
 	home_root=Node3D.new();world_root.add_child(home_root)
 	battle_root=Node3D.new();battle_root.visible=false;world_root.add_child(battle_root)
 	decor_root=Node3D.new();world_root.add_child(decor_root)
-	ground=MeshInstance3D.new()
-	var pm:=PlaneMesh.new();pm.size=Vector2(72,52);ground.mesh=pm
-	terrain_material=StandardMaterial3D.new();terrain_material.roughness=.9;ground.material_override=terrain_material;world_root.add_child(ground)
-	_create_roads(home_root)
-	_create_decor(decor_root,0)
+	ground=art.terrain()
+	terrain_material=ground.material_override
+	world_root.add_child(ground)
+	art.roads(home_root)
+	selection_ring=MeshInstance3D.new()
+	var ring:=TorusMesh.new()
+	ring.inner_radius=3.2;ring.outer_radius=3.3
+	ring.rings=40;ring.ring_segments=6
+	selection_ring.mesh=ring
+	selection_ring.material_override=art.mat(Color("8ff9d5"),true)
+	selection_ring.visible=false
+	world_root.add_child(selection_ring)
 
 func _setup_camera()->void:
-	camera=Camera3D.new();camera.position=Vector3(26,34,32);camera.rotation_degrees=Vector3(-48,38,0)
-	camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=31;camera.current=true;add_child(camera)
+	camera=Camera3D.new()
+	camera.projection=Camera3D.PROJECTION_ORTHOGONAL
+	camera.keep_aspect=Camera3D.KEEP_HEIGHT
+	camera.size=36
+	camera.current=true
+	camera.far=220
+	add_child(camera)
+	_center_camera()
 
 func _setup_ui()->void:
 	ui=CanvasLayer.new();add_child(ui)
-	var top:=PanelContainer.new();top.position=Vector2(18,14);top.size=Vector2(1884,88);top.add_theme_stylebox_override("panel",_style(Color(.02,.055,.10,.95),16,Color("239eda"),1));ui.add_child(top)
-	top_label=Label.new();top_label.add_theme_font_size_override("font_size",24);top_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;top.add_child(top_label)
-	var left:=VBoxContainer.new();left.position=Vector2(20,122);left.add_theme_constant_override("separation",10);ui.add_child(left)
-	left.add_child(_button("BUILD",func():_toggle_build(),Vector2(190,72)))
-	left.add_child(_button("UNITS",func():_toggle_units(),Vector2(190,72)))
-	left.add_child(_button("GALAXY",func():_toggle_galaxy(),Vector2(190,72)))
-	left.add_child(_button("CENTER",func():_center_camera(),Vector2(190,64)))
-	left.add_child(_button("ZOOM +",func():_zoom(-2.0),Vector2(190,64)))
-	left.add_child(_button("ZOOM -",func():_zoom(2.0),Vector2(190,64)))
-	var info:=PanelContainer.new();info.position=Vector2(1450,122);info.size=Vector2(435,255);info.add_theme_stylebox_override("panel",_style(Color(.02,.06,.11,.94),16,Color("2acfff"),1));ui.add_child(info)
-	var iv:=VBoxContainer.new();iv.add_theme_constant_override("separation",8);info.add_child(iv)
-	selected_label=Label.new();selected_label.text="SELECT A BUILDING";selected_label.add_theme_font_size_override("font_size",22);iv.add_child(selected_label)
-	selected_detail=Label.new();selected_detail.text="Tap a structure to inspect and upgrade.";selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",20);iv.add_child(selected_detail)
-	iv.add_child(_button("UPGRADE",func():_upgrade_selected(),Vector2(0,50)))
-	build_panel=_make_build_panel();ui.add_child(build_panel);build_panel.visible=false
-	units_panel=_make_units_panel();ui.add_child(units_panel);units_panel.visible=false
-	galaxy_panel=_make_galaxy_panel();ui.add_child(galaxy_panel);galaxy_panel.visible=false
-	toast=Label.new();toast.position=Vector2(600,95);toast.size=Vector2(720,55);toast.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;toast.add_theme_font_size_override("font_size",19);toast.add_theme_color_override("font_color",Color("ffcf63"));toast.visible=false;ui.add_child(toast)
-	victory_panel=PanelContainer.new();victory_panel.position=Vector2(620,320);victory_panel.size=Vector2(680,380);victory_panel.visible=false;victory_panel.add_theme_stylebox_override("panel",_style(Color(.015,.04,.08,.97),26,Color("ffca42"),3));ui.add_child(victory_panel)
-	var vv:=VBoxContainer.new();vv.alignment=BoxContainer.ALIGNMENT_CENTER;vv.add_theme_constant_override("separation",18);victory_panel.add_child(vv)
-	var vt:=Label.new();vt.text="VICTORY";vt.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;vt.add_theme_font_size_override("font_size",44);vt.add_theme_color_override("font_color",Color("ffcc4d"));vv.add_child(vt)
-	var vr:=Label.new();vr.name="Reward";vr.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;vr.add_theme_font_size_override("font_size",18);vv.add_child(vr)
-	vv.add_child(_button("RETURN HOME",func():_return_home(),Vector2(0,62)))
+	ui_root=Control.new();ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui_root.mouse_filter=Control.MOUSE_FILTER_IGNORE;ui.add_child(ui_root)
+	header=HBoxContainer.new();header.add_theme_constant_override("separation",8);ui_root.add_child(header)
+	var brand:=PanelContainer.new();brand.custom_minimum_size=Vector2(225,72)
+	brand.add_theme_stylebox_override("panel",_style(Color("112a36"),12,Color("426373"),1));header.add_child(brand)
+	var bv:=VBoxContainer.new();brand.add_child(bv)
+	var title:=Label.new();title.text="GALAXY 1942";title.add_theme_font_size_override("font_size",23);bv.add_child(title)
+	status_label=Label.new();status_label.text="TERRA  /  HOME PLANET";status_label.add_theme_font_size_override("font_size",13);status_label.modulate=Color("79cdbf");bv.add_child(status_label)
+	var colors:=[Color("ecc779"),Color("b4c8d6"),Color("edaa76"),Color("c995f2"),Color("82dec3")]
+	for i in 5:
+		var card:=PanelContainer.new();card.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		card.add_theme_stylebox_override("panel",_style(Color("112a36"),12,Color("36505e"),1));header.add_child(card)
+		var column:=VBoxContainer.new();column.add_theme_constant_override("separation",0);card.add_child(column)
+		var caption:=Label.new();caption.text=["CREDITS","METAL","OIL","CRYSTAL","POWER"][i];caption.add_theme_font_size_override("font_size",13);caption.modulate=colors[i];column.add_child(caption)
+		var value:=Label.new();value.text="0";value.add_theme_font_size_override("font_size",25);column.add_child(value);resource_labels.append(value)
+	dock=HBoxContainer.new();dock.add_theme_constant_override("separation",10);ui_root.add_child(dock)
+	dock.add_child(_button("BUILD",_toggle_build,Vector2(180,64)))
+	dock.add_child(_button("FLEET",_toggle_units,Vector2(180,64)))
+	var galaxy_button:=_button("GALAXY MAP",_toggle_galaxy,Vector2(224,64))
+	galaxy_button.add_theme_stylebox_override("normal",_style(Color("176d75"),12,Color("69d9c8"),1));dock.add_child(galaxy_button)
+	dock.add_child(_button("HOME",_home_action,Vector2(120,64)))
+	dock.add_child(_button("+",func():_zoom(-3),Vector2(64,64)))
+	dock.add_child(_button("−",func():_zoom(3),Vector2(64,64)))
+	info_panel=PanelContainer.new();info_panel.custom_minimum_size=Vector2(286,0);info_panel.visible=false
+	info_panel.add_theme_stylebox_override("panel",_style(Color("112a36"),14,Color("75cabb"),1));ui_root.add_child(info_panel)
+	var iv:=VBoxContainer.new();iv.add_theme_constant_override("separation",12);info_panel.add_child(iv)
+	selected_label=Label.new();selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
+	selected_detail=Label.new();selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
+	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
+	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
+	build_panel=_make_build_panel();ui_root.add_child(build_panel);build_panel.hide()
+	units_panel=_make_units_panel();ui_root.add_child(units_panel);units_panel.hide()
+	galaxy_panel=_make_galaxy_panel();ui_root.add_child(galaxy_panel);galaxy_panel.hide()
+	toast=Label.new();toast.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;toast.add_theme_font_size_override("font_size",18);toast.modulate=Color("d6f4de");toast.mouse_filter=Control.MOUSE_FILTER_IGNORE;toast.add_theme_color_override("font_outline_color",Color("10222c"));toast.add_theme_constant_override("outline_size",6);ui_root.add_child(toast)
+	victory_panel=_panel("VICTORY  /  WORLD SECURED")
+	var vv:VBoxContainer=victory_panel.get_child(0)
+	var vr:=Label.new();vr.name="Reward";vr.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;vr.add_theme_font_size_override("font_size",22);vv.add_child(vr)
+	vv.add_child(_button("RETURN HOME",_return_home,Vector2(0,64)))
+	ui_root.add_child(victory_panel);victory_panel.hide()
+	get_viewport().size_changed.connect(_layout_ui)
+	_layout_ui()
+	_update_top_bar()
 
 func _make_build_panel()->PanelContainer:
-	var panel:=PanelContainer.new();panel.position=Vector2(220,675);panel.size=Vector2(1235,385);panel.add_theme_stylebox_override("panel",_style(Color(.02,.06,.11,.97),18,Color("2acfff"),2))
-	var grid:=GridContainer.new();grid.columns=5;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);panel.add_child(grid)
+	var panel:=_panel("CONSTRUCTION  /  DEVELOP YOUR HOMEWORLD")
+	var grid:=_scroll_grid(panel,5)
 	for i in 10:
-		var b:=Button.new();b.custom_minimum_size=Vector2(230,170);b.text="%s\nMetal %d"%[BUILDING_NAMES[i],BUILDING_COST[i]];b.add_theme_font_size_override("font_size",20)
-		var path:="res://assets/buildings/%s.png"%_building_file(i)
-		if ResourceLoader.exists(path):b.icon=load(path);b.expand_icon=true;b.icon_max_width=92
-		b.add_theme_stylebox_override("normal",_style(Color(.025,.10,.17,.95),14,Color(.1,.30,.43),1));b.add_theme_stylebox_override("hover",_style(Color(.04,.17,.26,.98),14,Color("2acfff"),2))
+		var b:=_asset_button(BUILDING_NAMES[i],"%s METAL"%_fmt(BUILDING_COST[i]),"buildings/"+_building_file(i),Vector2(200,158))
 		b.pressed.connect(func(idx=i):_begin_build(idx));grid.add_child(b)
 	return panel
 
 func _make_units_panel()->PanelContainer:
-	var panel:=PanelContainer.new();panel.position=Vector2(220,610);panel.size=Vector2(1235,450);panel.add_theme_stylebox_override("panel",_style(Color(.02,.06,.11,.97),18,Color("8b7cff"),2))
-	var grid:=GridContainer.new();grid.columns=5;grid.add_theme_constant_override("h_separation",8);grid.add_theme_constant_override("v_separation",8);panel.add_child(grid)
+	var panel:=_panel("STAR HANGAR  /  TRAIN YOUR FLEET")
+	var grid:=_scroll_grid(panel,4)
 	for i in 20:
-		var b:=Button.new();b.custom_minimum_size=Vector2(230,100);b.text="%02d  %s\nStock %d"%[i+1,UNIT_NAMES[i],unit_stock[i]];b.add_theme_font_size_override("font_size",19)
-		b.add_theme_stylebox_override("normal",_style(Color(.025,.09,.16,.96),12,Color(.18,.24,.45),1));b.add_theme_stylebox_override("hover",_style(Color(.07,.12,.26,.98),12,Color("8b7cff"),2))
+		var cost:=180+i*35
+		var b:=_asset_button(UNIT_NAMES[i],"Stock %d  •  %d C / %d O"%[unit_stock[i],cost,int(cost*.4)],"",Vector2(230,100))
 		b.pressed.connect(func(idx=i):_train_unit(idx));grid.add_child(b)
 	return panel
 
 func _make_galaxy_panel()->PanelContainer:
-	var panel:=PanelContainer.new();panel.position=Vector2(265,120);panel.size=Vector2(1390,880);panel.add_theme_stylebox_override("panel",_style(Color(.008,.02,.065,.985),24,Color("527dff"),2))
-	var outer:=VBoxContainer.new();outer.add_theme_constant_override("separation",14);panel.add_child(outer)
-	var title:=Label.new();title.text="GALAXY MAP • 15 WORLDS";title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;title.add_theme_font_size_override("font_size",30);outer.add_child(title)
-	var grid:=GridContainer.new();grid.columns=5;grid.add_theme_constant_override("h_separation",12);grid.add_theme_constant_override("v_separation",12);outer.add_child(grid)
+	var panel:=_panel("GALAXY MAP  /  CHOOSE A RAID TARGET")
+	var grid:=_scroll_grid(panel,5)
 	for i in 15:
-		var b:=Button.new();b.custom_minimum_size=Vector2(250,190);b.text="%02d\n%s\nThreat Lv.%d\nATTACK"%[i+1,MAP_NAMES[i],2+i*2];b.add_theme_font_size_override("font_size",20)
-		var col:Color=MAP_ACCENT[i];b.add_theme_stylebox_override("normal",_style(Color(col.r*.12,col.g*.12,col.b*.12,.96),20,col,2));b.add_theme_stylebox_override("hover",_style(Color(col.r*.22,col.g*.22,col.b*.22,.98),20,Color.WHITE,2))
+		var b:=_asset_button(MAP_NAMES[i],"Threat %02d  /  ATTACK"%(2+i*2),"",Vector2(200,130))
+		b.add_theme_stylebox_override("normal",_style(MAP_ACCENT[i].darkened(0.82),12,MAP_ACCENT[i].darkened(0.35),1))
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
 
 func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator"][i]
 
 func _seed_home_base()->void:
-	var pos=[Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(15,0,-9)]
+	var pos=[Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
 	for i in 10:_spawn_building(home_root,i,pos[i],building_levels[i],false)
 
 func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->Dictionary:
-	var root:=Node3D.new();root.position=pos;parent.add_child(root)
-	var base:=Color("4b5969") if not enemy else Color("5b4244");var accent:=Color("27c7ff") if not enemy else Color("ff4738")
-	match type:
-		0:_model_core(root,base,accent)
-		1:_model_reactor(root,base,accent)
-		2:_model_extractor(root,base,Color("ff9b3c"))
-		3:_model_oil(root,base,Color("ff6e2e"))
-		4:_model_crystal(root,base,Color("b75cff"))
-		5:_model_vault(root,base,accent)
-		6:_model_hangar(root,base,accent)
-		7:_model_lab(root,base,accent)
-		8:_model_laser(root,base,Color("ff2e2e") if enemy else Color("45a8ff"))
-		9:_model_shield(root,base,accent)
-	root.scale=Vector3.ONE*(1.0+(level-1)*.035)
+	var root:Node3D=art.building(type,enemy)
+	root.position=pos;parent.add_child(root)
+	root.scale=Vector3.ONE*(1.0+(level-1)*.025)
+	for part_name in ["Rotor","Radar","Drill","Turret"]:
+		var part:Node3D=root.find_child(part_name,true,false)
+		if part:animators.append({"node":part,"kind":part_name,"home":parent==home_root})
+	if type==3: art.particles(root,Vector3(0,4.4,-.25),Color("9db4b6"),true,false)
 	var d={"node":root,"type":type,"level":level,"pos":pos,"hp":350.0+level*120.0,"max_hp":350.0+level*120.0}
 	if parent==home_root:buildings.append(d)
 	return d
 
 func _create_roads(parent:Node3D)->void:
-	var mat:=_mat(Color("252b31"))
-	for p in [Vector3(0,.02,0),Vector3(0,.02,8),Vector3(0,.02,-8)]:
-		var r:=_box(Vector3(34,.05,2.2),mat);r.position=p;parent.add_child(r)
-	for p in [Vector3(-8,.02,0),Vector3(8,.02,0)]:
-		var r:=_box(Vector3(2.2,.05,27),mat);r.position=p;parent.add_child(r)
+	art.roads(parent)
 
 func _create_decor(parent:Node3D,theme:int)->void:
-	for c in parent.get_children():c.queue_free()
-	var rng:=RandomNumberGenerator.new();rng.seed=1942+theme*97
-	for i in 55:
-		var x:=rng.randf_range(-32,32);var z:=rng.randf_range(-22,22)
-		if Vector2(x,z).length()<8:continue
-		var rock:=_sphere(rng.randf_range(.25,.65),_mat(MAP_GROUND[theme].lightened(.1)));rock.position=Vector3(x,rng.randf_range(.12,.28),z);rock.scale.y=rng.randf_range(.5,1.6);parent.add_child(rock)
+	art.decor(parent,theme)
 
 func _apply_map_theme(idx:int)->void:
-	map_index=idx;terrain_material.albedo_color=MAP_GROUND[idx];terrain_material.metallic=.55 if idx in [6,11] else .05;terrain_material.roughness=.42 if idx in [5,6] else .88;sun.light_color=MAP_ACCENT[idx].lerp(Color.WHITE,.72);_create_decor(decor_root,idx)
+	map_index=idx
+	var soil:Color=MAP_GROUND[idx].darkened(0.28)
+	var grass:Color=MAP_GROUND[idx].lightened(0.05)
+	if idx==0:soil=Color("354b43");grass=Color("526f50")
+	terrain_material.set_shader_parameter("soil_color",soil)
+	terrain_material.set_shader_parameter("grass_color",grass)
+	sun.light_color=MAP_ACCENT[idx].lerp(Color("fff0d1"),.88)
+	_create_decor(decor_root,idx)
 
-func _model_core(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5.8,.8,5.8),_mat(base)));var body:=_cyl(2.1,1.6,3.4,_mat(base.lightened(.06)));body.position.y=2;r.add_child(body)
-	for ang in [0.0,90.0,180.0,270.0]:
-		var p:=_cyl(.35,.28,4.2,_mat(base.darkened(.08)));p.position=Vector3(cos(deg_to_rad(ang))*2.2,2.6,sin(deg_to_rad(ang))*2.2);r.add_child(p)
-	var orb:=_sphere(.72,_mat(a,a,4,.18));orb.position.y=4.4;r.add_child(orb);var beam:=_cyl(.16,.11,5.5,_mat(a,a,7,.1));beam.position.y=7;r.add_child(beam)
 
-func _model_reactor(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5,.7,5),_mat(base)));var core:=_cyl(1.5,1.25,2.8,_mat(base.lightened(.04)));core.position.y=1.8;r.add_child(core);var glow:=_cyl(.72,.72,2.5,_mat(a,a,5,.14));glow.position.y=2.3;r.add_child(glow)
-	for ang in [45.0,135.0,225.0,315.0]:
-		var pod:=_cyl(.45,.45,2,_mat(base));pod.position=Vector3(cos(deg_to_rad(ang))*2,1,sin(deg_to_rad(ang))*2);r.add_child(pod)
 
-func _model_extractor(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5.2,.7,4.6),_mat(base)));var rig:=_box(Vector3(2.8,2.2,2.6),_mat(base.lightened(.05)));rig.position=Vector3(-.4,1.45,0);r.add_child(rig);var arm:=_box(Vector3(.45,.45,4),_mat(a));arm.position=Vector3(1,3,.2);arm.rotation_degrees=Vector3(0,0,-28);r.add_child(arm)
 
-func _model_oil(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5.4,.6,4.8),_mat(base)))
-	for p in [Vector3(-1.5,1.5,-.8),Vector3(0,1.8,.5),Vector3(1.5,1.4,-.3)]:
-		var t:=_cyl(.65,.65,2.7,_mat(base.lightened(.04)));t.position=p;r.add_child(t)
-	var g:=_sphere(.45,_mat(a,a,4,.18));g.position=Vector3(.2,2.35,1.3);r.add_child(g)
 
-func _model_crystal(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5,.55,4.6),_mat(base)))
-	for d in [Vector3(0,2.2,0),Vector3(-1.1,1.5,.5),Vector3(1.2,1.7,.2),Vector3(.5,1.2,-1.1),Vector3(-.6,1.1,-1)]:
-		var c:=_cone(.55,2.7,_mat(a,a,2.8,.12));c.position=d;r.add_child(c)
 
-func _model_vault(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5.2,.65,4.8),_mat(base)));var main:=_box(Vector3(3.4,2.7,3.2),_mat(base.lightened(.05)));main.position.y=1.65;r.add_child(main)
 
-func _model_hangar(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(6.3,.55,5.5),_mat(base)));var roof:=_box(Vector3(5.6,2.4,4.5),_mat(base.lightened(.03)));roof.position=Vector3(0,1.55,-.3);r.add_child(roof);var door:=_box(Vector3(3.6,1.8,.16),_mat(Color("07101a"),a,1.8));door.position=Vector3(0,1.2,2.02);r.add_child(door)
 
-func _model_lab(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5,.6,4.8),_mat(base)));var tower:=_cyl(1.2,1,2.9,_mat(base.lightened(.06)));tower.position.y=1.7;r.add_child(tower);var dome:=_sphere(1,_mat(a,a,2.4,.18));dome.position.y=3.25;dome.scale.y=.65;r.add_child(dome)
 
-func _model_laser(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(4.4,.65,4.4),_mat(base)));var tower:=_cyl(1,.75,3,_mat(base.lightened(.04)));tower.position.y=1.8;r.add_child(tower);var head:=_box(Vector3(2,.8,1.1),_mat(base));head.position=Vector3(0,3.4,0);r.add_child(head);var barrel:=_cyl(.22,.16,3.2,_mat(a,a,3));barrel.position=Vector3(0,3.45,-1.5);barrel.rotation_degrees=Vector3(90,0,0);r.add_child(barrel)
 
-func _model_shield(r:Node3D,base:Color,a:Color)->void:
-	r.add_child(_box(Vector3(5.8,.6,5.8),_mat(base)))
-	for ang in [0.0,90.0,180.0,270.0]:
-		var p:=_cyl(.32,.32,3.2,_mat(base.lightened(.08)));p.position=Vector3(cos(deg_to_rad(ang))*2.1,1.8,sin(deg_to_rad(ang))*2.1);r.add_child(p)
-	var bubble:=_sphere(3,_mat(a,a,1.7,.09));bubble.position.y=.5;bubble.scale.y=.55;r.add_child(bubble)
+
+
+
+
+
+
+
+
+
+
 
 func _unit_model(type:int,enemy:=false)->Node3D:
-	var r:=Node3D.new();var accent:=Color("37d7ff") if not enemy else Color("ff4b3c");var base:=Color("505d6d")
 	if type<=9:
-		var body:=_box(Vector3(1.1,.45,2.5),_mat(base));body.position.y=.55;r.add_child(body);var wing:=_box(Vector3(2.8,.16,1),_mat(accent.darkened(.25)));wing.position.y=.52;r.add_child(wing)
-	elif type<=13:
+		var ship:Node3D=art.model("fighter")
+		ship.scale=Vector3.ONE*(0.5+type*.035)
+		return ship
+	var r:=Node3D.new();var accent:=Color("37d7ff") if not enemy else Color("ff4b3c");var base:=Color("505d6d")
+	if type<=13:
 		var ch:=_box(Vector3(2.2,.55,3.1),_mat(base));ch.position.y=.45;r.add_child(ch);var turret:=_cyl(.55,.55,.55,_mat(base.lightened(.07)));turret.position.y=.95;r.add_child(turret)
 	elif type in [16,17]:
-		var orb:=_sphere(.55,_mat(accent,accent,2.2,.1));orb.position.y=1;r.add_child(orb)
+		var orb:=_sphere(.55,_mat(accent,accent,2.2,.8));orb.position.y=1;r.add_child(orb)
 	else:
 		var body:=_box(Vector3(.7,1.1,.45),_mat(base));body.position.y=1.1;r.add_child(body);var head:=_sphere(.35,_mat(accent.darkened(.2)));head.position.y=1.95;r.add_child(head)
 	return r
@@ -259,22 +287,24 @@ func _train_unit(idx:int)->void:
 	var c:=180+idx*35
 	if credits<c or oil<c*.4:_toast("NOT ENOUGH RESOURCES");return
 	credits-=c;oil-=c*.4;unit_stock[idx]+=1;selected_unit=idx;_toast("%s TRAINED • STOCK %d"%[UNIT_NAMES[idx].to_upper(),unit_stock[idx]])
-	units_panel.queue_free();units_panel=_make_units_panel();ui.add_child(units_panel)
+	units_panel.queue_free();units_panel=_make_units_panel();ui_root.add_child(units_panel);_layout_ui()
 
-func _toggle_build()->void:build_panel.visible=not build_panel.visible;units_panel.visible=false;galaxy_panel.visible=false
+func _toggle_build()->void:
+	if mode!="base":_toast("Return home to build your base.");return
+	build_panel.visible=not build_panel.visible;units_panel.visible=false;galaxy_panel.visible=false
 func _toggle_units()->void:units_panel.visible=not units_panel.visible;build_panel.visible=false;galaxy_panel.visible=false
 func _toggle_galaxy()->void:galaxy_panel.visible=not galaxy_panel.visible;build_panel.visible=false;units_panel.visible=false
 
 func _start_battle(idx:int)->void:
-	mode="battle";battle_map=idx;galaxy_panel.visible=false;home_root.visible=false;battle_root.visible=true
+	mode="battle";battle_map=idx;galaxy_panel.visible=false;info_panel.hide();selection_ring.hide();home_root.visible=false;battle_root.visible=true
 	for c in battle_root.get_children():c.queue_free()
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
 	var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[0,8,8,9,6,2,3]
 	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],2+idx/4,true))
 	var count:int=min(24,unit_stock[0]+unit_stock[1]+unit_stock[2])
 	for i in count:
-		var t:int=i%6;var n:Node3D=_unit_model(t,false);n.position=Vector3(-10+(i%8)*2.6,.25,17+(i/8)*2);battle_root.add_child(n);battle_units.append({"node":n,"type":t,"damage":8.0+t*1.5,"speed":2.7+t*.08})
-	camera.position=Vector3(25,34,34);camera.size=34;_toast("ATTACKING %s"%MAP_NAMES[idx].to_upper())
+		var t:int=i%6;var n:Node3D=_unit_model(t,false);n.position=Vector3(-10+(i%8)*2.6,3.2,17+(i/8)*2);battle_root.add_child(n);battle_units.append({"node":n,"type":t,"damage":8.0+t*1.5,"speed":2.7+t*.08})
+	camera_focus=Vector3.ZERO;_position_camera();camera.size=38;_toast("ATTACKING %s"%MAP_NAMES[idx].to_upper())
 
 func _battle_tick(delta:float)->void:
 	battle_elapsed+=delta;var total:=0.0;var alive_hp:=0.0;var alive:Array=[]
@@ -286,28 +316,35 @@ func _battle_tick(delta:float)->void:
 	for u in battle_units:
 		var n:Node3D=u.node
 		if not is_instance_valid(n):continue
-		var target:Dictionary=alive[0];var best:=n.position.distance_to(target.pos)
+		var target:Dictionary=alive[0];var best:=Vector2(n.position.x,n.position.z).distance_to(Vector2(target.pos.x,target.pos.z))
 		for e in alive:
-			var d:=n.position.distance_to(e.pos)
+			var d:=Vector2(n.position.x,n.position.z).distance_to(Vector2(e.pos.x,e.pos.z))
 			if d<best:best=d;target=e
-		if best>2.5:n.position=n.position.move_toward(target.pos,u.speed*delta);n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP)
+		if best>2.5:n.position=n.position.move_toward(Vector3(target.pos.x,n.position.y,target.pos.z),u.speed*delta);n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP)
 		else:
+			if target.hp<=0:continue
 			target.hp-=u.damage*delta*2.2
+			if visual_time-float(u.get("last_shot",-1.0))>0.55:
+				_laser(n.global_position+Vector3.UP,target.pos+Vector3(0,1.8,0))
+				u["last_shot"]=visual_time
 			if target.hp<=0 and is_instance_valid(target.node):_explode(target.node.global_position);target.node.queue_free()
 
 func _finish_battle(win:bool)->void:
 	if mode!="battle":return
 	if win:
+		mode="victory"
 		var reward:=Vector4(8000+battle_map*700,4200+battle_map*350,2600+battle_map*220,900+battle_map*90);credits+=reward.x;metal+=reward.y;oil+=reward.z;crystal+=reward.w
 		var l:Label=victory_panel.find_child("Reward",true,false);l.text="%s conquered\nDamage 100%%\n+%d Credits   +%d Metal   +%d Oil   +%d Crystal"%[MAP_NAMES[battle_map],int(reward.x),int(reward.y),int(reward.z),int(reward.w)];victory_panel.visible=true
 	else:_return_home();_toast("FLEET WITHDREW")
 
-func _return_home()->void:mode="base";victory_panel.visible=false;battle_root.visible=false;home_root.visible=true;_apply_map_theme(0);_center_camera();_toast("RETURNED TO HOME PLANET")
+func _return_home()->void:mode="base";victory_panel.visible=false;battle_root.visible=false;home_root.visible=true;_apply_map_theme(0);_center_camera();_update_top_bar();_toast("RETURNED TO HOME PLANET")
 func _economy_tick(delta:float)->void:credits+=delta*3.5;metal+=delta*(2.0+building_levels[2]*.7);oil+=delta*(1.5+building_levels[3]*.5);crystal+=delta*(.6+building_levels[4]*.22);power=800+building_levels[1]*160
 func _update_top_bar()->void:
-	if not top_label:return
-	var prefix:="HOME PLANET • TERRA" if mode=="base" else "BATTLE • %s • DAMAGE %d%%"%[MAP_NAMES[battle_map],int(battle_damage)]
-	top_label.text="%s        CREDITS %s     METAL %s     OIL %s     CRYSTAL %s     POWER %s"%[prefix,_fmt(credits),_fmt(metal),_fmt(oil),_fmt(crystal),_fmt(power)]
+	if resource_labels.size()!=5:return
+	var values:=[credits,metal,oil,crystal,power]
+	for i in 5:resource_labels[i].text=_fmt(values[i])
+	status_label.text="TERRA  /  HOME PLANET" if mode=="base" else "%s  /  %d%%"%[MAP_NAMES[battle_map].to_upper(),int(battle_damage)]
+
 func _fmt(v:float)->String:
 	if v>=1000000:return "%.2fM"%(v/1000000.0)
 	if v>=1000:return "%.1fK"%(v/1000.0)
@@ -319,14 +356,15 @@ func _select_building_at(pos:Vector3)->void:
 		var d:float=buildings[i].pos.distance_to(pos)
 		if d<dist:dist=d;best=i
 	selected_building=best
-	if best<0:selected_label.text="SELECT A BUILDING";selected_detail.text="Tap a structure to inspect and upgrade.";return
+	if best<0:info_panel.hide();selection_ring.hide();return
+	info_panel.show();selection_ring.show();selection_ring.position=buildings[best].pos+Vector3(0,.1,0)
 	var b:Dictionary=buildings[best];selected_label.text="%s • Lv.%d"%[BUILDING_NAMES[b.type],b.level];selected_detail.text="HP %d/%d\nUpgrade cost %d Metal\nMap theme: %s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,MAP_NAMES[map_index]]
 
 func _place_building(pos:Vector3)->void:
 	if build_type<0:return
-	if abs(pos.x)>30 or abs(pos.z)>21:_toast("BUILD INSIDE THE BASE AREA");return
+	if abs(pos.x)>18 or abs(pos.z)>15:_toast("BUILD INSIDE THE BASE AREA");return
 	for b in buildings:
-		if b.pos.distance_to(pos)<4.4:_toast("TOO CLOSE TO ANOTHER BUILDING");return
+		if b.pos.distance_to(pos)<6.1:_toast("TOO CLOSE TO ANOTHER BUILDING");return
 	var cost=BUILDING_COST[build_type]
 	if metal<cost:_toast("NOT ENOUGH METAL");return
 	metal-=cost;_spawn_building(home_root,build_type,pos,1,false);_toast("%s CONSTRUCTION COMPLETE"%BUILDING_NAMES[build_type].to_upper());build_type=-1
@@ -341,39 +379,53 @@ func _unhandled_input(event:InputEvent)->void:
 		if event.button_index==MOUSE_BUTTON_WHEEL_DOWN and event.pressed:_zoom(2);return
 		if event.button_index==MOUSE_BUTTON_LEFT:
 			drag_camera=event.pressed
-			if not event.pressed:
-				var h=_ground_hit(event.position)
-				if h!=null:
-					if build_type>=0:_place_building(h)
-					else:_select_building_at(h)
+			if event.pressed:mouse_start=event.position;pointer_moved=false
+			elif not pointer_moved:_tap_world(event.position)
 	elif event is InputEventMouseMotion and drag_camera:
-		camera.position+=Vector3(-event.relative.x*.025,0,-event.relative.y*.025);_clamp_camera()
+		if event.position.distance_to(mouse_start)>8:pointer_moved=true
+		if pointer_moved:_pan(event.position,event.relative)
 	elif event is InputEventScreenTouch:
-		if event.pressed:touch_points[event.index]=event.position
+		if event.pressed:
+			touch_points[event.index]=event.position
+			if touch_points.size()==1:touch_start=event.position;pointer_moved=false;gesture_multi=false
+			else:gesture_multi=true;pinch_last=0
 		else:
-			var single=touch_points.size()==1;touch_points.erase(event.index);pinch_last=0
-			if single:
-				var h=_ground_hit(event.position)
-				if h!=null:
-					if build_type>=0:_place_building(h)
-					else:_select_building_at(h)
+			var tap:bool=touch_points.size()==1 and not gesture_multi and not pointer_moved
+			touch_points.erase(event.index);pinch_last=0
+			if tap:_tap_world(event.position)
 	elif event is InputEventScreenDrag:
+		if not touch_points.has(event.index):return
 		touch_points[event.index]=event.position
-		if touch_points.size()==1:camera.position+=Vector3(-event.relative.x*.03,0,-event.relative.y*.03);_clamp_camera()
+		if touch_points.size()==1 and not gesture_multi:
+			if event.position.distance_to(touch_start)>8:pointer_moved=true
+			if pointer_moved:_pan(event.position,event.relative)
 		elif touch_points.size()>=2:
-			var k=touch_points.keys();var d:float=touch_points[k[0]].distance_to(touch_points[k[1]])
-			if pinch_last>0:camera.size=clamp(camera.size*(pinch_last/d),18,48)
+			var k:=touch_points.keys();var d:float=touch_points[k[0]].distance_to(touch_points[k[1]])
+			if pinch_last>0 and d>1:camera.size=clampf(camera.size*pinch_last/d,24,52)
 			pinch_last=d
 
-func _clamp_camera()->void:camera.position.x=clamp(camera.position.x,-22,22);camera.position.z=clamp(camera.position.z,12,42)
-func _center_camera()->void:camera.position=Vector3(26,34,32);camera.size=31
-func _zoom(delta:float)->void:camera.size=clamp(camera.size+delta,18,48)
+func _clamp_camera()->void:
+	camera_focus.x=clampf(camera_focus.x,-18,18)
+	camera_focus.z=clampf(camera_focus.z,-14,14)
+	_position_camera()
+
+func _center_camera()->void:
+	camera_focus=Vector3(0,0,1)
+	camera.size=36
+	_position_camera()
+
+func _zoom(delta:float)->void:camera.size=clampf(camera.size+delta,24,52)
+
 func _explode(pos:Vector3)->void:
-	var flash:=OmniLight3D.new();flash.position=pos+Vector3(0,2,0);flash.light_color=Color("ff6f32");flash.light_energy=8;flash.omni_range=8;world_root.add_child(flash)
-	var tw:=create_tween();tw.tween_property(flash,"light_energy",0,.55);tw.finished.connect(func():flash.queue_free())
+	art.particles(world_root,pos+Vector3.UP,Color("ffb564"),false,true)
+	art.particles(world_root,pos+Vector3.UP,Color("647575"),true,true)
+	var flash:=OmniLight3D.new();flash.position=pos+Vector3(0,2,0);flash.light_color=Color("ff9b56");flash.light_energy=4;flash.omni_range=6;world_root.add_child(flash)
+	var tw:=create_tween();tw.tween_property(flash,"light_energy",0,.45);tw.finished.connect(flash.queue_free)
+
 func _toast(s:String)->void:
+	if toast_tween:toast_tween.kill()
 	toast.text=s;toast.visible=true;toast.modulate.a=1
-	var tw:=create_tween();tw.tween_interval(1.6);tw.tween_property(toast,"modulate:a",0,.65);tw.finished.connect(func():toast.visible=false;toast.modulate.a=1)
+	toast_tween=create_tween();toast_tween.tween_interval(2.5);toast_tween.tween_property(toast,"modulate:a",0,.5)
 
 func _box(size:Vector3,mat:Material)->MeshInstance3D:
 	var n:=MeshInstance3D.new();var m:=BoxMesh.new();m.size=size;n.mesh=m;n.material_override=mat;return n
@@ -388,6 +440,108 @@ func _mat(color:Color,emit:=Color.TRANSPARENT,energy:=0.0,alpha:=1.0)->StandardM
 	if alpha<.999:m.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
 	return m
 func _button(text:String,cb:Callable,size:Vector2)->Button:
-	var b:=Button.new();b.text=text;b.custom_minimum_size=size;b.add_theme_font_size_override("font_size",23);b.add_theme_stylebox_override("normal",_style(Color(.025,.10,.17,.96),14,Color(.10,.32,.48),1));b.add_theme_stylebox_override("hover",_style(Color(.04,.18,.28,.98),14,Color("2acfff"),2));b.pressed.connect(cb);return b
+	var b:=Button.new();b.text=text;b.custom_minimum_size=size;b.add_theme_font_size_override("font_size",20)
+	b.add_theme_color_override("font_color",Color("dfebec"))
+	b.add_theme_stylebox_override("normal",_style(Color("183644"),12,Color("4a6877"),1))
+	b.add_theme_stylebox_override("hover",_style(Color("24515b"),12,Color("83dcc9"),2))
+	b.add_theme_stylebox_override("pressed",_style(Color("0f242c"),12,Color("83dcc9"),2))
+	b.pressed.connect(cb);return b
+
 func _style(bg:Color,radius:int,border:Color,width:int)->StyleBoxFlat:
 	var s:=StyleBoxFlat.new();s.bg_color=bg;s.border_color=border;s.set_border_width_all(width);s.corner_radius_top_left=radius;s.corner_radius_top_right=radius;s.corner_radius_bottom_left=radius;s.corner_radius_bottom_right=radius;s.content_margin_left=14;s.content_margin_right=14;s.content_margin_top=10;s.content_margin_bottom=10;return s
+
+func _position_camera()->void:
+	camera.position=camera_focus+Vector3(29,38,33)
+	camera.look_at(camera_focus,Vector3.UP)
+
+func _pan(pos:Vector2,relative:Vector2)->void:
+	var now=_ground_hit(pos)
+	var before=_ground_hit(pos-relative)
+	if now!=null and before!=null:camera_focus+=before-now;_clamp_camera()
+
+func _tap_world(pos:Vector2)->void:
+	if mode!="base":return
+	var h=_ground_hit(pos)
+	if h!=null:
+		if build_type>=0:_place_building(h)
+		else:_select_building_at(h)
+
+func _panel(title:String)->PanelContainer:
+	var p:=PanelContainer.new()
+	p.add_theme_stylebox_override("panel",_style(Color("102832"),16,Color("517582"),1))
+	var column:=VBoxContainer.new();column.add_theme_constant_override("separation",14);p.add_child(column)
+	var row:=HBoxContainer.new();column.add_child(row)
+	var label:=Label.new();label.text=title;label.add_theme_font_size_override("font_size",20);label.size_flags_horizontal=Control.SIZE_EXPAND_FILL;row.add_child(label)
+	row.add_child(_button("CLOSE",func():
+		if p==victory_panel:_return_home()
+		else:p.hide()
+	,Vector2(104,48)))
+	return p
+
+func _scroll_grid(panel:PanelContainer,columns:int)->GridContainer:
+	var scroll:=ScrollContainer.new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	panel.get_child(0).add_child(scroll)
+	var grid:=GridContainer.new();grid.columns=columns;grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);scroll.add_child(grid)
+	return grid
+
+func _asset_button(title:String,detail:String,icon:String,minimum:Vector2)->Button:
+	var b:=_button("",func():pass,minimum);b.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	var col:=VBoxContainer.new();col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT,Control.PRESET_MODE_MINSIZE,10);col.mouse_filter=Control.MOUSE_FILTER_IGNORE;col.alignment=BoxContainer.ALIGNMENT_CENTER;b.add_child(col)
+	var path:="res://assets/icons/"+icon+".png"
+	if not icon.is_empty() and ResourceLoader.exists(path):
+		var image:=TextureRect.new();image.texture=load(path);image.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;image.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;image.custom_minimum_size.y=82;image.mouse_filter=Control.MOUSE_FILTER_IGNORE;col.add_child(image)
+	for text in [title,detail]:
+		var label:=Label.new();label.text=text;label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;label.add_theme_font_size_override("font_size",17 if text==title else 14);label.modulate=Color("dfebec") if text==title else Color("8fc7be");label.mouse_filter=Control.MOUSE_FILTER_IGNORE;col.add_child(label)
+	return b
+
+func _layout_ui()->void:
+	var size:=get_viewport().get_visible_rect().size
+	var margin:=24.0
+	if OS.has_feature("android"):
+		var safe:=DisplayServer.get_display_safe_area()
+		var screen:=DisplayServer.screen_get_size()
+		if screen.x>0:
+			margin=maxf(margin,maxf(safe.position.x,screen.x-safe.end.x)*size.x/float(screen.x)+8)
+	header.position=Vector2(margin,14);header.size=Vector2(size.x-margin*2,76)
+	dock.position=Vector2((size.x-882)/2,size.y-80)
+	info_panel.position=Vector2(size.x-margin-286,110);info_panel.size=Vector2(286,260)
+	for panel in [build_panel,units_panel,galaxy_panel]:
+		if panel:panel.position=Vector2(margin,105);panel.size=Vector2(size.x-margin*2,size.y-200)
+	victory_panel.position=Vector2((size.x-720)/2,170);victory_panel.size=Vector2(720,330)
+	toast.position=Vector2(margin,size.y-114);toast.size=Vector2(size.x-margin*2,28)
+
+func _setup_life()->void:
+	for i in 3:
+		var ship:Node3D=art.model("fighter")
+		ship.scale=Vector3.ONE*0.48
+		home_root.add_child(ship);scouts.append(ship)
+
+func _visual_tick(delta:float)->void:
+	visual_time+=delta
+	for i in range(animators.size()-1,-1,-1):
+		var item:Dictionary=animators[i]
+		if not is_instance_valid(item.node):animators.remove_at(i);continue
+		if item.kind=="Turret":item.node.rotation.y=sin(visual_time*.4)*.85
+		elif item.kind=="Drill":item.node.rotation.y+=delta*1.2
+		elif item.kind=="Rotor":item.node.rotation.y+=delta*.45
+		elif item.kind=="Radar":item.node.rotation.y+=delta*.3
+	for i in scouts.size():
+		var a:=visual_time*.075+i*TAU/3
+		scouts[i].position=Vector3(cos(a)*18,5.3+sin(a*2)*.35,sin(a)*13)
+		scouts[i].rotation.y=-a+PI
+	if selection_ring.visible:selection_ring.rotation.y+=delta*.25
+
+func _laser(from:Vector3,to:Vector3)->void:
+	var beam:=MeshInstance3D.new()
+	var mesh:=CylinderMesh.new();mesh.top_radius=.045;mesh.bottom_radius=.045;mesh.height=from.distance_to(to);mesh.radial_segments=6
+	beam.mesh=mesh;beam.material_override=art.mat(Color("88f7e4"),true)
+	world_root.add_child(beam);beam.position=(from+to)*.5
+	var direction:=(to-from).normalized()
+	var axis:=Vector3.UP.cross(direction)
+	if axis.length()>0.001:beam.quaternion=Quaternion(axis.normalized(),acos(clampf(Vector3.UP.dot(direction),-1,1)))
+	var tw:=create_tween();tw.tween_interval(.09);tw.tween_callback(beam.queue_free)
+
+func _home_action()->void:
+	if mode=="base":_center_camera()
+	else:_return_home()

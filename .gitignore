@@ -1,0 +1,9 @@
+game/
+.godot/
+*.import
+*.uid
+godot_override/assets/models/*.glb
+godot_override/assets/models/manifest.json
+godot_override/assets/icons/
+
+__pycache__/

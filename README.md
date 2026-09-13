@@ -1,20 +1,39 @@
-# GALAXY 1942 — Godot Edition
+# GALAXY 1942 — Homeworld 3D
 
-This repository has moved to a fresh **Godot 4** implementation.
+Android landscape base-building prototype in Godot 4.4.1 / GDScript.
+The original Android Canvas version remains on `legacy-android-canvas`.
 
-The previous Android Canvas prototype is preserved on the **legacy-android-canvas** branch.
+## Current visual build
 
-## Godot prototype
-- Modern 2.5D RTS home planet
-- 10 transparent building sprites
-- Pan + pinch zoom camera
-- Tap/select/upgrade buildings
-- Build and place new structures
-- Live resource production
-- Galaxy map with raid targets
-- Automated fleet raid prototype
-- Android landscape UI
+- Ten original GLB building designs with separated moving parts and PBR materials.
+- Terrain shader, surrounding ridges, rocks and alien vegetation.
+- Directional shadows, emissive accents, animated shields, rotating defenses,
+  extraction smoke, patrol ships, weapon beams and destruction particles.
+- Landscape HUD, five resource cards, touch pan / pinch zoom and scrollable menus.
+- Individual transparent building icons rendered from the same in-game GLBs.
 
-The complete editable Godot project is stored in `godot_project.zip`. Unzip it, then open `project.godot` in Godot 4.4.x.
+## Open and test
 
-GitHub Actions automatically exports a debug Android APK after changes to main.
+Download the **GALAXY1942-Godot-Source** artifact from the newest successful
+GitHub Actions run. Extract its ZIP, then open `project.godot` in Godot 4.4.1.
+It contains the complete project and individual `.glb` models.
+The old root `godot_project.zip` is historical and is not the current build.
+
+For developers: `python3 tools/assemble_godot.py --output game` assembles the
+same project. The asset generator uses only Python's standard library.
+`godot_override/` contains runtime source. `godot_src/` holds project/export settings.
+
+GitHub Actions renders the real scene, tests construction, upgrades, training,
+raid victory and reward settlement, then exports a debug APK. It uploads
+screenshots, the APK and the complete editable project as separate artifacts.
+
+## Scope and performance
+
+This is a visual vertical slice, not a completed online game. Multiplayer,
+server validation and durable player progress are not implemented. Ten flight
+unit types currently share the original fighter mesh; ground troop art remains
+prototype quality. Check frame rate and heat on a physical Android device.
+
+The GLB generator records triangle counts and authorship in
+`assets/models/manifest.json`. Its highest-detail building is about 4,400 triangles.
+Art assets are authored for this project; no third-party game artwork is used.
