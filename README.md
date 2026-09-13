@@ -1,19 +1,20 @@
-# SKY WINGS 1942 REBORN — Android prototype
+# GALAXY 1942 — Godot Edition
 
-เกมยิงแนว vertical shoot'em up ตามคอนเซ็ปต์จากภาพอ้างอิง: เครื่องบิน 5 ลำ, HP, คะแนน, Coin/Gem, ไอเท็มดรอป, พลังยิงหลายระดับ, โล่, ระเบิด, ศัตรูหลายแบบ และบอสทุกช่วงด่าน
+This repository has moved to a fresh **Godot 4** implementation.
 
-## เปิดและ Build
-1. เปิดโฟลเดอร์ `SkyWings1942` ด้วย Android Studio รุ่นปัจจุบัน
-2. รอ Gradle Sync
-3. เลือก emulator หรือมือถือ Android
-4. กด Run
-5. เปลี่ยน `applicationId`/ชื่อเกมได้ใน `app/build.gradle` และ Manifest
+The previous Android Canvas prototype is preserved on the **legacy-android-canvas** branch.
 
-## การเล่น
-- ลากนิ้วเพื่อบังคับเครื่องบิน
-- เกมยิงอัตโนมัติ
-- เก็บไอเท็มเพื่อเพิ่มพลังยิง/โล่/HP/เหรียญ/เพชร/ระเบิด
-- ปุ่ม BOMB อยู่มุมขวาล่าง
-- เมนู START เข้าเกม
+## Godot prototype
+- Modern 2.5D RTS home planet
+- 10 transparent building sprites
+- Pan + pinch zoom camera
+- Tap/select/upgrade buildings
+- Build and place new structures
+- Live resource production
+- Galaxy map with raid targets
+- Automated fleet raid prototype
+- Android landscape UI
 
-หมายเหตุ: เวอร์ชันนี้เป็น playable prototype ที่วาดกราฟิกด้วย Android Canvas เพื่อให้โปรเจกต์ไม่มี dependency ด้าน asset เพิ่มเติม เหมาะสำหรับต่อยอดเป็นเกมเต็มด้วย sprite, เสียง, เพลง, ระบบอัปเกรด, ร้านค้า และภารกิจจริง
+The complete editable Godot project is stored in `godot_project.zip`. Unzip it, then open `project.godot` in Godot 4.4.x.
+
+GitHub Actions automatically exports a debug Android APK after changes to main.
