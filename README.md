@@ -53,3 +53,18 @@ prototype quality. Check frame rate and heat on a physical Android device.
 The GLB generator records triangle counts and authorship in
 `assets/models/manifest.json`. Its highest-detail building is about 4,400 triangles.
 Art assets are authored for this project; no third-party game artwork is used.
+
+
+## v0.5 — Colony production and deployment
+
+Buildings now take 8–45 seconds to construct. One construction drone handles a building or upgrade at a time. Upgrades take 30 seconds per current level. Metal is charged once when work starts; construction unlocks production and tutorial progress only at completion. Existing v0.4 colonies migrate without resetting.
+
+Choose any clear grid location in the colony. Mission landing rings suggest layouts but are optional. Select a completed building and MOVE to relocate it for free. Buildings cannot overlap.
+
+The Star Hangar queues up to 20 units, sequentially, at 5 + 2 × unit-index seconds each. Credits and Oil are charged on enqueue. Only finished units enter stock. Raids show an AI outpost first; tap an outer map edge to deploy up to 24 units of the types actually trained. The current combat prototype still preserves fleet stock after raids and does not implement individual unit losses or full RTS command selection.
+
+Construction, upgrades and training use persisted completion timestamps. Offline resource catch-up is calculated chronologically and capped at eight hours, including facilities that finish while away. Returning cannot award the same elapsed interval twice. Clock rollback does not award negative time. Local timestamps are not cheat-resistant server time.
+
+**Connectivity:** this APK is an offline single-player build with AI raids. It does not yet provide player accounts, cloud saves, matchmaking, asynchronous player-base raids, or real-time network battles. A server-authoritative service is required before those can be advertised as online features. Red Alert and Clash of Clans are gameplay references; GALAXY 1942 assets, names and interfaces remain original.
+
+QA covers unfinished building production, busy builders, restart during work, sequential training completion, offline cap and duplicate catch-up, relocation collision, actual trained unit types, invalid deployment zones and the full colony-to-victory flow.

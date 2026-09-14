@@ -30,6 +30,7 @@ var mode:="base"
 var map_index:=0
 var selected_building:=-1
 var build_type:=-1
+var moving_building:=-1
 var selected_unit:=0
 var buildings:Array[Dictionary]=[]
 var building_levels:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0])
@@ -64,6 +65,7 @@ var camera_focus := Vector3.ZERO
 var top_refresh := 0.0
 var toast_tween: Tween
 var battle_cooldown := 0.0
+var awaiting_deployment := false
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
 const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35]
@@ -79,6 +81,11 @@ var profile_ready := false
 var roads_root:Node3D
 var landing_marker:MeshInstance3D
 var landing_label:Label3D
+const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45]
+var colony_time := 0.0
+var training_queue:Array = []
+var work_label:Label
+
 
 func _ready()->void:
 	_setup_environment()
@@ -94,14 +101,15 @@ func _ready()->void:
 	onboarding.welcome()
 
 func _process(delta:float)->void:
-	if mode=="base": _economy_tick(delta)
-	elif mode=="battle": _battle_tick(delta)
+	if has_colony:_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()))
+	if mode=="battle": _battle_tick(delta)
 	_visual_tick(delta)
 	autosave_time+=delta
 	if autosave_time>=10.0:_save_profile();autosave_time=0.0
 	top_refresh += delta
 	if top_refresh > 0.15:
 		_update_top_bar()
+		_update_work_display()
 		top_refresh = 0.0
 
 func _setup_environment()->void:
@@ -192,6 +200,7 @@ func _setup_ui()->void:
 	selected_label=Label.new();selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
 	selected_detail=Label.new();selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
+	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
 	build_panel=_make_build_panel();ui_root.add_child(build_panel);build_panel.hide()
 	units_panel=_make_units_panel();ui_root.add_child(units_panel);units_panel.hide()
@@ -202,6 +211,10 @@ func _setup_ui()->void:
 	var vr:=Label.new();vr.name="Reward";vr.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;vr.add_theme_font_size_override("font_size",22);vv.add_child(vr)
 	vv.add_child(_button("RETURN HOME",_return_home,Vector2(0,64)))
 	ui_root.add_child(victory_panel);victory_panel.hide()
+	work_label=Label.new();work_label.add_theme_font_size_override("font_size",18)
+	work_label.add_theme_color_override("font_outline_color",Color("10222c"));work_label.add_theme_constant_override("outline_size",7)
+	work_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;work_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	ui_root.add_child(work_label)
 	get_viewport().size_changed.connect(_layout_ui)
 	_layout_ui()
 	_update_top_bar()
@@ -210,7 +223,7 @@ func _make_build_panel()->PanelContainer:
 	var panel:=_panel("CONSTRUCTION  /  DEVELOP YOUR HOMEWORLD")
 	var grid:=_scroll_grid(panel,5)
 	for i in BUILD_ORDER:
-		var b:=_asset_button(BUILDING_NAMES[i],"%s METAL"%_fmt(BUILDING_COST[i]),"buildings/"+_building_file(i),Vector2(200,158))
+		var b:=_asset_button(BUILDING_NAMES[i],"%s METAL • %ds"%[_fmt(BUILDING_COST[i]),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
 		var reason:=_build_lock_reason(i)
 		b.disabled=not reason.is_empty()
 		if b.disabled:
@@ -221,18 +234,18 @@ func _make_build_panel()->PanelContainer:
 	return panel
 
 func _make_units_panel()->PanelContainer:
-	var panel:=_panel("STAR HANGAR  /  TRAIN YOUR FLEET")
+	var panel:=_panel("STAR HANGAR / QUEUED %d OF 20"%training_queue.size())
 	var grid:=_scroll_grid(panel,4)
 	for i in 20:
 		var cost:=180+i*35
-		var b:=_asset_button(UNIT_NAMES[i],"Stock %d  •  %d C / %d O"%[unit_stock[i],cost,int(cost*.4)],"",Vector2(230,100))
+		var b:=_asset_button(UNIT_NAMES[i],"Ready %d • %ds • %d C / %d O"%[unit_stock[i],5+i*2,cost,int(cost*.4)],"",Vector2(230,100))
 		b.disabled=building_levels[6]==0 or tutorial_step<11 or (tutorial_step<13 and i!=0)
 		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
 		b.pressed.connect(func(idx=i):_train_unit(idx));grid.add_child(b)
 	return panel
 
 func _make_galaxy_panel()->PanelContainer:
-	var panel:=_panel("GALAXY MAP  /  CHOOSE A RAID TARGET")
+	var panel:=_panel("GALAXY MAP / AI OUTPOSTS")
 	var grid:=_scroll_grid(panel,5)
 	for i in 15:
 		var b:=_asset_button(MAP_NAMES[i],"Threat %02d  /  ATTACK"%(2+i*2),"",Vector2(200,130))
@@ -292,8 +305,9 @@ func _begin_build(idx:int)->void:
 	if mode!="base" or not has_colony:return
 	var reason:=_build_lock_reason(idx)
 	if not reason.is_empty():_toast(reason);return
+	moving_building=-1
 	build_type=idx;build_panel.hide();units_panel.hide();galaxy_panel.hide();info_panel.hide();selection_ring.hide()
-	_toast("Tap the glowing landing site." if tutorial_step<10 else "Tap clear terrain to place "+BUILDING_NAMES[idx]+".")
+	_toast("Tap clear terrain to place "+BUILDING_NAMES[idx]+". The glowing site is a suggestion.")
 	onboarding.refresh_guide()
 	_update_landing_marker()
 
@@ -306,10 +320,12 @@ func _upgrade_selected()->void:
 	if b.level>=100:_toast("Maximum level reached.");return
 	var cost:int=500+int(b.type)*120+int(b.level)*360
 	if metal<cost:_toast("NOT ENOUGH METAL");return
-	metal-=cost;b.level+=1;b.node.scale=Vector3.ONE*(1.0+(b.level-1)*.025)
-	b.max_hp=350.0+b.level*120.0;b.hp=b.max_hp
+	if _builder_busy():_toast("Construction drone busy. Wait for the current job.");return
+	metal-=cost
+	b["job"]="upgrade";b["started"]=colony_time;b["finish"]=colony_time+30*b.level
+	_add_work_marker(b)
 	_refresh_progress();_save_profile();_select_building_at(b.pos)
-	_toast("%s upgraded to Level %d."%[BUILDING_NAMES[b.type],b.level])
+	_toast("Upgrade started. The new level unlocks when construction finishes.")
 
 func _train_unit(idx:int)->void:
 	if mode!="base" or building_levels[6]==0 or tutorial_step<11:_toast("Build your colony and upgrade the Core first.");return
@@ -317,10 +333,13 @@ func _train_unit(idx:int)->void:
 	if tutorial_step<13 and idx!=0:_toast("Train Fighters for your first mission.");return
 	var c:=180+idx*35
 	if credits<c or oil<c*.4:_toast("NOT ENOUGH RESOURCES");return
-	credits-=c;oil-=c*.4;unit_stock[idx]+=1;selected_unit=idx
+	if training_queue.size()>=20:_toast("Training queue full (20).");return
+	credits-=c;oil-=c*.4;selected_unit=idx
+	var start:float=colony_time if training_queue.is_empty() else float(training_queue.back().finish)
+	training_queue.append({"type":idx,"finish":start+5+idx*2})
 	_refresh_progress();_setup_life();_save_profile()
 	units_panel.show();onboarding.refresh_guide()
-	_toast("%s trained. Fleet ready: %d"%[UNIT_NAMES[idx],unit_stock[idx]])
+	_toast("%s added to training queue (%d)."%[UNIT_NAMES[idx],training_queue.size()])
 
 func _toggle_build()->void:
 	if mode!="base" or not has_colony:return
@@ -340,7 +359,7 @@ func _toggle_galaxy()->void:
 func _start_battle(idx:int)->void:
 	if mode!="base" or tutorial_step<12 or idx<0 or idx>=15:return
 	if idx==home_planet:_toast("This world is your home. Choose a rival outpost.");return
-	if unit_stock[0]+unit_stock[1]+unit_stock[2]<=0:_toast("Train a fleet before attacking.");return
+	if Array(unit_stock).reduce(func(a,b):return a+b,0)<=0:_toast("Train a fleet before attacking.");return
 	build_type=-1;landing_marker.hide();landing_label.hide()
 	_save_profile()
 	mode="battle";battle_map=idx;galaxy_panel.visible=false;info_panel.hide();selection_ring.hide();home_root.visible=false;battle_root.visible=true
@@ -348,12 +367,27 @@ func _start_battle(idx:int)->void:
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
 	var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[0,8,8,9,6,2,3]
 	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],2+idx/4,true))
-	var count:int=min(24,unit_stock[0]+unit_stock[1]+unit_stock[2])
-	for i in count:
-		var t:int=i%6;var n:Node3D=_unit_model(t,false);n.position=Vector3(-10+(i%8)*2.6,3.2,17+(i/8)*2);battle_root.add_child(n);battle_units.append({"node":n,"type":t,"damage":8.0+t*1.5,"speed":2.7+t*.08})
-	camera_focus=Vector3.ZERO;_position_camera();camera.size=38;_toast("ATTACKING %s"%MAP_NAMES[idx].to_upper());_refresh_progress()
+	awaiting_deployment=true
+	camera_focus=Vector3.ZERO;_position_camera();camera.size=44
+	_toast("SCOUT THE AI BASE. Tap an outer edge to deploy your fleet.");_refresh_progress()
+
+func _deploy_fleet(pos:Vector3)->void:
+	if mode!="battle" or not awaiting_deployment:return
+	if absf(pos.x)>22 or absf(pos.z)>20 or (absf(pos.x)<16 and absf(pos.z)<13):
+		_toast("Deploy outside the enemy base, near the map edge.");return
+	var roster:Array[int]=[]
+	for kind in 20:
+		for count in mini(unit_stock[kind],24-roster.size()):roster.append(kind)
+	for i in roster.size():
+		var kind:int=roster[i]
+		var n:Node3D=_unit_model(kind,false)
+		n.position=Vector3(clampf(pos.x+(i%6-2.5)*1.2,-22,22),3.2,clampf(pos.z+floori(i/6.0)*1.1,-20,20))
+		battle_root.add_child(n);battle_units.append({"node":n,"type":kind,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
+	awaiting_deployment=false
+	_toast("FLEET DEPLOYED — %d units"%roster.size())
 
 func _battle_tick(delta:float)->void:
+	if awaiting_deployment:return
 	battle_elapsed+=delta;var total:=0.0;var alive_hp:=0.0;var alive:Array=[]
 	for e in battle_targets:
 		total+=e.max_hp
@@ -394,6 +428,7 @@ func _return_home()->void:
 func _economy_tick(delta:float)->void:
 	if not has_colony:return
 	for b in buildings:
+		if b.get("job","")=="build":continue
 		match int(b.type):
 			0:credits=minf(1e12,credits+delta*3.5*b.level)
 			2:metal=minf(1e12,metal+delta*2.7*b.level)
@@ -425,10 +460,7 @@ func _place_building(pos:Vector3)->void:
 	if mode!="base" or not has_colony or build_type<0:return
 	var reason:=_build_lock_reason(build_type)
 	if not reason.is_empty():_toast(reason);return
-	if tutorial_step<10:
-		var site:Vector3=LANDING_SITES[build_type]
-		if pos.distance_to(site)>3.0:_toast("Use the glowing landing site for this mission.");return
-		pos=site
+	pos.x=snappedf(pos.x,1.0);pos.z=snappedf(pos.z,1.0)
 	pos.y=0
 	if abs(pos.x)>18 or abs(pos.z)>15:_toast("BUILD INSIDE THE BASE AREA");return
 	for b in buildings:
@@ -436,9 +468,12 @@ func _place_building(pos:Vector3)->void:
 	var cost:int=BUILDING_COST[build_type]
 	if metal<cost:_toast("NOT ENOUGH METAL");return
 	var kind:=build_type
-	metal-=cost;_spawn_building(home_root,kind,pos,1,false);build_type=-1
+	metal-=cost
+	var structure:Dictionary=_spawn_building(home_root,kind,pos,1,false)
+	structure["job"]="build";structure["started"]=colony_time;structure["finish"]=colony_time+BUILD_SECONDS[kind]
+	_add_work_marker(structure);build_type=-1
 	_ensure_roads();_refresh_progress();_save_profile()
-	_toast(BUILDING_NAMES[kind]+" complete. Next mission unlocked.")
+	_toast(BUILDING_NAMES[kind]+" construction started.")
 
 func _ground_hit(screen_pos:Vector2)->Variant:
 	var origin:=camera.project_ray_origin(screen_pos);var dir:=camera.project_ray_normal(screen_pos);return Plane(Vector3.UP,0).intersects_ray(origin,dir)
@@ -536,10 +571,15 @@ func _pan(pos:Vector2,relative:Vector2)->void:
 	if now!=null and before!=null:camera_focus+=before-now;_clamp_camera()
 
 func _tap_world(pos:Vector2)->void:
+	if mode=="battle" and awaiting_deployment:
+		var point=_ground_hit(pos)
+		if point!=null:_deploy_fleet(point)
+		return
 	if mode!="base":return
 	var h=_ground_hit(pos)
 	if h!=null:
-		if build_type>=0:_place_building(h)
+		if moving_building>=0:_move_building(h)
+		elif build_type>=0:_place_building(h)
 		else:_select_building_at(h)
 
 func _panel(title:String)->PanelContainer:
@@ -631,12 +671,14 @@ func _home_action()->void:
 
 func _found_colony(planet:int)->void:
 	if has_colony or planet<0 or planet>=15:return
+	colony_time=Time.get_unix_time_from_system()
 	home_planet=planet;has_colony=true;tutorial_step=0;tutorial_dismissed=false
 	credits=3000;metal=10000;oil=1000;crystal=500;power=0
 	_save_profile();onboarding.enter_colony()
 
 func _build_lock_reason(kind:int)->String:
 	if kind<0 or kind>=10:return "Unknown structure."
+	if _builder_busy():return "Construction drone busy."
 	if kind==0 and building_levels[0]>0:return "Your colony already has a Galactic Core."
 	if tutorial_step<10 and kind!=BUILD_ORDER[tutorial_step]:return "Next: "+BUILDING_NAMES[BUILD_ORDER[tutorial_step]]
 	if kind!=0 and building_levels[0]==0:return "Build the Galactic Core first."
@@ -647,6 +689,7 @@ func _build_lock_reason(kind:int)->String:
 func _recalculate_colony()->void:
 	building_levels.fill(0);power=0
 	for b in buildings:
+		if b.get("job","")=="build":continue
 		building_levels[b.type]=maxi(building_levels[b.type],b.level)
 		if b.type==1:power+=300*b.level
 		else:power-=POWER_DEMAND[b.type]
@@ -674,7 +717,7 @@ func _refresh_progress()->void:
 		onboarding.refresh_guide()
 
 func _update_landing_marker()->void:
-	var active:=has_colony and mode=="base" and tutorial_step<10
+	var active:=has_colony and mode=="base" and tutorial_step<10 and not _builder_busy()
 	landing_marker.visible=active;landing_label.visible=active
 	if not active:return
 	var kind:int=BUILD_ORDER[tutorial_step]
@@ -689,8 +732,8 @@ func _ensure_roads()->void:
 func _save_profile()->void:
 	if not has_colony or not profile_ready:return
 	var records:Array=[]
-	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z]})
-	var data:Dictionary={"schema":1,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
+	var data:Dictionary={"schema":1,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
 	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.")
 
 func _load_profile()->void:
@@ -698,11 +741,94 @@ func _load_profile()->void:
 	if data.is_empty():return
 	has_colony=true;home_planet=int(data.home_planet);tutorial_step=int(data.tutorial_step);tutorial_dismissed=bool(data.get("tutorial_dismissed",false))
 	credits=float(data.resources[0]);metal=float(data.resources[1]);oil=float(data.resources[2]);crystal=float(data.resources[3]);unit_stock=PackedInt32Array(data.unit_stock)
-	for b in data.buildings:_spawn_building(home_root,int(b.type),Vector3(b.pos[0],0,b.pos[2]),int(b.level),false)
+	colony_time=float(data.get("colony_time",Time.get_unix_time_from_system()))
+	training_queue=data.get("training_queue",[])
+	for b in data.buildings:
+		var placed:Dictionary=_spawn_building(home_root,int(b.type),Vector3(b.pos[0],0,b.pos[2]),int(b.level),false)
+		if b.get("job","")!="":
+			for key in ["job","started","finish"]:placed[key]=b[key]
+			_add_work_marker(placed)
+	_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()))
 	_recalculate_colony();_ensure_roads()
 
 func _notification(what:int)->void:
 	if what==NOTIFICATION_APPLICATION_PAUSED or what==NOTIFICATION_WM_CLOSE_REQUEST:_save_profile()
+	if what==NOTIFICATION_APPLICATION_RESUMED and has_colony:_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()));_save_profile()
 
 func _exit_tree()->void:
 	_save_profile()
+
+func _builder_busy()->bool:
+	for b in buildings:
+		if b.get("job","")!="":return true
+	return false
+
+func _add_work_marker(b:Dictionary)->void:
+	var label:=Label3D.new();label.font_size=42;label.pixel_size=.018;label.outline_size=8
+	label.position=Vector3(0,6,0);label.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+	label.modulate=Color("ffd483");b.node.add_child(label);b["work_marker"]=label
+	if b.job=="build":b.node.scale=Vector3(1,.2,1)
+
+func _advance_colony(now:float)->void:
+	if not has_colony:return
+	if colony_time<=0:colony_time=now;return
+	var changed:=false
+	var economy_start:float=maxf(colony_time,now-8*3600)
+	while colony_time<now:
+		var next:float=now
+		for b in buildings:
+			if b.get("job","")!="":next=minf(next,maxf(colony_time,float(b.finish)))
+		if not training_queue.is_empty():next=minf(next,maxf(colony_time,float(training_queue[0].finish)))
+		_economy_tick(maxf(0,next-maxf(colony_time,economy_start)))
+		colony_time=next
+		for b in buildings:
+			if b.get("job","")!="" and float(b.finish)<=colony_time:
+				if b.job=="upgrade":b.level+=1
+				b["job"]="";b.node.scale=Vector3.ONE*(1+(b.level-1)*.025)
+				b.max_hp=350.0+b.level*120.0;b.hp=b.max_hp
+				if is_instance_valid(b.get("work_marker")):b.work_marker.queue_free();b.erase("work_marker")
+				changed=true
+		while not training_queue.is_empty() and float(training_queue[0].finish)<=colony_time:
+			unit_stock[int(training_queue.pop_front().type)]+=1;changed=true
+	if changed:
+		_refresh_progress();_setup_life()
+		if profile_ready:_save_profile()
+
+func _update_work_display()->void:
+	if not is_instance_valid(work_label):return
+	work_label.visible=mode=="base" or (mode=="battle" and awaiting_deployment)
+	if mode=="battle" and awaiting_deployment:
+		work_label.text="AI OUTPOST • Tap an outer edge to deploy up to 24 trained units"
+		work_label.position=Vector2(24,get_viewport().get_visible_rect().size.y-150)
+		work_label.size=Vector2(get_viewport().get_visible_rect().size.x-48,32)
+		return
+	var lines:Array[String]=[]
+	for b in buildings:
+		if b.get("job","")=="":continue
+		var left:int=maxi(0,int(ceil(float(b.finish)-colony_time)))
+		var progress:float=clampf((colony_time-float(b.started))/maxf(1,float(b.finish)-float(b.started)),0,1)
+		if b.job=="build":b.node.scale=Vector3(1,.2+.8*progress,1)
+		if is_instance_valid(b.get("work_marker")):b.work_marker.text="%s %d%% • %ds"%[str(b.job).to_upper(),int(progress*100),left]
+		lines.append("DRONE: %s • %ds"%[BUILDING_NAMES[b.type],left])
+	if not training_queue.is_empty():lines.append("TRAINING: %s • %ds • %d queued"%[UNIT_NAMES[int(training_queue[0].type)],maxi(0,int(ceil(float(training_queue[0].finish)-colony_time))),training_queue.size()])
+	work_label.text="  |  ".join(lines)
+	work_label.position=Vector2(24,get_viewport().get_visible_rect().size.y-145)
+	work_label.size=Vector2(get_viewport().get_visible_rect().size.x-48,32)
+	if selected_building>=0 and info_panel.visible:
+		var b:Dictionary=buildings[selected_building]
+		if b.get("job","")!="":selected_detail.text="%s in progress\n%d seconds remaining"%[str(b.job).capitalize(),maxi(0,int(ceil(float(b.finish)-colony_time)))]
+
+func _begin_move()->void:
+	if mode!="base" or selected_building<0:return
+	if buildings[selected_building].get("job","")!="":_toast("Wait until this construction finishes.");return
+	moving_building=selected_building;build_type=-1;info_panel.hide()
+	_toast("Tap clear terrain to relocate this structure for free.")
+
+func _move_building(pos:Vector3)->void:
+	if mode!="base" or moving_building<0:return
+	pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
+	if absf(pos.x)>18 or absf(pos.z)>15:_toast("Stay inside the base area.");return
+	for i in buildings.size():
+		if i!=moving_building and buildings[i].pos.distance_to(pos)<6.1:_toast("Leave space around other buildings.");return
+	var b:Dictionary=buildings[moving_building];b.pos=pos;b.node.position=pos;moving_building=-1
+	_save_profile();_select_building_at(pos);_toast("Structure relocated.")

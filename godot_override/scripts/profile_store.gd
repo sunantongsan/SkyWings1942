@@ -39,13 +39,27 @@ func _valid(data:Variant)->bool:
 	for value in data.unit_stock:
 		if not _number(value,0,1000000):return false
 	if not data.buildings is Array or data.buildings.size()>300:return false
+	if not _number(data.get("colony_time",0),0,1e12):return false
+	var queue=data.get("training_queue",[])
+	if not queue is Array or queue.size()>20:return false
+	var previous:=0.0
+	for job in queue:
+		if not job is Dictionary:return false
+		if not _number(job.get("type",-1),0,19) or not _number(job.get("finish",-1),previous,1e12):return false
+		previous=float(job.finish)
+	var busy:=0
 	var kinds:Dictionary={}
 	for b in data.buildings:
 		if not b is Dictionary:return false
 		if not _number(b.get("type",-1),0,9) or not _number(b.get("level",0),1,100):return false
 		if not b.get("pos") is Array or b.pos.size()!=3:return false
 		if not _number(b.pos[0],-18,18) or not _number(b.pos[1],0,0) or not _number(b.pos[2],-15,15):return false
-		kinds[int(b.type)]=true
+		if b.get("job","") not in ["","build","upgrade"]:return false
+		if b.get("job","")!="":
+			busy+=1
+			if not _number(b.get("started",-1),0,1e12) or not _number(b.get("finish",-1),float(b.started),1e12):return false
+		if b.get("job","")!="build":kinds[int(b.type)]=true
+	if busy>1:return false
 	var order:=[0,1,2,5,3,4,6,8,7,9]
 	for i in mini(int(data.tutorial_step),10):
 		if not kinds.has(order[i]):return false

@@ -60,6 +60,14 @@ func run()->void:
 	assert(game.build_type==0,"Touch must activate the mission action")
 	await touch_at(game.camera.unproject_position(Vector3.ZERO))
 	assert(game.buildings.size()==1 and game.buildings[0].type==0 and game.buildings[0].level==1)
+	assert(game.tutorial_step==0 and game.building_levels[0]==0,"Construction must not unlock facilities early")
+	game._update_work_display();await shot("00g-construction-timer")
+	var before:float=game.credits
+	game._economy_tick(1);assert(game.credits==before,"Unfinished buildings cannot produce")
+	game._begin_build(0);game._place_building(Vector3(8,0,0));assert(game.buildings.size()==1,"Busy builder blocks duplicate jobs")
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.buildings[0].get("job","")=="build","Active construction survives restart")
+	game._advance_colony(game.colony_time+9)
 	assert(game.tutorial_step==1 and game.building_levels[1]==0)
 	var metal_before:float=game.metal
 	game._economy_tick(1)
@@ -70,6 +78,8 @@ func run()->void:
 		assert(game.tutorial_step==step)
 		game._begin_build(kind)
 		game._place_building(game.LANDING_SITES[kind])
+		assert(game.tutorial_step==step,"Mission must wait for completion")
+		game._advance_colony(game.colony_time+game.BUILD_SECONDS[kind]+1)
 		assert(game.buildings.size()==step+1 and game.building_levels[kind]==1,"Build one required structure at a time")
 		assert(game.tutorial_step==step+1 and game.power>=0)
 		if step==1:await shot("00e-first-reactor")
@@ -97,17 +107,31 @@ func run()->void:
 	await shot("02-building-selected")
 	var old_metal:float=game.metal
 	game._upgrade_selected()
+	assert(game.buildings[0].level==1 and game._builder_busy())
+	game._advance_colony(game.colony_time+31)
 	assert(game.buildings[0].level==2 and game.metal<old_metal and game.tutorial_step==11)
 	game.info_panel.hide();game.selection_ring.hide()
 	game._toggle_build();await shot("03-build-menu");game.build_panel.hide()
 	for i in 8:game._train_unit(0)
-	assert(game.unit_stock[0]==8 and game.tutorial_step==12)
+	assert(game.unit_stock[0]==0 and game.training_queue.size()==8)
+	game._update_work_display();await shot("04a-production-queue")
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.training_queue.size()==8 and game.unit_stock[0]==0)
+	game._advance_colony(game.colony_time+5.1)
+	assert(game.unit_stock[0]==1 and game.training_queue.size()==7,"One unit finishes at each queue deadline")
+	game._advance_colony(game.colony_time+36)
+	assert(game.unit_stock[0]==8 and game.training_queue.is_empty() and game.tutorial_step==12)
 	await shot("04-fleet-menu")
 	game.units_panel.hide();game._toggle_galaxy()
 	await shot("05-galaxy-map")
 	game._start_battle(game.home_planet)
 	assert(game.mode=="base","The player cannot raid their own homeworld")
 	game._start_battle(1)
+	assert(game.awaiting_deployment and game.battle_units.is_empty())
+	game._deploy_fleet(Vector3.ZERO);assert(game.awaiting_deployment,"Cannot deploy inside enemy base")
+	game._deploy_fleet(Vector3(0,0,16))
+	assert(not game.awaiting_deployment and game.battle_units.size()==8)
+	for u in game.battle_units:assert(u.type==0,"Only trained unit types may deploy")
 	await create_timer(0.4).timeout
 	await shot("06-battle")
 	game.set_process(false)
@@ -133,6 +157,17 @@ func run()->void:
 	root.size=Vector2i(1600,720);await process_frame;game._layout_ui()
 	assert(game.header.get_rect().end.x<=1600)
 	await shot("08-wide-phone")
+	# Time catch-up is capped, exactly once, and safe against backward clocks.
+	var time_before:float=game.colony_time
+	var credits_before:float=game.credits
+	game._advance_colony(time_before-60);assert(game.credits==credits_before)
+	game._advance_colony(time_before+10*3600)
+	assert(absf(game.credits-credits_before-8*3600*7.0)<1.0,"Offline production capped at eight hours")
+	var caught_up:float=game.credits
+	game._advance_colony(game.colony_time);assert(game.credits==caught_up,"No duplicate catch-up")
+	game._select_building_at(Vector3.ZERO);game._begin_move();game._move_building(Vector3(-7,0,-4))
+	assert(game.buildings[0].pos==Vector3.ZERO,"Relocation cannot overlap structures")
+	game._move_building(Vector3(0,0,1));assert(game.buildings[0].pos==Vector3(0,0,1))
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()
@@ -141,6 +176,7 @@ func run()->void:
 	game.profile_ready=false;game.queue_free();await process_frame
 	for suffix in ["",".bak",".tmp"]:
 		if FileAccess.file_exists(QA_SAVE+suffix):DirAccess.remove_absolute(QA_SAVE+suffix)
+	print("PERSISTENT_CONSTRUCTION_UPGRADE_TRAINING_QUEUE_PASSED")
 	print("GALAXY_VISUAL_AND_GAMEPLAY_CHECKS_PASSED")
 	print("NEW_COLONY_TOUCH_ORDER_SAVE_RELOAD_AND_RAID_PASSED")
 	quit(0)

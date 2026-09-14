@@ -106,7 +106,7 @@ func show_help()->void:
 	help_return=page
 	page="help";_clear()
 	column.add_child(_label("COMMANDER'S FIELD GUIDE",30))
-	var text:=_label("1   CHOOSE A WORLD — settle a permanent home for this colony.\n\n2   BUILD — follow the mission card and tap the glowing landing site.\n\n3   GATHER — production begins when the matching facility is built.\n\n4   UPGRADE — tap a building, then use UPGRADE to improve it.\n\n5   TRAIN — the Star Hangar prepares your fleet using Credits and Oil.\n\n6   RAID — open the Galaxy Map, choose a rival outpost and return with rewards.\n\nDRAG to move the camera. PINCH or use + / − to zoom. Progress saves on this device.",18,Color("bed3da"));text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	var text:=_label("1   CHOOSE A WORLD — settle a permanent home for this colony.\n\n2   BUILD — follow the mission card and tap clear terrain (the glowing site is a suggestion).\n\n3   GATHER — production begins when the matching facility is built.\n\n4   UPGRADE — tap a building, then use UPGRADE to improve it.\n\n5   TRAIN — the Star Hangar prepares your fleet using Credits and Oil.\n\n6   RAID — open the Galaxy Map, choose a rival outpost and return with rewards.\n\nDRAG to move the camera. PINCH or use + / − to zoom. Progress saves on this device. Construction and training continue while away. Offline resource production is capped at 8 hours. Raids are against AI.",18,Color("bed3da"));text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	var scroll:=ScrollContainer.new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.custom_minimum_size.y=345;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.add_child(text);text.size_flags_horizontal=Control.SIZE_EXPAND_FILL;column.add_child(scroll)
 	column.add_child(host._button("BACK TO EXPEDITION",func():
 		if help_return=="welcome":welcome()
@@ -118,6 +118,7 @@ func show_help()->void:
 func refresh_guide()->void:
 	var step:int=host.tutorial_step
 	guide.visible=page.is_empty() and host.mode=="base" and not guide_suppressed and not host.build_panel.visible and not host.units_panel.visible and not host.galaxy_panel.visible and (step<13 or not host.tutorial_dismissed)
+	guide_action.disabled=host._builder_busy() and step<=10
 	guide_progress.value=step
 	if step<10:
 		var kind:int=host.BUILD_ORDER[step]
@@ -134,12 +135,13 @@ func refresh_guide()->void:
 		guide_action.text="OPEN STAR HANGAR"
 	elif step==12:
 		guide_title.text="13 / 13  ·  YOUR FIRST RAID"
-		guide_text.text="Open GALAXY MAP and choose a rival outpost. Your fleet attacks automatically. Win to earn resources."
+		guide_text.text="Open GALAXY MAP and choose a rival outpost. Scout the enemy base, then tap an outer edge to deploy your fleet. Win to earn resources."
 		guide_action.text="OPEN GALAXY MAP"
 	else:
-		guide_title.text="COLONY ONLINE"
+		guide_title.text="COLONY ESTABLISHED"
 		guide_text.text="Training complete, Commander. Expand your base, upgrade facilities and explore the galaxy."
 		guide_action.text="CONTINUE BUILDING"
+	if host._builder_busy() and step<=10:guide_action.text="CONSTRUCTION IN PROGRESS"
 	layout()
 
 func _guide_pressed()->void:
