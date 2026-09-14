@@ -82,6 +82,9 @@ var deployment_bar:HBoxContainer
 var deploy_picker:OptionButton
 var deploy_status:Label
 var missiles:Array[Dictionary]=[]
+var wreck_root:Node3D
+var unit_icon_cache:Dictionary={}
+const GROUND_ASSETS := ["battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander"]
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
 const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40]
@@ -158,6 +161,7 @@ func _setup_environment()->void:
 
 func _setup_world()->void:
 	world_root=Node3D.new();add_child(world_root)
+	wreck_root=Node3D.new();wreck_root.name="BattleWreckage";world_root.add_child(wreck_root)
 	home_root=Node3D.new();world_root.add_child(home_root)
 	battle_root=Node3D.new();battle_root.visible=false;world_root.add_child(battle_root)
 	decor_root=Node3D.new();world_root.add_child(decor_root)
@@ -261,8 +265,8 @@ func _make_units_panel()->PanelContainer:
 	var grid:=_scroll_grid(panel,4)
 	for i in 20:
 		var cost:=180+i*35
-		var b:=_asset_button(UNIT_NAMES[i],"Ready %d • %ds • %d C / %d O"%[unit_stock[i],5+i*2,cost,int(cost*.4)],"",Vector2(230,100))
-		b.disabled=building_levels[6]==0 or tutorial_step<11 or (tutorial_step<13 and i!=0)
+		var b:=_asset_button(UNIT_NAMES[i],"Ready %d • %ds • %d C / %d O"%[unit_stock[i],5+i*2,cost,int(cost*.4)],"units/"+_unit_asset(i),Vector2(230,168))
+		b.disabled=building_levels[6]==0 or tutorial_step<11
 		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
 		b.pressed.connect(func(idx=i):_train_unit(idx));grid.add_child(b)
 	return panel
@@ -315,18 +319,27 @@ func _apply_map_theme(idx:int)->void:
 	_create_decor(decor_root,idx)
 
 func _unit_model(type:int,enemy:=false)->Node3D:
-	if type<=9:
-		var ship:Node3D=art.model("fighter")
-		ship.scale=Vector3.ONE*(0.5+type*.035)
-		return ship
-	var r:=Node3D.new();var accent:=Color("37d7ff") if not enemy else Color("ff4b3c");var base:=Color("505d6d")
-	if type<=13:
-		var ch:=_box(Vector3(2.2,.55,3.1),_mat(base));ch.position.y=.45;r.add_child(ch);var turret:=_cyl(.55,.55,.55,_mat(base.lightened(.07)));turret.position.y=.95;r.add_child(turret)
-	elif type in [16,17]:
-		var orb:=_sphere(.55,_mat(accent,accent,2.2,.8));orb.position.y=1;r.add_child(orb)
-	else:
-		var body:=_box(Vector3(.7,1.1,.45),_mat(base));body.position.y=1.1;r.add_child(body);var head:=_sphere(.35,_mat(accent.darkened(.2)));head.position.y=1.95;r.add_child(head)
-	return r
+	var model:Node3D=art.model(_unit_asset(type))
+	if type<10:model.scale=Vector3.ONE*(0.5+type*.035)
+	var turret:Node3D=model.find_child("Turret",true,false)
+	var weapon:Node3D=model.find_child("Weapon",true,false)
+	if turret and weapon:
+		var local:Vector3=weapon.position-turret.position
+		weapon.owner=null;weapon.reparent(turret,false);weapon.position=local
+	var parts:Dictionary={}
+	for part_name in ["Turret","Weapon","LeftLeg","RightLeg","LeftArm","RightArm","Rotor"]:
+		var part:Node3D=model.find_child(part_name,true,false)
+		if part:parts[part_name]=part
+	model.set_meta("parts",parts)
+	if weapon:model.set_meta("weapon_rest",weapon.position)
+	if enemy:
+		for mesh in model.find_children("*","MeshInstance3D",true,false):
+			for surface in mesh.mesh.get_surface_count():
+				var material:Material=mesh.get_active_material(surface)
+				if material is StandardMaterial3D and material.emission_enabled:
+					var red:StandardMaterial3D=material.duplicate();red.emission=Color("ff654b");red.albedo_color=Color("ff654b")
+					mesh.set_surface_override_material(surface,red)
+	return model
 
 func _begin_build(idx:int)->void:
 	if mode!="base" or not has_colony:return
@@ -358,7 +371,6 @@ func _upgrade_selected()->void:
 func _train_unit(idx:int)->void:
 	if mode!="base" or building_levels[6]==0 or tutorial_step<11:_toast("Build your colony and upgrade the Core first.");return
 	if idx<0 or idx>=20:return
-	if tutorial_step<13 and idx!=0:_toast("Train Fighters for your first mission.");return
 	var c:=180+idx*35
 	if credits<c or oil<c*.4:_toast("NOT ENOUGH RESOURCES");return
 	if training_queue.size()>=20:_toast("Training queue full (20).");return
@@ -392,6 +404,7 @@ func _start_battle(idx:int)->void:
 	_save_profile()
 	mode="battle";battle_map=idx;galaxy_panel.visible=false;info_panel.hide();selection_ring.hide();home_root.visible=false;battle_root.visible=true
 	for c in battle_root.get_children():c.queue_free()
+	_clear_wrecks()
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
 	var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[0,8,8,9,6,2,3]
 	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],1+idx,true))
@@ -417,7 +430,11 @@ func _deploy_fleet(pos:Vector3)->void:
 	for i in roster.size():
 		var kind:int=roster[i]
 		var n:Node3D=_unit_model(kind,false)
-		n.position=Vector3(clampf(pos.x+(i%6-2.5)*1.2,-22,22),3.2,clampf(pos.z+floori(i/6.0)*1.1,-20,20))
+		var outward:Vector3=Vector3(signf(pos.x),0,0) if absf(pos.x)>absf(pos.z) else Vector3(0,0,signf(pos.z))
+		var lateral:=Vector3(outward.z,0,-outward.x)
+		var spacing:=2.7 if kind in [10,11,12,13,14] else 1.4
+		n.position=pos+lateral*(i%6-2.5)*spacing+outward*floori(i/6.0)*spacing
+		n.position.y=_unit_height(kind)
 		battle_root.add_child(n);battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
 	_refresh_deployment()
 	_toast("Squad placed. Choose another type or location, then ATTACK.")
@@ -442,14 +459,21 @@ func _battle_tick(delta:float)->void:
 		for e in alive:
 			var d:=Vector2(n.position.x,n.position.z).distance_to(Vector2(e.pos.x,e.pos.z))
 			if d<best:best=d;target=e
-		if best>2.5:n.position=n.position.move_toward(Vector3(target.pos.x,n.position.y,target.pos.z),u.speed*delta);n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP)
-		else:
+		var moving:bool=best>_attack_range(u.type)
+		_animate_unit(u,delta,moving,target.pos)
+		if moving:n.position=n.position.move_toward(Vector3(target.pos.x,n.position.y,target.pos.z),u.speed*delta)
+		if best>.01:n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP,true)
+		if not moving:
 			if target.hp<=0:continue
 			target.hp-=u.damage*delta*2.2
 			if visual_time-float(u.get("last_shot",-1.0))>0.55:
-				_weapon_effect(n.global_position+Vector3.UP,target.node,target.pos+Vector3(0,1.8,0),u.type in [2,6,7,12,13])
+				var muzzle:Vector3=n.global_position+Vector3.UP
+				var parts:Dictionary=n.get_meta("parts",{})
+				if parts.has("Weapon"):muzzle=parts.Weapon.global_position+parts.Weapon.global_basis.z*1.4
+				_fire_animation(n);_muzzle_flash(muzzle)
+				_weapon_effect(muzzle,target.node,target.pos+Vector3(0,1.8,0),u.type in [2,6,7,10,11,12,13])
 				u["last_shot"]=visual_time
-			if target.hp<=0 and is_instance_valid(target.node):_explode(target.node.global_position);target.node.queue_free()
+			if target.hp<=0 and is_instance_valid(target.node):_destroy_entity(target,true)
 
 func _finish_battle(win:bool)->void:
 	if mode!="battle":return
@@ -465,7 +489,7 @@ func _return_home()->void:
 	if not has_colony:return
 	mode="base";victory_panel.hide();battle_root.hide();home_root.show()
 	if is_instance_valid(deployment_bar):deployment_bar.hide()
-	dock.show();_clear_missiles()
+	dock.show();_clear_missiles();_clear_wrecks()
 	_apply_map_theme(home_planet);_center_camera();_refresh_progress();_save_profile();_toast("Returned to "+MAP_NAMES[home_planet]+".")
 
 func _economy_tick(delta:float)->void:
@@ -976,8 +1000,7 @@ func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->
 		var damage:float=_shot_damage(tower,difficulty)
 		target.hp-=damage
 		_weapon_effect(tower.node.global_position+Vector3(0,3,0),target.node,target.node.global_position,tower.type==11)
-		if target.hp<=0:
-			_explode(target.node.global_position);target.node.queue_free()
+		if target.hp<=0:_destroy_entity(target,false)
 
 func _start_defense_drill()->void:
 	if mode!="base" or not home_attackers.is_empty():return
@@ -1031,7 +1054,7 @@ func _show_deployment()->void:
 	deploy_picker=OptionButton.new();deploy_picker.custom_minimum_size=Vector2(300,64);deploy_picker.add_theme_font_size_override("font_size",20)
 	deployment_bar.add_child(deploy_picker)
 	for kind in 20:
-		deploy_picker.add_item(UNIT_NAMES[kind],kind)
+		deploy_picker.add_icon_item(_unit_icon(kind),UNIT_NAMES[kind],kind)
 	deploy_picker.select(deploy_kind)
 	deploy_picker.item_selected.connect(func(index:int):deploy_kind=index;_refresh_deployment())
 	var quantity:=OptionButton.new();quantity.custom_minimum_size=Vector2(170,64);quantity.add_theme_font_size_override("font_size",20)
@@ -1096,3 +1119,97 @@ func _clear_missiles()->void:
 	for rocket in missiles:
 		if is_instance_valid(rocket.node):rocket.node.queue_free()
 	missiles.clear()
+
+func _unit_asset(kind:int)->String:
+	return "fighter" if kind<10 else GROUND_ASSETS[kind-10]
+
+func _unit_height(kind:int)->float:
+	if kind<10:return 3.2
+	if kind in [16,17]:return 1.4
+	return .03
+
+func _attack_range(kind:int)->float:
+	if kind<10:return 2.5
+	if kind in [12,13,15]:return 12.0
+	return 7.0 if kind in [10,11,14] else 5.5
+
+func _unit_icon(kind:int)->Texture2D:
+	var asset:=_unit_asset(kind)
+	if unit_icon_cache.has(asset):return unit_icon_cache[asset]
+	if not ResourceLoader.exists("res://assets/icons/units/"+asset+".png"):return null
+	var texture:Texture2D=load("res://assets/icons/units/"+asset+".png")
+	var img:=texture.get_image();img.resize(52,44,Image.INTERPOLATE_LANCZOS)
+	var icon:=ImageTexture.create_from_image(img);unit_icon_cache[asset]=icon
+	return icon
+
+func _animate_unit(unit:Dictionary,delta:float,moving:bool,target:Vector3)->void:
+	var parts:Dictionary=unit.node.get_meta("parts",{})
+	unit["walk_phase"]=float(unit.get("walk_phase",0))+delta*(7 if unit.type==14 else 11)
+	var stride:float=sin(float(unit.walk_phase))*.45 if moving else 0.0
+	if parts.has("LeftLeg"):parts.LeftLeg.rotation.x=stride
+	if parts.has("RightLeg"):parts.RightLeg.rotation.x=-stride
+	if parts.has("LeftArm"):parts.LeftArm.rotation.x=-stride*.35
+	if parts.has("RightArm"):parts.RightArm.rotation.x=stride*.35
+	if parts.has("Rotor"):parts.Rotor.rotation.y+=delta*2
+	if parts.has("Turret"):
+		var aim:Vector3=target;aim.y=parts.Turret.global_position.y
+		if parts.Turret.global_position.distance_to(aim)>.01:parts.Turret.look_at(aim,Vector3.UP,true)
+
+func _fire_animation(model:Node3D)->void:
+	var parts:Dictionary=model.get_meta("parts",{})
+	if not parts.has("Weapon"):return
+	var old:Tween=model.get_meta("recoil_tween") if model.has_meta("recoil_tween") else null
+	if old and old.is_valid():old.kill()
+	var rest:Vector3=model.get_meta("weapon_rest")
+	parts.Weapon.position=rest-Vector3(0,0,.16)
+	var recoil:=model.create_tween();recoil.tween_property(parts.Weapon,"position",rest,.22)
+	model.set_meta("recoil_tween",recoil)
+
+func _muzzle_flash(pos:Vector3)->void:
+	var flash:=_sphere(.18,art.mat(Color("ffe8a8"),true));world_root.add_child(flash);flash.position=pos
+	var fade:=flash.create_tween();fade.tween_property(flash,"scale",Vector3.ONE*.05,.12);fade.tween_callback(flash.queue_free)
+
+func _destroy_entity(entity:Dictionary,structure:bool)->void:
+	if entity.get("dying",false) or not is_instance_valid(entity.node):return
+	entity["dying"]=true;entity.hp=0
+	var model:Node3D=entity.node
+	var pos:Vector3=model.global_position
+	_explode(pos)
+	var group:=Node3D.new();group.name="StructureWreck" if structure else "UnitWreck";wreck_root.add_child(group)
+	model.reparent(group,true)
+	for label in model.find_children("*","Label3D",true,false):label.hide()
+	for i in range(animators.size()-1,-1,-1):
+		if is_instance_valid(animators[i].node) and model.is_ancestor_of(animators[i].node):animators.remove_at(i)
+	var recoil:Tween=model.get_meta("recoil_tween") if model.has_meta("recoil_tween") else null
+	if recoil and recoil.is_valid():recoil.kill()
+	for mesh in model.find_children("*","MeshInstance3D",true,false):mesh.material_override=art.mat(Color("41444b"))
+	var duration:=1.1 if structure else .55
+	var collapse:=model.create_tween().set_parallel(true)
+	var crushed:Vector3=model.scale*Vector3(1.05,.23 if structure else .6,1.05)
+	collapse.tween_property(model,"scale",crushed,duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	collapse.tween_property(model,"rotation:z",.12 if structure else .7,duration)
+	collapse.tween_property(model,"position:y",.03,duration)
+	var fire:=art.particles(group,Vector3(pos.x,.4,pos.z),Color("ff9438"),false,false)
+	fire.direction=Vector3.UP;fire.spread=25;fire.gravity=Vector3(0,.8,0);fire.initial_velocity_min=.5;fire.initial_velocity_max=1.8
+	fire.amount=12;fire.scale_amount_min=.16;fire.scale_amount_max=.45
+	var smoke:=art.particles(group,Vector3(pos.x,1,pos.z),Color("42464c"),true,false)
+	smoke.amount=12;smoke.scale_amount_min=.25;smoke.scale_amount_max=.9;smoke.initial_velocity_max=1.4
+	for i in (7 if structure else 3):
+		var piece:=_box(Vector3(.35,.2,.45),art.mat(Color("60636c")));group.add_child(piece);piece.global_position=pos+Vector3.UP
+		_fling_debris(piece,Vector3(cos(i*2.4),0,sin(i*2.4))*(2.0+i*.3))
+	var expiry:=group.create_tween();expiry.tween_interval(5);expiry.tween_callback(func():fire.emitting=false)
+	expiry.tween_interval(3);expiry.tween_callback(func():smoke.emitting=false)
+	expiry.tween_interval(4);expiry.tween_callback(group.queue_free)
+	while wreck_root.get_child_count()>12:
+		var oldest:=wreck_root.get_child(0);wreck_root.remove_child(oldest);oldest.queue_free()
+
+func _fling_debris(piece:Node3D,offset:Vector3)->void:
+	var origin:=piece.position
+	var fly:=piece.create_tween()
+	fly.tween_method(func(t:float):
+		piece.position=origin+offset*t+Vector3(0,sin(t*PI)*2.5-origin.y*t,0)
+		piece.rotation=Vector3(t*4,t*3,t*2)
+	,0.0,1.0,.9)
+
+func _clear_wrecks()->void:
+	for child in wreck_root.get_children():wreck_root.remove_child(child);child.queue_free()

@@ -99,3 +99,12 @@ Before an AI raid, choose a unit type and squad size (1, 4, 8 or up to 24), then
 Lasers are brighter and last longer. Missile Bastions and missile/bomber unit types show moving emissive homing rockets, exhaust and impact flashes, with a 64-projectile visual cap and cleanup. Visual rockets accompany the existing combat damage calculation; they do not change damage into a delayed impact mechanic.
 
 QA exercises raw Android touch scrolling over cards without purchases, single-tap purchase, separate squads/types/locations, undo, empty-army rejection and moving projectile cleanup, alongside previous economy/save/combat tests.
+
+
+## v0.9 — Ground forces and destruction presentation
+
+Ten original GLBs replace the placeholder ground units: Battle Tank, Siege Tank, Artillery, Rocket Launcher, Mech Warrior, Sniper, Shield Drone, Repair Drone, Assault Soldier and Elite Commander. Troop cards and deployment choices show portraits rendered from those same models. Ground troops deploy at ground height; support drones hover and aircraft retain their flight height. Ground formation spacing and attack ranges differ from aircraft.
+
+Infantry/mechs have alternating leg movement. Vehicle turrets aim and weapons recoil with muzzle flashes. Destroyed units and buildings become darkened wrecks, collapse, scatter debris and burn with smoke for up to twelve seconds. A twelve-wreck cap and scene-change cleanup bound rendering costs. Existing aircraft models and support-unit combat roles remain the prototype versions.
+
+QA checks model and portrait imports, grounded placement, articulated walking, cannon recoil, destruction starting only once, collapsed structures and complete wreck/particle cleanup, alongside existing colony, touch, deployment and battle tests.

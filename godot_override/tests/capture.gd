@@ -292,6 +292,44 @@ func run()->void:
 	assert(game.missiles.is_empty(),"Missile and impact must clean up")
 	rocket_target.queue_free()
 	print("TOUCH_SCROLL_SQUAD_PLACEMENT_AND_MOVING_MISSILES_PASSED")
+	# Real ground models, walk/recoil animation, and persistent destruction visuals.
+	game._clear_wrecks()
+	var lineup:Array[Node3D]=[]
+	for kind in range(10,20):
+		assert(ResourceLoader.exists("res://assets/models/"+game._unit_asset(kind)+".glb"))
+		if DisplayServer.get_name()!="headless":assert(ResourceLoader.exists("res://assets/icons/units/"+game._unit_asset(kind)+".png"))
+		var model:Node3D=game._unit_model(kind);game.world_root.add_child(model)
+		model.position=Vector3((kind-10)%5*4-8,game._unit_height(kind),30+floori((kind-10)/5.0)*5)
+		lineup.append(model)
+		if kind not in [16,17]:assert(model.position.y<.1,"Ground troops must not float like aircraft")
+	var soldier:Node3D=lineup[8]
+	var soldier_parts:Dictionary=soldier.get_meta("parts")
+	game._animate_unit({"node":soldier,"type":18},.12,true,Vector3.ZERO)
+	assert(absf(soldier_parts.LeftLeg.rotation.x)>.1 and soldier_parts.LeftLeg.rotation.x==-soldier_parts.RightLeg.rotation.x)
+	var tank:Node3D=lineup[0];var tank_parts:Dictionary=tank.get_meta("parts")
+	assert(tank_parts.Weapon.get_parent()==tank_parts.Turret)
+	var rest:Vector3=tank.get_meta("weapon_rest");game._fire_animation(tank)
+	assert(tank_parts.Weapon.position.z<rest.z,"Tank cannon recoils on firing")
+	game.camera_focus=Vector3(0,0,32);game._position_camera();game.camera.size=21
+	game.info_panel.hide();game.onboarding.guide.hide()
+	await shot("14-ground-force-lineup")
+	game._toggle_units();await shot("15-ground-unit-portraits");game.units_panel.hide()
+	var destroyed:Dictionary={"node":tank,"type":10,"hp":0}
+	game._destroy_entity(destroyed,false)
+	assert(is_instance_valid(tank) and game.wreck_root.is_ancestor_of(tank),"Destroyed vehicles leave wreckage instead of disappearing")
+	var structure:Dictionary=game._spawn_building(game.battle_root,0,Vector3(1,0,32),1,true)
+	game._destroy_entity(structure,true)
+	assert(structure.dying and is_instance_valid(structure.node))
+	var wreck_count:int=game.wreck_root.get_child_count();game._destroy_entity(structure,true)
+	assert(game.wreck_root.get_child_count()==wreck_count,"Destruction starts only once")
+	await create_timer(1.3).timeout
+	assert(structure.node.scale.y<.3,"Destroyed building collapses into rubble")
+	await shot("16-burning-building-and-tank-wreckage")
+	await create_timer(11.5).timeout
+	assert(game.wreck_root.get_child_count()==0,"Wreckage and smoke expire cleanly")
+	for model in lineup:
+		if is_instance_valid(model):model.queue_free()
+	print("GROUND_MODELS_PORTRAITS_WALK_RECOIL_AND_WRECKAGE_PASSED")
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()

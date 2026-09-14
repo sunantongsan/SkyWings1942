@@ -19,7 +19,7 @@ def material(name,h,metal=.2,rough=.55,emission=False):
     return m
 class Model:
     def __init__(self,accent='38d6f1'):
-        self.parts=defaultdict(lambda:defaultdict(list));self.part='Hull'
+        self.parts=defaultdict(lambda:defaultdict(list));self.part='Hull';self.pivots={}
         self.materials=[material('ceramic_armor','a9bec7',.25,.43),material('navy_titanium','293e50',.5,.48),material('recess','101e2b',.12,.8),material('alloy_edges','728c9b',.55,.42),material('power_emission',accent,.15,.34,True),material('safety_ochre','e7ab58',.25,.55),material('glass','1c7b94',.45,.22)]
     def tri(self,a,b,c,mat):
         u=[b[i]-a[i] for i in range(3)];v=[c[i]-a[i] for i in range(3)]
@@ -73,7 +73,7 @@ class Model:
             if typ=='pos':a.update(min=[min(vals[i::3]) for i in range(3)],max=[max(vals[i::3]) for i in range(3)])
             access.append(a);return len(access)-1
         for part,mats in self.parts.items():
-            pivot={'Drill':(1.25,0,0),'Radar':(1.9,3.65,-1.6)}.get(part,(0,0,0))
+            pivot=self.pivots.get(part,{'Drill':(1.25,0,0),'Radar':(1.9,3.65,-1.6)}.get(part,(0,0,0)))
             mats={k:[(tuple(p[i]-pivot[i] for i in range(3)),n) for p,n in v] for k,v in mats.items()}
             primitives=[]
             for mat,verts in mats.items():
@@ -267,6 +267,8 @@ def fighter():
 manifest={'authorship':'Original GALAXY 1942 procedural mesh designs, no external assets','coordinates':'Y-up, metres, front +Z, ground y=0','assets':[]}
 for i,name in enumerate(NAMES):manifest['assets'].append(building(i).export(name))
 manifest['assets'].append(fighter().export('fighter'))
+from unit_models import build_ground_assets
+manifest['assets'].extend(build_ground_assets(Model))
 manifest['assets'].append(mining_vehicle().export('mining_vehicle'))
 manifest['assets'].append(construction_drone().export('construction_drone'))
 # Reusable angular geology, organic crown plants; merged into material surfaces.
