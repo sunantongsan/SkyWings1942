@@ -263,8 +263,9 @@ func _make_build_panel()->PanelContainer:
 func _make_units_panel()->PanelContainer:
 	var panel:=_panel("STAR HANGAR / QUEUED %d OF 20"%training_queue.size())
 	var grid:=_scroll_grid(panel,4)
-	for i in 20:
-		var cost:=180+i*35
+	var order:Array=range(20) if tutorial_step<13 else [10,18,14,12,11,13,15,19,16,17,0,1,2,3,4,5,6,7,8,9]
+	for i in order:
+		var cost:int=180+int(i)*35
 		var b:=_asset_button(UNIT_NAMES[i],"Ready %d • %ds • %d C / %d O"%[unit_stock[i],5+i*2,cost,int(cost*.4)],"units/"+_unit_asset(i),Vector2(230,168))
 		b.disabled=building_levels[6]==0 or tutorial_step<11
 		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
@@ -1189,11 +1190,11 @@ func _destroy_entity(entity:Dictionary,structure:bool)->void:
 	collapse.tween_property(model,"scale",crushed,duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	collapse.tween_property(model,"rotation:z",.12 if structure else .7,duration)
 	collapse.tween_property(model,"position:y",.03,duration)
-	var fire:=art.particles(group,Vector3(pos.x,.4,pos.z),Color("ff9438"),false,false)
+	var fire:=art.particles(group,Vector3(pos.x,1.4 if structure else .8,pos.z),Color("ff9438"),false,false)
 	fire.direction=Vector3.UP;fire.spread=25;fire.gravity=Vector3(0,.8,0);fire.initial_velocity_min=.5;fire.initial_velocity_max=1.8
-	fire.amount=12;fire.scale_amount_min=.16;fire.scale_amount_max=.45
-	var smoke:=art.particles(group,Vector3(pos.x,1,pos.z),Color("42464c"),true,false)
-	smoke.amount=12;smoke.scale_amount_min=.25;smoke.scale_amount_max=.9;smoke.initial_velocity_max=1.4
+	fire.amount=12;fire.scale_amount_min=.45;fire.scale_amount_max=.85
+	var smoke:=art.particles(group,Vector3(pos.x,2.2 if structure else 1.2,pos.z),Color("42464c"),true,false)
+	smoke.amount=12;smoke.scale_amount_min=.45;smoke.scale_amount_max=1.35;smoke.initial_velocity_max=1.4
 	for i in (7 if structure else 3):
 		var piece:=_box(Vector3(.35,.2,.45),art.mat(Color("60636c")));group.add_child(piece);piece.global_position=pos+Vector3.UP
 		_fling_debris(piece,Vector3(cos(i*2.4),0,sin(i*2.4))*(2.0+i*.3))

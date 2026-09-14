@@ -32,6 +32,9 @@ func run() -> void:
 		await process_frame
 		await RenderingServer.frame_post_draw
 		var img:=viewport.get_texture().get_image()
+		if folder=="units":
+			var bounds:=img.get_used_rect().grow(8).intersection(Rect2i(Vector2i.ZERO,img.get_size()))
+			if bounds.size.x>0 and bounds.size.y>0:img=img.get_region(bounds)
 		assert(img.save_png("res://assets/icons/"+folder+"/"+name+".png")==OK)
 		model.queue_free()
 		await process_frame

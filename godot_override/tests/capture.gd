@@ -299,7 +299,7 @@ func run()->void:
 		assert(ResourceLoader.exists("res://assets/models/"+game._unit_asset(kind)+".glb"))
 		if DisplayServer.get_name()!="headless":assert(ResourceLoader.exists("res://assets/icons/units/"+game._unit_asset(kind)+".png"))
 		var model:Node3D=game._unit_model(kind);game.world_root.add_child(model)
-		model.position=Vector3((kind-10)%5*4-8,game._unit_height(kind),30+floori((kind-10)/5.0)*5)
+		model.position=Vector3((kind-10)%5*4-8,game._unit_height(kind),70+floori((kind-10)/5.0)*5)
 		lineup.append(model)
 		if kind not in [16,17]:assert(model.position.y<.1,"Ground troops must not float like aircraft")
 	var soldier:Node3D=lineup[8]
@@ -310,14 +310,14 @@ func run()->void:
 	assert(tank_parts.Weapon.get_parent()==tank_parts.Turret)
 	var rest:Vector3=tank.get_meta("weapon_rest");game._fire_animation(tank)
 	assert(tank_parts.Weapon.position.z<rest.z,"Tank cannon recoils on firing")
-	game.camera_focus=Vector3(0,0,32);game._position_camera();game.camera.size=21
+	game.camera_focus=Vector3(0,0,72);game._position_camera();game.camera.size=21
 	game.info_panel.hide();game.onboarding.guide.hide()
 	await shot("14-ground-force-lineup")
 	game._toggle_units();await shot("15-ground-unit-portraits");game.units_panel.hide()
 	var destroyed:Dictionary={"node":tank,"type":10,"hp":0}
 	game._destroy_entity(destroyed,false)
 	assert(is_instance_valid(tank) and game.wreck_root.is_ancestor_of(tank),"Destroyed vehicles leave wreckage instead of disappearing")
-	var structure:Dictionary=game._spawn_building(game.battle_root,0,Vector3(1,0,32),1,true)
+	var structure:Dictionary=game._spawn_building(game.battle_root,0,Vector3(1,0,72),1,true)
 	game._destroy_entity(structure,true)
 	assert(structure.dying and is_instance_valid(structure.node))
 	var wreck_count:int=game.wreck_root.get_child_count();game._destroy_entity(structure,true)
