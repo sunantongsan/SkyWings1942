@@ -246,7 +246,7 @@ func run()->void:
 	assert(game.profile_store._valid(valid_profile),"No legacy 300-building save cap")
 	game._start_battle(14)
 	assert(game.battle_targets.size()==11 and game.battle_targets[0].level==15,"Late worlds have more and stronger defenses")
-	game._deploy_fleet(Vector3(0,0,16))
+	game._deploy_fleet(Vector3(0,0,16));game._launch_assault()
 	for u in game.battle_units:u.hp=0
 	game._battle_tick(.1)
 	assert(game.mode=="base","A destroyed fleet loses the battle")
