@@ -624,7 +624,7 @@ func _layout_ui()->void:
 	dock.position=Vector2((size.x-996)/2,size.y-80)
 	info_panel.position=Vector2(size.x-margin-286,110);info_panel.size=Vector2(286,260)
 	for panel in [build_panel,units_panel,galaxy_panel]:
-		if panel:panel.position=Vector2(margin,105);panel.size=Vector2(size.x-margin*2,size.y-200)
+		if panel:panel.position=Vector2(margin,105);panel.size=Vector2(size.x-margin*2,size.y-260)
 	victory_panel.position=Vector2((size.x-720)/2,170);victory_panel.size=Vector2(720,330)
 	toast.position=Vector2(margin,size.y-114);toast.size=Vector2(size.x-margin*2,28)
 	if onboarding:onboarding.layout()
@@ -766,7 +766,7 @@ func _builder_busy()->bool:
 func _add_work_marker(b:Dictionary)->void:
 	var label:=Label3D.new();label.font_size=42;label.pixel_size=.018;label.outline_size=8
 	label.position=Vector3(0,6,0);label.billboard=BaseMaterial3D.BILLBOARD_ENABLED
-	label.modulate=Color("ffd483");b.node.add_child(label);b["work_marker"]=label
+	label.modulate=Color("ffd483");b.node.add_child(label);label.top_level=true;label.global_position=b.node.global_position+Vector3(0,6,0);b["work_marker"]=label
 	if b.job=="build":b.node.scale=Vector3(1,.2,1)
 
 func _advance_colony(now:float)->void:

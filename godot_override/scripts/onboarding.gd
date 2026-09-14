@@ -18,7 +18,7 @@ var guide_progress:ProgressBar
 var guide_suppressed:=false
 var settle_frames:=0
 const BIOMES:=["Lush frontier","Volcanic plains","Frozen frontier","Desert dunes","Midnight world","Ocean frontier","Machine world","Alien wetlands","Nebula outpost","Asteroid colony","Ancient ruins","Orbital colony","Lunar frontier","Cloud outpost","Rift colony"]
-const WHY:=["Your command center earns Credits and unlocks the colony. Place it on the glowing landing site.","Supply your colony with Power. Other facilities depend on this reactor.","Start producing Metal for construction and upgrades.","Establish a resource depot before expanding your industry.","Produce Oil to train your fleet and support future operations.","Mine Crystal for advanced colony development.","Build the Star Hangar. This is where your fleet is trained.","Establish your first defensive position with a Laser Tower.","Prepare a Research Lab for future technology upgrades.","Complete your defenses with a Shield Generator."]
+const WHY:=["Your command center earns Credits and unlocks the colony. Place it on clear terrain. The glowing site is a suggestion.","Supply your colony with Power. Other facilities depend on this reactor.","Start producing Metal for construction and upgrades.","Establish a resource depot before expanding your industry.","Produce Oil to train your fleet and support future operations.","Mine Crystal for advanced colony development.","Build the Star Hangar. This is where your fleet is trained.","Establish your first defensive position with a Laser Tower.","Prepare a Research Lab for future technology upgrades.","Complete your defenses with a Shield Generator."]
 
 func _init(game:Node3D)->void:
 	host=game

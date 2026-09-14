@@ -115,6 +115,7 @@ func run()->void:
 	for i in 8:game._train_unit(0)
 	assert(game.unit_stock[0]==0 and game.training_queue.size()==8)
 	game._update_work_display();await shot("04a-production-queue")
+	assert(game.units_panel.get_rect().end.y<=game.work_label.position.y,"Queue timer must remain visible below the menu")
 	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
 	assert(game.training_queue.size()==8 and game.unit_stock[0]==0)
 	game._advance_colony(game.colony_time+5.1)
