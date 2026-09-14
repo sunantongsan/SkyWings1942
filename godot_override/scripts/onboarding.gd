@@ -16,6 +16,7 @@ var guide_text:Label
 var guide_action:Button
 var guide_progress:ProgressBar
 var guide_suppressed:=false
+var settle_frames:=0
 const BIOMES:=["Lush frontier","Volcanic plains","Frozen frontier","Desert dunes","Midnight world","Ocean frontier","Machine world","Alien wetlands","Nebula outpost","Asteroid colony","Ancient ruins","Orbital colony","Lunar frontier","Cloud outpost","Rift colony"]
 const WHY:=["Your command center earns Credits and unlocks the colony. Place it on the glowing landing site.","Supply your colony with Power. Other facilities depend on this reactor.","Start producing Metal for construction and upgrades.","Establish a resource depot before expanding your industry.","Produce Oil to train your fleet and support future operations.","Mine Crystal for advanced colony development.","Build the Star Hangar. This is where your fleet is trained.","Establish your first defensive position with a Laser Tower.","Prepare a Research Lab for future technology upgrades.","Complete your defenses with a Shield Generator."]
 
@@ -41,6 +42,7 @@ func _label(text:String,size:int,color:=Color("eef5f5"))->Label:
 func _clear()->void:
 	for child in column.get_children():column.remove_child(child);child.queue_free()
 	planet_buttons.clear()
+	column.alignment=BoxContainer.ALIGNMENT_CENTER if page=="welcome" else BoxContainer.ALIGNMENT_BEGIN
 	screen.show();guide.hide();host.header.hide();host.dock.hide();host.info_panel.hide();host.toast.hide()
 	for p in [host.build_panel,host.units_panel,host.galaxy_panel]:p.hide()
 
@@ -155,4 +157,14 @@ func layout()->void:
 	screen.position=Vector2.ZERO;screen.size=size
 	var width:float=minf(size.x-80,1120 if page=="planets" else 900)
 	panel.position=Vector2((size.x-width)/2,32);panel.size=Vector2(width,size.y-64)
-	guide.position=Vector2(24,110);guide.size=Vector2(302,0)
+	guide.position=Vector2(maxf(24.0,host.header.position.x),110);guide.size=Vector2(302,0)
+	settle_frames=3
+
+func tick()->void:
+	# Autowrapped labels settle their minimum height after container sorting.
+	# Reapply the intended size, rather than retaining a transient tall minimum.
+	if settle_frames<=0:return
+	settle_frames-=1
+	var size:Vector2=host.get_viewport().get_visible_rect().size
+	panel.size=Vector2(minf(size.x-80,1120 if page=="planets" else 900),size.y-64)
+	guide.size=Vector2(302,guide.get_combined_minimum_size().y)

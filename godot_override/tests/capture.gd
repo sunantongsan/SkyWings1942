@@ -33,6 +33,7 @@ func run()->void:
 	assert(game.buildings.is_empty() and game.unit_stock[0]==0)
 	assert(not FileAccess.file_exists(QA_SAVE),"Opening welcome must not create a colony")
 	await shot("00-welcome")
+	assert(game.onboarding.panel.get_rect().end.y<=720,"Welcome card must fit on screen")
 	game.onboarding.show_help();await shot("00a-field-guide");game.onboarding.welcome()
 	game.onboarding.choose_world()
 	assert(game.onboarding.planet_buttons.size()==15 and game.onboarding.confirm_button.disabled)
@@ -50,7 +51,9 @@ func run()->void:
 	assert(game.buildings.is_empty(),"A reactor cannot precede the Core")
 	game._toggle_units();assert(not game.units_panel.visible)
 	game._toggle_galaxy();assert(not game.galaxy_panel.visible)
+	game.toast.hide()
 	await shot("00c-empty-colony")
+	assert(game.onboarding.guide.get_rect().end.y<600,"Tutorial card must not cover the bottom controls")
 	# The mission button and terrain placement receive Android ScreenTouch events.
 	await process_frame
 	await touch_at(game.onboarding.guide_action.get_global_rect().get_center())

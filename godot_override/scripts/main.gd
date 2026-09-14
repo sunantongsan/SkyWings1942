@@ -148,7 +148,7 @@ func _setup_world()->void:
 	landing_marker=MeshInstance3D.new()
 	var landing_mesh:=TorusMesh.new();landing_mesh.inner_radius=2.8;landing_mesh.outer_radius=2.95;landing_mesh.rings=40;landing_mesh.ring_segments=6
 	landing_marker.mesh=landing_mesh;landing_marker.material_override=art.mat(Color("ffe19b"),true);world_root.add_child(landing_marker);landing_marker.hide()
-	landing_label=Label3D.new();landing_label.font_size=32;landing_label.pixel_size=.009;landing_label.outline_size=8;landing_label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;landing_label.modulate=Color("ffe7a5");world_root.add_child(landing_label);landing_label.hide()
+	landing_label=Label3D.new();landing_label.font_size=48;landing_label.pixel_size=.022;landing_label.outline_size=4;landing_label.no_depth_test=true;landing_label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;landing_label.modulate=Color("ffe7a5");world_root.add_child(landing_label);landing_label.hide()
 
 func _setup_camera()->void:
 	camera=Camera3D.new()
@@ -268,6 +268,7 @@ func _apply_map_theme(idx:int)->void:
 	var soil:Color=MAP_GROUND[idx].darkened(0.28)
 	var grass:Color=MAP_GROUND[idx].lightened(0.05)
 	if idx==0:soil=Color("354b43");grass=Color("526f50")
+	if idx==2:soil=Color("3d586e");grass=Color("618498")
 	terrain_material.set_shader_parameter("soil_color",soil)
 	terrain_material.set_shader_parameter("grass_color",grass)
 	sun.light_color=MAP_ACCENT[idx].lerp(Color("fff0d1"),.88)
@@ -515,6 +516,8 @@ func _mat(color:Color,emit:=Color.TRANSPARENT,energy:=0.0,alpha:=1.0)->StandardM
 func _button(text:String,cb:Callable,size:Vector2)->Button:
 	var b:=Button.new();b.text=text;b.custom_minimum_size=size;b.add_theme_font_size_override("font_size",20)
 	b.add_theme_color_override("font_color",Color("dfebec"))
+	b.add_theme_color_override("font_disabled_color",Color("72868d"))
+	b.add_theme_stylebox_override("disabled",_style(Color("14242c"),12,Color("2e414c"),1))
 	b.add_theme_stylebox_override("normal",_style(Color("183644"),12,Color("4a6877"),1))
 	b.add_theme_stylebox_override("hover",_style(Color("24515b"),12,Color("83dcc9"),2))
 	b.add_theme_stylebox_override("pressed",_style(Color("0f242c"),12,Color("83dcc9"),2))
@@ -594,6 +597,7 @@ func _setup_life()->void:
 		home_root.add_child(ship);scouts.append(ship)
 
 func _visual_tick(delta:float)->void:
+	if onboarding:onboarding.tick()
 	visual_time+=delta
 	for i in range(animators.size()-1,-1,-1):
 		var item:Dictionary=animators[i]
