@@ -112,7 +112,21 @@ func run()->void:
 	assert(game.buildings[0].level==2 and game.metal<old_metal and game.tutorial_step==11)
 	game.info_panel.hide();game.selection_ring.hide()
 	game._toggle_build();await shot("03-build-menu");game.build_panel.hide()
-	for i in 8:game._train_unit(0)
+
+	game._toggle_units();await process_frame;await process_frame
+	var sc:ScrollContainer=game.units_panel.find_children("*","ScrollContainer",true,false)[0]
+	var funds_before:float=game.credits
+	var swipe_start:Vector2=sc.get_global_rect().get_center()
+	var swipe_press:=InputEventScreenTouch.new();swipe_press.index=0;swipe_press.position=swipe_start;swipe_press.pressed=true;Input.parse_input_event(swipe_press);await process_frame
+	var swipe:=InputEventScreenDrag.new();swipe.index=0;swipe.position=swipe_start-Vector2(0,160);swipe.relative=Vector2(0,-160);Input.parse_input_event(swipe);await process_frame
+	var swipe_end:=InputEventScreenTouch.new();swipe_end.index=0;swipe_end.position=swipe.position;swipe_end.pressed=false;Input.parse_input_event(swipe_end);await process_frame
+	assert(sc.scroll_vertical>0,"Finger drag must scroll over the unit cards")
+	assert(game.training_queue.is_empty() and game.credits==funds_before,"Dragging must not buy units")
+	sc.velocity=0;sc.scroll_vertical=0;await process_frame;await process_frame
+	var fighter_button:Button=sc.get_child(0).get_child(0)
+	await touch_at(fighter_button.get_global_rect().get_center())
+	assert(game.training_queue.size()==1,"A stationary finger tap purchases exactly once")
+	for i in 7:game._train_unit(0)
 	assert(game.unit_stock[0]==0 and game.training_queue.size()==8)
 	game._update_work_display();await shot("04a-production-queue")
 	assert(game.units_panel.get_rect().end.y<=game.work_label.position.y,"Queue timer must remain visible below the menu")
@@ -128,9 +142,22 @@ func run()->void:
 	game._start_battle(game.home_planet)
 	assert(game.mode=="base","The player cannot raid their own homeworld")
 	game._start_battle(1)
+
 	assert(game.awaiting_deployment and game.battle_units.is_empty())
+	game._launch_assault();assert(game.awaiting_deployment,"Cannot launch an empty army")
+	game.unit_stock[1]=4;game.deploy_kind=1;game.deploy_count=4
+	game._deploy_fleet(Vector3(-18,0,0))
+	assert(game.battle_units.size()==4 and game.awaiting_deployment)
+	for u in game.battle_units:assert(u.type==1 and u.node.position.x<0)
+	game.deploy_kind=0;game.deploy_count=4;game._deploy_fleet(Vector3(18,0,0))
+	assert(game.battle_units.size()==8 and game.deployment_groups.size()==2)
+	assert(game.battle_units[4].type==0 and game.battle_units[4].node.position.x>0)
+	await shot("13-separated-deployment-squads")
+	game._undo_squad();game._undo_squad()
+	assert(game.battle_units.is_empty() and game.deployed_stock[0]==0 and game.deployed_stock[1]==0)
+	game.unit_stock[1]=0;game.deploy_kind=0;game.deploy_count=8
 	game._deploy_fleet(Vector3.ZERO);assert(game.awaiting_deployment,"Cannot deploy inside enemy base")
-	game._deploy_fleet(Vector3(0,0,16))
+	game._deploy_fleet(Vector3(0,0,16));game._launch_assault()
 	assert(not game.awaiting_deployment and game.battle_units.size()==8)
 	for u in game.battle_units:assert(u.type==0,"Only trained unit types may deploy")
 	await create_timer(0.4).timeout
@@ -254,6 +281,17 @@ func run()->void:
 	assert(game.buildings[0].level==5 and game._can_fire(game.buildings[0]),"Five-star defense persists on reload")
 	assert(game.buildings[0].rank_label.text=="★★★★★")
 	print("ALL_BUILDING_STAR_RANKS_AND_LEVEL_FIVE_RETALIATION_PASSED")
+
+	var rocket_target:=Node3D.new();game.world_root.add_child(rocket_target);rocket_target.position=Vector3(12,4,0)
+	game._weapon_effect(Vector3(0,4,0),rocket_target,rocket_target.position,true)
+	assert(game.missiles.size()==1)
+	var origin:Vector3=game.missiles[0].node.position
+	game._projectile_tick(.1)
+	assert(game.missiles[0].node.position.distance_to(origin)>1,"Missile must visibly travel")
+	for i in 60:game._projectile_tick(.1)
+	assert(game.missiles.is_empty(),"Missile and impact must clean up")
+	rocket_target.queue_free()
+	print("TOUCH_SCROLL_SQUAD_PLACEMENT_AND_MOVING_MISSILES_PASSED")
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()

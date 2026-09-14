@@ -74,6 +74,14 @@ var top_refresh := 0.0
 var toast_tween: Tween
 var battle_cooldown := 0.0
 var awaiting_deployment := false
+var deploy_kind:=0
+var deploy_count:=8
+var deployed_stock:=PackedInt32Array()
+var deployment_groups:Array[int]=[]
+var deployment_bar:HBoxContainer
+var deploy_picker:OptionButton
+var deploy_status:Label
+var missiles:Array[Dictionary]=[]
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
 const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40]
@@ -113,6 +121,7 @@ func _process(delta:float)->void:
 	if has_colony:_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()))
 	if mode=="battle": _battle_tick(delta)
 	if mode=="base":_home_defense_tick(delta)
+	_projectile_tick(delta)
 	_visual_tick(delta)
 	autosave_time+=delta
 	if autosave_time>=10.0:_save_profile();autosave_time=0.0
@@ -388,24 +397,30 @@ func _start_battle(idx:int)->void:
 	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],1+idx,true))
 	for i in floori(idx/3.0):
 		battle_targets.append(_spawn_building(battle_root,11,Vector3(-12+i*8,0,-12),1+idx,true))
-	awaiting_deployment=true
+	awaiting_deployment=true;deployed_stock.resize(20);deployed_stock.fill(0);deployment_groups.clear()
+	deploy_count=8
+	for kind in 20:
+		if unit_stock[kind]>0:deploy_kind=kind;break
 	camera_focus=Vector3.ZERO;_position_camera();camera.size=44
-	_toast("SCOUT THE AI BASE. Tap an outer edge to deploy your fleet.");_refresh_progress()
+	_toast("Choose a squad, then tap an outer edge. Place several groups before ATTACK.");_refresh_progress();_show_deployment()
 
 func _deploy_fleet(pos:Vector3)->void:
 	if mode!="battle" or not awaiting_deployment:return
 	if absf(pos.x)>22 or absf(pos.z)>20 or (absf(pos.x)<16 and absf(pos.z)<13):
 		_toast("Deploy outside the enemy base, near the map edge.");return
 	var roster:Array[int]=[]
-	for kind in 20:
-		for count in mini(unit_stock[kind],24-roster.size()):roster.append(kind)
+	var available:int=unit_stock[deploy_kind]-deployed_stock[deploy_kind]
+	var amount:int=mini(mini(deploy_count,available),24-battle_units.size())
+	if amount<=0:_toast("No units remaining of this type, or deployment limit reached.");return
+	for i in amount:roster.append(deploy_kind)
+	deployment_groups.append(amount);deployed_stock[deploy_kind]+=amount
 	for i in roster.size():
 		var kind:int=roster[i]
 		var n:Node3D=_unit_model(kind,false)
 		n.position=Vector3(clampf(pos.x+(i%6-2.5)*1.2,-22,22),3.2,clampf(pos.z+floori(i/6.0)*1.1,-20,20))
 		battle_root.add_child(n);battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
-	awaiting_deployment=false
-	_toast("FLEET DEPLOYED — %d units"%roster.size())
+	_refresh_deployment()
+	_toast("Squad placed. Choose another type or location, then ATTACK.")
 
 func _battle_tick(delta:float)->void:
 	if awaiting_deployment:return
@@ -432,7 +447,7 @@ func _battle_tick(delta:float)->void:
 			if target.hp<=0:continue
 			target.hp-=u.damage*delta*2.2
 			if visual_time-float(u.get("last_shot",-1.0))>0.55:
-				_laser(n.global_position+Vector3.UP,target.pos+Vector3(0,1.8,0))
+				_weapon_effect(n.global_position+Vector3.UP,target.node,target.pos+Vector3(0,1.8,0),u.type in [2,6,7,12,13])
 				u["last_shot"]=visual_time
 			if target.hp<=0 and is_instance_valid(target.node):_explode(target.node.global_position);target.node.queue_free()
 
@@ -449,6 +464,8 @@ func _finish_battle(win:bool)->void:
 func _return_home()->void:
 	if not has_colony:return
 	mode="base";victory_panel.hide();battle_root.hide();home_root.show()
+	if is_instance_valid(deployment_bar):deployment_bar.hide()
+	dock.show();_clear_missiles()
 	_apply_map_theme(home_planet);_center_camera();_refresh_progress();_save_profile();_toast("Returned to "+MAP_NAMES[home_planet]+".")
 
 func _economy_tick(delta:float)->void:
@@ -631,7 +648,7 @@ func _panel(title:String)->PanelContainer:
 	return p
 
 func _scroll_grid(panel:PanelContainer,columns:int)->GridContainer:
-	var scroll:=ScrollContainer.new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	var scroll:=preload("res://scripts/touch_scroll.gd").new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
 	panel.get_child(0).add_child(scroll)
 	var grid:=GridContainer.new();grid.columns=columns;grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);scroll.add_child(grid)
@@ -691,13 +708,14 @@ func _visual_tick(delta:float)->void:
 
 func _laser(from:Vector3,to:Vector3)->void:
 	var beam:=MeshInstance3D.new()
-	var mesh:=CylinderMesh.new();mesh.top_radius=.045;mesh.bottom_radius=.045;mesh.height=from.distance_to(to);mesh.radial_segments=6
+	var mesh:=CylinderMesh.new();mesh.top_radius=.10;mesh.bottom_radius=.10;mesh.height=from.distance_to(to);mesh.radial_segments=6
 	beam.mesh=mesh;beam.material_override=art.mat(Color("88f7e4"),true)
 	world_root.add_child(beam);beam.position=(from+to)*.5
 	var direction:=(to-from).normalized()
 	var axis:=Vector3.UP.cross(direction)
 	if axis.length()>0.001:beam.quaternion=Quaternion(axis.normalized(),acos(clampf(Vector3.UP.dot(direction),-1,1)))
-	var tw:=create_tween();tw.tween_interval(.09);tw.tween_callback(beam.queue_free)
+	elif direction.y<0:beam.rotation.x=PI
+	var tw:=create_tween();tw.tween_interval(.18);tw.tween_callback(beam.queue_free)
 
 func _home_action()->void:
 	if not has_colony:return
@@ -845,7 +863,7 @@ func _update_work_display()->void:
 	if not is_instance_valid(work_label):return
 	work_label.visible=mode=="base" or (mode=="battle" and awaiting_deployment)
 	if mode=="battle" and awaiting_deployment:
-		work_label.text="AI OUTPOST • Tap an outer edge to deploy up to 24 trained units"
+		work_label.text="Select type + squad size • Tap separate map edges • ATTACK when ready"
 		work_label.position=Vector2(24,get_viewport().get_visible_rect().size.y-150)
 		work_label.size=Vector2(get_viewport().get_visible_rect().size.x-48,32)
 		return
@@ -957,7 +975,7 @@ func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->
 		tower["fire_wait"]=2.0 if tower.type==11 else 1.2
 		var damage:float=_shot_damage(tower,difficulty)
 		target.hp-=damage
-		_laser(tower.node.global_position+Vector3(0,3,0),target.node.global_position)
+		_weapon_effect(tower.node.global_position+Vector3(0,3,0),target.node,target.node.global_position,tower.type==11)
 		if target.hp<=0:
 			_explode(target.node.global_position);target.node.queue_free()
 
@@ -1006,3 +1024,75 @@ func _shot_damage(b:Dictionary,difficulty:int)->float:
 	var base:float=2.0+difficulty*.8+b.level*.3
 	var veteran_bonus:float=maxf(0,b.level-4)*1.5
 	return (base+veteran_bonus)*(2.0 if b.type==11 else 1.0)
+
+func _show_deployment()->void:
+	if is_instance_valid(deployment_bar):deployment_bar.queue_free()
+	deployment_bar=HBoxContainer.new();deployment_bar.add_theme_constant_override("separation",10);ui_root.add_child(deployment_bar)
+	deploy_picker=OptionButton.new();deploy_picker.custom_minimum_size=Vector2(300,64);deploy_picker.add_theme_font_size_override("font_size",20)
+	deployment_bar.add_child(deploy_picker)
+	for kind in 20:
+		deploy_picker.add_item(UNIT_NAMES[kind],kind)
+	deploy_picker.select(deploy_kind)
+	deploy_picker.item_selected.connect(func(index:int):deploy_kind=index;_refresh_deployment())
+	var quantity:=OptionButton.new();quantity.custom_minimum_size=Vector2(170,64);quantity.add_theme_font_size_override("font_size",20)
+	for count in [1,4,8,24]:quantity.add_item("SQUAD %d"%count,count)
+	quantity.select(2);quantity.item_selected.connect(func(index:int):deploy_count=quantity.get_item_id(index))
+	deployment_bar.add_child(quantity)
+	deployment_bar.add_child(_button("UNDO SQUAD",_undo_squad,Vector2(180,64)))
+	deployment_bar.add_child(_button("ATTACK",_launch_assault,Vector2(160,64)))
+	deploy_status=Label.new();deploy_status.add_theme_font_size_override("font_size",20);deployment_bar.add_child(deploy_status)
+	dock.hide();_refresh_deployment()
+
+func _refresh_deployment()->void:
+	if not is_instance_valid(deployment_bar):return
+	deployment_bar.position=Vector2(24,get_viewport().get_visible_rect().size.y-85)
+	for kind in 20:
+		var available:int=unit_stock[kind]-deployed_stock[kind]
+		deploy_picker.set_item_text(kind,"%s (%d)"%[UNIT_NAMES[kind],available])
+		deploy_picker.set_item_disabled(kind,available<=0)
+	deploy_status.text="%d / 24 PLACED"%battle_units.size()
+
+func _undo_squad()->void:
+	if not awaiting_deployment or deployment_groups.is_empty():return
+	var amount:int=deployment_groups.pop_back()
+	for i in amount:
+		var unit:Dictionary=battle_units.pop_back();deployed_stock[unit.type]-=1;unit.node.queue_free()
+	_refresh_deployment()
+
+func _launch_assault()->void:
+	if mode!="battle" or not awaiting_deployment:return
+	if battle_units.is_empty():_toast("Place at least one squad first.");return
+	awaiting_deployment=false
+	if is_instance_valid(deployment_bar):deployment_bar.hide()
+	dock.show();_toast("ATTACK — squads advancing!")
+
+func _weapon_effect(origin:Vector3,target:Node3D,destination:Vector3,rocket:bool)->void:
+	if not rocket:_laser(origin,destination);return
+	if missiles.size()>=64:return
+	var body:=MeshInstance3D.new();var shape:=SphereMesh.new();shape.radius=.16;shape.height=.6;body.mesh=shape
+	body.material_override=art.mat(Color("ffd57a"),true);world_root.add_child(body);body.position=origin
+	var exhaust:=MeshInstance3D.new();var plume:=SphereMesh.new();plume.radius=.12;plume.height=.75;exhaust.mesh=plume
+	exhaust.material_override=art.mat(Color("ff692f"),true);body.add_child(exhaust);exhaust.position.y=-.4
+	missiles.append({"node":body,"target":target,"destination":destination,"age":0.0,"context":mode})
+
+func _projectile_tick(delta:float)->void:
+	for i in range(missiles.size()-1,-1,-1):
+		var rocket:Dictionary=missiles[i]
+		if rocket.context!=mode or not is_instance_valid(rocket.node):
+			if is_instance_valid(rocket.node):rocket.node.queue_free()
+			missiles.remove_at(i);continue
+		rocket.age+=delta
+		if is_instance_valid(rocket.target):rocket.destination=rocket.target.global_position+Vector3(0,.8,0)
+		var direction:Vector3=rocket.destination-rocket.node.position
+		if direction.length()<.5 or rocket.age>4:
+			var flash:=_sphere(.35,art.mat(Color("ffd28a"),true));world_root.add_child(flash);flash.position=rocket.node.position
+			var fade:=create_tween();fade.tween_property(flash,"scale",Vector3.ONE*2.2,.15);fade.tween_callback(flash.queue_free)
+			rocket.node.queue_free();missiles.remove_at(i);continue
+		rocket.node.position=rocket.node.position.move_toward(rocket.destination,delta*24)
+		var axis:=Vector3.UP.cross(direction.normalized())
+		if axis.length()>.001:rocket.node.quaternion=Quaternion(axis.normalized(),acos(clampf(Vector3.UP.dot(direction.normalized()),-1,1)))
+
+func _clear_missiles()->void:
+	for rocket in missiles:
+		if is_instance_valid(rocket.node):rocket.node.queue_free()
+	missiles.clear()

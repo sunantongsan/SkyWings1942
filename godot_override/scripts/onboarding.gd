@@ -67,7 +67,7 @@ func choose_world()->void:
 	page="planets";_clear();host.mode="planet_select"
 	column.add_child(_label("CHOOSE YOUR HOMEWORLD",30))
 	column.add_child(_label("15 frontiers. One colony. Every world starts with the same supplies.",17,Color("b4cbd4")))
-	var scroll:=ScrollContainer.new();scroll.custom_minimum_size.y=300;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;column.add_child(scroll)
+	var scroll:=preload("res://scripts/touch_scroll.gd").new();scroll.custom_minimum_size.y=300;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;column.add_child(scroll)
 	var grid:=GridContainer.new();grid.columns=5;grid.add_theme_constant_override("h_separation",9);grid.add_theme_constant_override("v_separation",9);grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(grid)
 	for i in 15:
 		var b:Button=host._button("",func(idx=i):select_world(idx),Vector2(195,88));b.size_flags_horizontal=Control.SIZE_EXPAND_FILL;grid.add_child(b);planet_buttons.append(b)
@@ -107,7 +107,7 @@ func show_help()->void:
 	page="help";_clear()
 	column.add_child(_label("COMMANDER'S FIELD GUIDE",30))
 	var text:=_label("1   CHOOSE A WORLD — settle a permanent home for this colony.\n\n2   BUILD — follow the mission card and tap clear terrain (the glowing site is a suggestion).\n\n3   GATHER — production begins when the matching facility is built.\n\n4   UPGRADE — tap a building, then use UPGRADE to improve it.\n\n5   TRAIN — the Star Hangar prepares your fleet using Credits and Oil.\n\n6   RAID — open the Galaxy Map, choose a rival outpost and return with rewards.\n\nDRAG to move the camera. PINCH or use + / − to zoom. Progress saves on this device. Construction and training continue while away. Offline resource production is capped at 8 hours. Raids are against AI.",18,Color("bed3da"));text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	var scroll:=ScrollContainer.new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.custom_minimum_size.y=345;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.add_child(text);text.size_flags_horizontal=Control.SIZE_EXPAND_FILL;column.add_child(scroll)
+	var scroll:=preload("res://scripts/touch_scroll.gd").new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.custom_minimum_size.y=345;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.add_child(text);text.size_flags_horizontal=Control.SIZE_EXPAND_FILL;column.add_child(scroll)
 	column.add_child(host._button("BACK TO EXPEDITION",func():
 		if help_return=="welcome":welcome()
 		else:

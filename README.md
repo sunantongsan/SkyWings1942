@@ -88,3 +88,14 @@ Existing models now show gold star ranks above every building, including AI buil
 Every completed building at level five or higher automatically acquires and fires at invading units. Laser Towers and Missile Bastions retain their early-level weapons. Per-shot damage rises with every level, with an additional veteran bonus from five stars onward. Civilian buildings fire from their existing structures without new models. This applies to both enemy outposts and the local home-defense drill. Existing save levels remain authoritative; no save reset is required.
 
 QA checks the unlock threshold for all 12 building types, higher-rank damage, unfinished construction, the real 4→5 upgrade deadline, a Core damaging an intruder, visible rank text and save/reload persistence.
+
+
+## v0.8 — Mobile scrolling, squad placement and weapon visuals
+
+Scrollable building/unit/help menus now capture finger gestures over their content, apply inertial scrolling and activate a card only on an undragged release. Emulated mouse events are suppressed inside these touch lists to prevent duplicate actions.
+
+Before an AI raid, choose a unit type and squad size (1, 4, 8 or up to 24), then tap a valid outer edge for each group. Multiple groups can approach from different directions. UNDO SQUAD removes the latest group and restores its available deployment count. ATTACK begins the battle only after at least one unit is placed. The total field limit remains 24 and fleet stock retains the existing practice-mode persistence.
+
+Lasers are brighter and last longer. Missile Bastions and missile/bomber unit types show moving emissive homing rockets, exhaust and impact flashes, with a 64-projectile visual cap and cleanup. Visual rockets accompany the existing combat damage calculation; they do not change damage into a delayed impact mechanic.
+
+QA exercises raw Android touch scrolling over cards without purchases, single-tap purchase, separate squads/types/locations, undo, empty-army rejection and moving projectile cleanup, alongside previous economy/save/combat tests.
