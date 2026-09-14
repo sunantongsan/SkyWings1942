@@ -169,6 +169,61 @@ func run()->void:
 	game._select_building_at(Vector3.ZERO);game._begin_move();game._move_building(Vector3(-7,0,-4))
 	assert(game.buildings[0].pos==Vector3.ZERO,"Relocation cannot overlap structures")
 	game._move_building(Vector3(0,0,1));assert(game.buildings[0].pos==Vector3(0,0,1))
+
+	# Gold supply chain, parallel builders, map growth and firing defenses.
+	game.gold=0;game._buy_drone();assert(game.drone_count==1)
+	game._begin_build(10);game._place_building(Vector3(35,0,0))
+	assert(game.buildings.back().type==10 and game.buildings.back().get("job","")=="build")
+	var no_gold:float=game.gold
+	game._advance_colony(game.colony_time+41)
+	assert(game.building_levels[10]==1 and game.gold==no_gold,"Refinery requires a mining vehicle")
+	var mining_metal:float=game.metal
+	var mining_oil:float=game.oil
+	game._build_miner()
+	assert(game.metal==mining_metal-600 and game.oil==mining_oil-150)
+	game._advance_colony(game.colony_time+16)
+	assert(game.miner_count==1 and game.industry_visuals.size()==1)
+	game._advance_colony(game.colony_time+101)
+	assert(game.gold>=200)
+	game._buy_drone();assert(game.drone_count==2)
+	game.gold=100000
+	for i in 12:game._buy_drone()
+	assert(game.drone_count==10 and game.drone_visuals.size()==10)
+	for i in 10:
+		game._begin_build(1);game._place_building(Vector3(100+i*8,0,0))
+	assert(game._builder_busy(),"Ten active jobs use all drones")
+	var count_before:int=game.buildings.size()
+	game._begin_build(1);game._place_building(Vector3(200,0,0))
+	assert(game.buildings.size()==count_before,"No eleventh construction job")
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.drone_count==10 and game.miner_count==1 and game._builder_busy())
+	assert(game.buildings.back().pos.x==172,"Expanded colony positions survive save/load")
+	game._advance_colony(game.colony_time+16)
+	assert(not game._builder_busy())
+	game._begin_build(11);game._place_building(Vector3(35,0,10));game._advance_colony(game.colony_time+46)
+	assert(game.building_levels[11]==1)
+	game.camera_focus=Vector3(35,0,3);game._position_camera();game._update_work_display()
+	await shot("09-gold-refinery-and-miner")
+	game._toggle_build();await shot("10-ten-construction-drones");game.build_panel.hide()
+	game._start_defense_drill()
+	assert(game.home_attackers.size()==3)
+	var target_hp:float=game.home_attackers[1].hp
+	game._home_defense_tick(1.3)
+	var was_hit:=false
+	for u in game.home_attackers:
+		if u.hp<target_hp:was_hit=true
+	assert(was_hit,"Home defenses must damage actual enemy units")
+	await shot("11-home-defense-drill")
+	var valid_profile:Dictionary=game.profile_store.read_profile(QA_SAVE)
+	for i in 320:valid_profile.buildings.append({"type":1,"level":1,"pos":[500+i*8,0,0]})
+	assert(game.profile_store._valid(valid_profile),"No legacy 300-building save cap")
+	game._start_battle(14)
+	assert(game.battle_targets.size()==11 and game.battle_targets[0].level==15,"Late worlds have more and stronger defenses")
+	game._deploy_fleet(Vector3(0,0,16))
+	for u in game.battle_units:u.hp=0
+	game._battle_tick(.1)
+	assert(game.mode=="base","A destroyed fleet loses the battle")
+	print("GOLD_MINERS_TEN_DRONES_EXPANDED_MAP_AND_DEFENSE_AI_PASSED")
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()

@@ -8,8 +8,8 @@ from collections import defaultdict
 OUT=Path(__file__).resolve().parents[1]/'godot_override/assets/models'
 OUT.mkdir(parents=True,exist_ok=True)
 TAU=math.tau
-NAMES=['galactic_core','fusion_reactor','metal_extractor','oil_processor','crystal_mine','resource_vault','star_hangar','research_lab','laser_tower','shield_generator']
-ACCENTS=['38d6f1','60eccb','f5b74b','fa9851','bf88ff','ecc779','65c8ff','71e1e3','6fbdff','68e4e6']
+NAMES=['galactic_core','fusion_reactor','metal_extractor','oil_processor','crystal_mine','resource_vault','star_hangar','research_lab','laser_tower','shield_generator','gold_refinery','missile_bastion']
+ACCENTS=['38d6f1','60eccb','f5b74b','fa9851','bf88ff','ecc779','65c8ff','71e1e3','6fbdff','68e4e6','ffd065','ff9852']
 def rgb(h):
     values=[int(h[i:i+2],16)/255 for i in (0,2,4)]
     return [v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4 for v in values]
@@ -196,6 +196,61 @@ def building(t):
             m.strut((x,2.6,z),(x*.5,3.15,z*.5),.28,1)
             m.block((.24,.7,.16),(x*1.2,1.9,z*1.2),4,.025,a)
         m.part='Rotor';m.ring(1.25,2.85,4,.12)
+    elif t==10:
+        # Gold refinery: smelter, intake conveyor, exhaust stacks and gold vault.
+        m.block((2.4,2.4,2.8),(-.9,1.7,-.3),1,.22)
+        m.block((2.7,.35,3.1),(-.9,3,-.3),0,.12)
+        for x in [-1.6,-.4]:
+            m.drum(.3,1.7,(x,3.4,-1.1),3)
+            m.ring(.32,4.2,5,pos=(x,0,-1.1))
+        m.block((1.6,.8,2.1),(1.6,.95,.3),0,.14)
+        m.block((1.1,.12,3.1),(1.3,.65,1.5),2,.03)
+        for z in range(6):
+            m.block((1.2,.09,.18),(1.3,.76,.3+z*.45),3,.02)
+        for z in range(3):
+            m.block((.6,.25,.34),(1.3,.95,.6+z*.6),5,.06)
+        m.block((1.6,.65,.08),(-.9,1.8,1.15),4,.04)
+        vents(m,-.9,3.22,-.3)
+        m.part='Rotor';m.ring(.65,3.25,4,pos=(-.9,0,-.3))
+    elif t==11:
+        m.drum(1.65,.8,(0,1,0),1,8);fins(m,1.2,1.5,1.25,4)
+        m.drum(1.1,.6,(0,2,0),3,12)
+        m.part='Turret'
+        m.block((2.9,.7,2.1),(0,2.5,0),0,.2)
+        for x in [-.9,0,.9]:
+            m.block((.7,.8,2.7),(x,3,.15),1,.12)
+            m.block((.45,.45,.1),(x,3,1.55),2,.04)
+            m.block((.23,.23,.11),(x,3,1.61),4,.02)
+        m.strut((0,2.8,-1),(0,4.2,-1),.08,3)
+        m.block((.8,.3,.15),(0,4.2,-1),4,.03)
+    return m
+
+def mining_vehicle():
+    m=Model('ffd065')
+    m.block((1.8,.6,2.9),(0,.7,0),1,.14)
+    for x in [-1,1]:
+        m.block((.55,.65,3.1),(x,.4,0),2,.13)
+        for z in [-1,-.5,0,.5,1]:
+            m.block((.6,.14,.19),(x,.76,z),3,.02)
+    m.block((1.3,.9,1.1),(0,1.35,-.65),0,.14)
+    m.block((1,.45,.08),(0,1.42,-.06),6,.03)
+    m.block((1.3,.3,1.1),(0,1.1,.5),5,.06)
+    m.strut((-.6,.9,1),(-.6,1.3,2),.15,3)
+    m.strut((.6,.9,1),(.6,1.3,2),.15,3)
+    m.part='Drill'
+    for x in [-.6,-.3,0,.3,.6]:
+        m.block((.19,.4,.5),(x,.9,2),3,.03)
+    return m
+
+def construction_drone():
+    m=Model('67ffe1')
+    m.block((.9,.35,.7),(0,0,0),0,.12)
+    m.block((.5,.14,.08),(0,0,.4),4,.02)
+    for x in [-1,1]:
+        for z in [-1,1]:
+            m.strut((x*.25,0,z*.2),(x*.7,0,z*.6),.09,3)
+            m.drum(.27,.1,(x*.7,0,z*.6),1,12)
+            m.ring(.22,.06,4,pos=(x*.7,0,z*.6),width=.04)
     return m
 
 def fighter():
@@ -212,6 +267,8 @@ def fighter():
 manifest={'authorship':'Original GALAXY 1942 procedural mesh designs, no external assets','coordinates':'Y-up, metres, front +Z, ground y=0','assets':[]}
 for i,name in enumerate(NAMES):manifest['assets'].append(building(i).export(name))
 manifest['assets'].append(fighter().export('fighter'))
+manifest['assets'].append(mining_vehicle().export('mining_vehicle'))
+manifest['assets'].append(construction_drone().export('construction_drone'))
 # Reusable angular geology, organic crown plants; merged into material surfaces.
 for seed in range(3):
     m=Model();m.materials[0]=material('weathered_stone','697a75',.05,.95);rng=random.Random(seed+1942)

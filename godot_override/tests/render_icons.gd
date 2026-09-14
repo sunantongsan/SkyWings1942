@@ -1,5 +1,5 @@
 extends SceneTree
-var names := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator"]
+var names := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion"]
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:

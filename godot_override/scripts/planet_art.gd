@@ -1,7 +1,7 @@
 extends RefCounted
 ## Authored GLB instances, restrained environment dressing and mobile effects.
 const ROOT := "res://assets/models/"
-const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator"]
+const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion"]
 var scene_cache: Dictionary = {}
 var materials: Dictionary = {}
 var box_meshes: Dictionary = {}
@@ -64,25 +64,14 @@ func mat(color: Color, emission := false) -> StandardMaterial3D:
 
 func terrain() -> MeshInstance3D:
 	var mesh := MeshInstance3D.new()
-	var surface := SurfaceTool.new()
-	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for z in range(-55,55):
-		for x in range(-65,65):
-			var a := Vector3(x, elevation(x,z), z)
-			var b := Vector3(x+1, elevation(x+1,z), z)
-			var c := Vector3(x, elevation(x,z+1), z+1)
-			var d := Vector3(x+1, elevation(x+1,z+1), z+1)
-			for v in [a,b,c,b,d,c]: surface.add_vertex(v)
-	surface.generate_normals()
-	mesh.mesh = surface.commit()
+	var plane:=PlaneMesh.new();plane.size=Vector2(192,192);mesh.mesh=plane
 	var material := ShaderMaterial.new()
 	material.shader = load("res://shaders/terrain.gdshader")
 	mesh.material_override = material
 	return mesh
 
 func elevation(x: float,z: float) -> float:
-	var outskirts := smoothstep(20.0,36.0,Vector2(x,z*1.15).length())
-	return outskirts*(1.7+sin(x*0.19)*1.4+cos(z*0.22)*1.5+sin((x+z)*0.31)*0.7)-0.02
+	return -0.02
 
 func cuboid(parent: Node3D, size: Vector3, pos: Vector3, color: Color, emit := false) -> MeshInstance3D:
 	var n := MeshInstance3D.new()
