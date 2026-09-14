@@ -8,8 +8,8 @@ from collections import defaultdict
 OUT=Path(__file__).resolve().parents[1]/'godot_override/assets/models'
 OUT.mkdir(parents=True,exist_ok=True)
 TAU=math.tau
-NAMES=['galactic_core','fusion_reactor','metal_extractor','oil_processor','crystal_mine','resource_vault','star_hangar','research_lab','laser_tower','shield_generator','gold_refinery','missile_bastion']
-ACCENTS=['38d6f1','60eccb','f5b74b','fa9851','bf88ff','ecc779','65c8ff','71e1e3','6fbdff','68e4e6','ffd065','ff9852']
+NAMES=['galactic_core','fusion_reactor','metal_extractor','oil_processor','crystal_mine','resource_vault','star_hangar','research_lab','laser_tower','shield_generator','gold_refinery','missile_bastion','vehicle_factory','barracks']
+ACCENTS=['38d6f1','60eccb','f5b74b','fa9851','bf88ff','ecc779','65c8ff','71e1e3','6fbdff','68e4e6','ffd065','ff9852','ffbc57','79e6b0']
 def rgb(h):
     values=[int(h[i:i+2],16)/255 for i in (0,2,4)]
     return [v/12.92 if v<=.04045 else ((v+.055)/1.055)**2.4 for v in values]
@@ -223,6 +223,34 @@ def building(t):
             m.block((.23,.23,.11),(x,3,1.61),4,.02)
         m.strut((0,2.8,-1),(0,4.2,-1),.08,3)
         m.block((.8,.3,.15),(0,4.2,-1),4,.03)
+    elif t==12:
+        # Two deep vehicle assembly bays, overhead crane and industrial exhausts.
+        for x in [-2.35,0,2.35]:
+            m.block((.45,2.6,4.4),(x,1.85,0),1,.1)
+        m.block((4.9,.45,4.6),(0,3.35,0),0,.18)
+        m.block((4.8,2.5,.35),(0,1.8,-2.1),1,.1)
+        for x in [-1.2,1.2]:
+            m.block((1.8,.08,3.8),(x,.6,1.25),2,.06)
+            m.block((1.7,.12,.15),(x,2.95,2.25),5,.02)
+            for z in range(4):m.block((1.6,.03,.08),(x,.66,.3+z*.7),5,.01)
+        for x in [-1.8,1.8]:
+            m.drum(.22,1.2,(x,3.8,-1.5),3)
+            vents(m,x,3.62,0,6)
+        m.strut((-2.4,4.2,0),(2.4,4.2,0),.2,5)
+        m.strut((0,4.2,0),(0,3.6,0),.1,3)
+    elif t==13:
+        # Armored troop quarters with parade apron and communication mast.
+        m.block((4.4,2.1,3.2),(0,1.6,-.5),1,.25)
+        m.block((4.7,.4,3.5),(0,2.85,-.5),0,.18)
+        for x in [-1.6,-.8,.8,1.6]:
+            m.block((.45,.55,.08),(x,2,1.14),4,.04)
+        m.block((.8,1.55,.12),(0,1.35,1.17),2,.08)
+        m.block((1,.16,.15),(0,2.2,1.22),5,.03)
+        m.block((4,.08,1.6),(0,.57,2),0,.12)
+        for x in [-1.4,0,1.4]:m.block((.5,.03,.65),(x,.63,2),5,.03)
+        m.strut((2,.6,-1.5),(2,4.8,-1.5),.08,3)
+        m.block((.9,.6,.06),(1.6,4.35,-1.5),4,.02)
+        vents(m,-1.1,3.1,-.5,6)
     return m
 
 def mining_vehicle():

@@ -51,11 +51,12 @@ func _valid(data:Variant)->bool:
 	if not _number(data.get("gold",0),0,1e12):return false
 	if not _number(data.get("miner_count",0),0,1e9):return false
 	if not _number(data.get("miner_finish",0),0,1e12):return false
+	if not _number(data.get("drone_finish",0),0,1e12):return false
 	var busy:=0
 	var kinds:Dictionary={}
 	for b in data.buildings:
 		if not b is Dictionary:return false
-		if not _number(b.get("type",-1),0,11) or not _number(b.get("level",0),1,100):return false
+		if not _number(b.get("type",-1),0,13) or not _number(b.get("level",0),1,100):return false
 		if not b.get("pos") is Array or b.pos.size()!=3:return false
 		if not _number(b.pos[0],-1e12,1e12) or not _number(b.pos[1],0,0) or not _number(b.pos[2],-1e12,1e12):return false
 		if b.get("job","") not in ["","build","upgrade"]:return false

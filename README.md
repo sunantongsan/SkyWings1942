@@ -108,3 +108,14 @@ Ten original GLBs replace the placeholder ground units: Battle Tank, Siege Tank,
 Infantry/mechs have alternating leg movement. Vehicle turrets aim and weapons recoil with muzzle flashes. Destroyed units and buildings become darkened wrecks, collapse, scatter debris and burn with smoke for up to twelve seconds. A twelve-wreck cap and scene-change cleanup bound rendering costs. Existing aircraft models and support-unit combat roles remain the prototype versions.
 
 QA checks model and portrait imports, grounded placement, articulated walking, cannon recoil, destruction starting only once, collapsed structures and complete wreck/particle cleanup, alongside existing colony, touch, deployment and battle tests.
+
+
+### v0.10 production facilities
+
+- Star Hangar produces aircraft and armed support drones; it also produces construction drones (Gold unlock price, 15-second job, maximum 10).
+- New original Vehicle Factory GLB produces Battle Tank (level 1), Artillery (2), Siege Tank (3), Rocket Launcher (4), and Mining Vehicles (1, also requires Gold Refinery).
+- New original Barracks GLB produces Assault Soldier (1), Sniper (2), Mech Warrior (3), Elite Commander (5).
+- Aircraft unlock across Hangar levels 1–7; Shield/Repair Drones unlock at level 2. Their current combat behavior is unchanged; specialized support abilities remain prototype work.
+- One serial production line per facility type; the three lines run concurrently. Additional buildings of the same type do not add lines. Highest completed, non-upgrading building level controls new orders. Already accepted jobs continue during upgrades.
+- Locked cards show the required facility level. Select an industrial building and tap PRODUCE, or use FLEET tabs. Existing units and accepted jobs remain valid on upgrading from v0.9; no save reset.
+- Construction drone and mining vehicle timers persist and share their matching production line. Offline catch-up retains the existing eight-hour resource cap.

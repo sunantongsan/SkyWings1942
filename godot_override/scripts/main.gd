@@ -1,7 +1,7 @@
 extends Node3D
 
-const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion"]
-const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200]
+const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks"]
+const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000]
 const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander"]
 const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mechanis","Toxicus","Nebularis","Asteroid Belt","Ruins","Orbit Station","Moon Base","Gas Giant","Wormhole"]
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
@@ -30,6 +30,7 @@ var gold:=0.0
 var drone_count:=1
 var miner_count:=0
 var miner_finish:=0.0
+var drone_finish:=0.0
 var industry_visuals:Array[Node3D]=[]
 var drone_visuals:Array[Node3D]=[]
 var home_attackers:Array[Dictionary]=[]
@@ -41,7 +42,7 @@ var build_type:=-1
 var moving_building:=-1
 var selected_unit:=0
 var buildings:Array[Dictionary]=[]
-var building_levels:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0,0])
+var building_levels:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0,0,0,0])
 var unit_stock:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])
 var drag_camera:=false
 var touch_points:={}
@@ -87,7 +88,7 @@ var unit_icon_cache:Dictionary={}
 const GROUND_ASSETS := ["battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander"]
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
-const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40]
+const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25]
 var home_planet := -1
 var has_colony := false
 var tutorial_step := 0
@@ -100,9 +101,12 @@ var profile_ready := false
 var roads_root:Node3D
 var landing_marker:MeshInstance3D
 var landing_label:Label3D
-const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45]
+const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30]
 var colony_time := 0.0
 var training_queue:Array = []
+var production_kind:=6
+const UNIT_FACILITY := [6,6,6,6,6,6,6,6,6,6,12,12,12,12,13,13,6,6,13,13]
+const UNIT_TIER := [1,2,2,3,4,3,4,5,6,7,1,3,2,4,3,2,2,2,1,5]
 var work_label:Label
 
 
@@ -222,6 +226,9 @@ func _setup_ui()->void:
 	var iv:=VBoxContainer.new();iv.add_theme_constant_override("separation",12);info_panel.add_child(iv)
 	selected_label=Label.new();selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
 	selected_detail=Label.new();selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
+	iv.add_child(_button("PRODUCE",func():
+		if selected_building>=0 and buildings[selected_building].type in [6,12,13]:_show_production(buildings[selected_building].type)
+		else:_toast("Select a Star Hangar, Vehicle Factory or Barracks."),Vector2(0,54)))
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
@@ -245,11 +252,9 @@ func _setup_ui()->void:
 func _make_build_panel()->PanelContainer:
 	var panel:=_panel("CONSTRUCTION  /  DEVELOP YOUR HOMEWORLD")
 	var actions:=HBoxContainer.new();panel.get_child(0).add_child(actions)
-	actions.add_child(_button("DRONES %d/10 • %s GOLD"%[drone_count,str(DRONE_PRICES[mini(drone_count-1,8)]) if drone_count<10 else "MAX"],_buy_drone,Vector2(310,52)))
-	actions.add_child(_button("BUILD MINER • 600 M / 150 O",_build_miner,Vector2(360,52)))
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
-	for i in BUILD_ORDER+[10,11]:
+	for i in BUILD_ORDER+[10,11,12,13]:
 		var b:=_asset_button(BUILDING_NAMES[i],"%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
 		var reason:=_build_lock_reason(i)
 		b.disabled=not reason.is_empty()
@@ -260,16 +265,56 @@ func _make_build_panel()->PanelContainer:
 		b.pressed.connect(func(idx=i):_begin_build(idx));grid.add_child(b)
 	return panel
 
+func _facility_finish(kind:int)->float:
+	var finish:float=colony_time
+	if kind==6:finish=maxf(finish,drone_finish)
+	if kind==12:finish=maxf(finish,miner_finish)
+	for job in training_queue:
+		if UNIT_FACILITY[int(job.type)]==kind:finish=maxf(finish,float(job.finish))
+	return finish
+
+func _production_level(kind:int)->int:
+	var level:=0
+	for building in buildings:
+		if building.type==kind and building.get("job","")=="":level=maxi(level,building.level)
+	return level
+
+func _unit_lock_reason(idx:int)->String:
+	if tutorial_step<11:return "Complete the Core upgrade mission"
+	if _production_level(UNIT_FACILITY[idx])<UNIT_TIER[idx]:return "%s level %d required"%[BUILDING_NAMES[UNIT_FACILITY[idx]],UNIT_TIER[idx]]
+	return ""
+
+func _show_production(kind:int)->void:
+	production_kind=kind
+	_refresh_progress()
+	units_panel.show();build_panel.hide();info_panel.hide()
+
 func _make_units_panel()->PanelContainer:
-	var panel:=_panel("STAR HANGAR / QUEUED %d OF 20"%training_queue.size())
+	var level:=_production_level(production_kind)
+	var panel:=_panel("%s / LEVEL %d / QUEUED %d OF 20"%[BUILDING_NAMES[production_kind].to_upper(),level,training_queue.size()])
+	var tabs:=HBoxContainer.new();panel.get_child(0).add_child(tabs)
+	for kind in [6,12,13]:
+		var button:=_button(BUILDING_NAMES[kind].to_upper(),func(k=kind):_show_production(k),Vector2(270,54))
+		if kind==production_kind:button.add_theme_stylebox_override("normal",_style(Color("176d75"),12,Color("69d9c8"),1))
+		tabs.add_child(button)
 	var grid:=_scroll_grid(panel,4)
-	var order:Array=range(20) if tutorial_step<13 else [10,18,14,12,11,13,15,19,16,17,0,1,2,3,4,5,6,7,8,9]
-	for i in order:
-		var cost:int=180+int(i)*35
-		var b:=_asset_button(UNIT_NAMES[i],"Ready %d • %ds • %d C / %d O"%[unit_stock[i],5+i*2,cost,int(cost*.4)],"units/"+_unit_asset(i),Vector2(230,168))
-		b.disabled=building_levels[6]==0 or tutorial_step<11
+	for i in range(20):
+		if UNIT_FACILITY[i]!=production_kind:continue
+		var cost:int=180+i*35
+		var reason:=_unit_lock_reason(i)
+		var detail:String="LV %d • Ready %d • %ds\n%d C / %d O"%[UNIT_TIER[i],unit_stock[i],5+i*2,cost,int(cost*.4)] if reason.is_empty() else "LOCKED • "+reason
+		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,168))
+		b.disabled=not reason.is_empty()
 		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
 		b.pressed.connect(func(idx=i):_train_unit(idx));grid.add_child(b)
+	if production_kind==12:
+		var miner:=_asset_button("Mining Vehicle","LV 1 • 15s • 600 M / 150 O\nRequires Gold Refinery","units/mining_vehicle",Vector2(230,168))
+		miner.disabled=level<1 or building_levels[10]<1 or miner_finish>0
+		miner.pressed.connect(_build_miner);grid.add_child(miner)
+	if production_kind==6:
+		var drone:=_asset_button("Construction Drone","LV 1 • 15s • %d / 10 • %d Gold"%[drone_count,DRONE_PRICES[mini(drone_count-1,8)]],"units/construction_drone",Vector2(230,168))
+		drone.disabled=level<1 or drone_count>=10 or drone_finish>0
+		drone.pressed.connect(_buy_drone);grid.add_child(drone)
 	return panel
 
 func _make_galaxy_panel()->PanelContainer:
@@ -284,7 +329,7 @@ func _make_galaxy_panel()->PanelContainer:
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
 
-func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion"][i]
+func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks"][i]
 
 func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->Dictionary:
 	var root:Node3D=art.building(type,enemy)
@@ -370,14 +415,17 @@ func _upgrade_selected()->void:
 	_toast("Upgrade started. The new level unlocks when construction finishes.")
 
 func _train_unit(idx:int)->void:
-	if mode!="base" or building_levels[6]==0 or tutorial_step<11:_toast("Build your colony and upgrade the Core first.");return
+	if mode!="base":return
 	if idx<0 or idx>=20:return
+	var reason:=_unit_lock_reason(idx)
+	if not reason.is_empty():_toast(reason);return
 	var c:=180+idx*35
 	if credits<c or oil<c*.4:_toast("NOT ENOUGH RESOURCES");return
 	if training_queue.size()>=20:_toast("Training queue full (20).");return
 	credits-=c;oil-=c*.4;selected_unit=idx
-	var start:float=colony_time if training_queue.is_empty() else float(training_queue.back().finish)
+	var start:float=_facility_finish(UNIT_FACILITY[idx])
 	training_queue.append({"type":idx,"finish":start+5+idx*2})
+	training_queue.sort_custom(func(a,b):return float(a.finish)<float(b.finish))
 	_refresh_progress();_setup_life();_save_profile()
 	units_panel.show();onboarding.refresh_guide()
 	_toast("%s added to training queue (%d)."%[UNIT_NAMES[idx],training_queue.size()])
@@ -531,6 +579,11 @@ func _select_building_at(pos:Vector3)->void:
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
 	selected_detail.text="HP %d/%d\nUpgrade: %d Metal\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,weapon]
+	if b.type in [6,12,13]:
+		var next_units:Array[String]=[]
+		for kind in range(20):
+			if UNIT_FACILITY[kind]==b.type and UNIT_TIER[kind]==b.level+1:next_units.append(UNIT_NAMES[kind])
+		selected_detail.text+="\nNext level: "+(", ".join(next_units) if not next_units.is_empty() else "More HP and stronger defense")
 
 func _place_building(pos:Vector3)->void:
 	if mode!="base" or not has_colony or build_type<0:return
@@ -756,7 +809,7 @@ func _found_colony(planet:int)->void:
 	_save_profile();onboarding.enter_colony()
 
 func _build_lock_reason(kind:int)->String:
-	if kind<0 or kind>=12:return "Unknown structure."
+	if kind<0 or kind>=14:return "Unknown structure."
 	if _builder_busy():return "Construction drone busy."
 	if kind==0 and building_levels[0]>0:return "Your colony already has a Galactic Core."
 	if kind<10 and tutorial_step<10 and kind!=BUILD_ORDER[tutorial_step]:return "Next: "+BUILDING_NAMES[BUILD_ORDER[tutorial_step]]
@@ -819,12 +872,13 @@ func _save_profile()->void:
 	if not has_colony or not profile_ready:return
 	var records:Array=[]
 	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
-	var data:Dictionary={"schema":1,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	var data:Dictionary={"schema":1,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
 	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.")
 
 func _load_profile()->void:
 	var data:Dictionary=profile_store.read_profile(profile_path)
 	if data.is_empty():return
+	drone_finish=float(data.get("drone_finish",0))
 	gold=float(data.get("gold",0));drone_count=int(data.get("drone_count",1));miner_count=int(data.get("miner_count",0));miner_finish=float(data.get("miner_finish",0))
 	has_colony=true;home_planet=int(data.home_planet);tutorial_step=int(data.tutorial_step);tutorial_dismissed=bool(data.get("tutorial_dismissed",false))
 	credits=float(data.resources[0]);metal=float(data.resources[1]);oil=float(data.resources[2]);crystal=float(data.resources[3]);unit_stock=PackedInt32Array(data.unit_stock)
@@ -864,12 +918,14 @@ func _advance_colony(now:float)->void:
 	var economy_start:float=maxf(colony_time,now-8*3600)
 	while colony_time<now:
 		var next:float=now
+		if drone_finish>0:next=minf(next,maxf(colony_time,drone_finish))
 		if miner_finish>0:next=minf(next,maxf(colony_time,miner_finish))
 		for b in buildings:
 			if b.get("job","")!="":next=minf(next,maxf(colony_time,float(b.finish)))
 		if not training_queue.is_empty():next=minf(next,maxf(colony_time,float(training_queue[0].finish)))
 		_economy_tick(maxf(0,next-maxf(colony_time,economy_start)))
 		colony_time=next
+		if drone_finish>0 and drone_finish<=colony_time:drone_count+=1;drone_finish=0;changed=true
 		if miner_finish>0 and miner_finish<=colony_time:miner_count+=1;miner_finish=0;changed=true
 		for b in buildings:
 			if b.get("job","")!="" and float(b.finish)<=colony_time:
@@ -903,6 +959,7 @@ func _update_work_display()->void:
 	if not training_queue.is_empty():lines.append("TRAINING: %s • %ds • %d queued"%[UNIT_NAMES[int(training_queue[0].type)],maxi(0,int(ceil(float(training_queue[0].finish)-colony_time))),training_queue.size()])
 	var summary:="DRONES %d / 10 • "%drone_count
 	if lines.size()>2:lines=[lines[0],"+%d more active jobs"%(lines.size()-1)]
+	if drone_finish>0:summary+="NEW DRONE %ds • "%maxi(0,int(ceil(drone_finish-colony_time)))
 	if miner_finish>0:summary+="MINER %ds • "%maxi(0,int(ceil(miner_finish-colony_time)))
 	work_label.text=summary+"  |  ".join(lines)
 	work_label.position=Vector2(24,get_viewport().get_visible_rect().size.y-145)
@@ -931,22 +988,25 @@ func _building_oil_cost(kind:int)->int:
 
 func _buy_drone()->void:
 	if not has_colony or mode!="base":return
+	if _production_level(6)<1:_toast("Complete a Star Hangar first.");return
+	if drone_finish>0:_toast("Construction drone is in production.");return
 	if drone_count>=10:_toast("Maximum 10 construction drones.");return
 	var cost:int=DRONE_PRICES[drone_count-1]
 	if gold<cost:_toast("Mine %d Gold to unlock the next drone."%cost);return
-	gold-=cost;drone_count+=1
+	gold-=cost;drone_finish=_facility_finish(6)+15
 	_sync_industry_visuals();_refresh_progress();_save_profile()
-	_toast("Construction drone %d unlocked. Build in parallel!"%drone_count)
+	_toast("Construction drone queued in Star Hangar (15s).")
 
 func _build_miner()->void:
 	if mode!="base" or building_levels[10]==0:_toast("Complete a Gold Refinery first.");return
+	if _production_level(12)<1:_toast("Complete a Vehicle Factory first.");return
 	if miner_finish>0:_toast("A mining vehicle is already in production.");return
 	var capacity:=0
 	for b in buildings:
 		if b.type==10 and b.get("job","")!="build":capacity+=3
 	if miner_count>=capacity:_toast("Build another refinery for more mining vehicles.");return
 	if metal<600 or oil<150:_toast("Mining vehicle costs 600 Metal and 150 Oil.");return
-	metal-=600;oil-=150;miner_finish=colony_time+15
+	metal-=600;oil-=150;miner_finish=_facility_finish(12)+15
 	_save_profile();_toast("Mining vehicle production started (15 seconds).")
 
 func _sync_industry_visuals()->void:
