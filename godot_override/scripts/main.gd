@@ -281,6 +281,10 @@ func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->D
 		if part:animators.append({"node":part,"kind":part_name,"home":parent==home_root})
 	if type==3: art.particles(root,Vector3(0,4.4,-.25),Color("9db4b6"),true,false)
 	var d={"node":root,"type":type,"level":level,"pos":pos,"hp":350.0+level*120.0,"max_hp":350.0+level*120.0}
+	var rank:=Label3D.new();rank.font_size=44;rank.pixel_size=.018;rank.outline_size=8
+	rank.billboard=BaseMaterial3D.BILLBOARD_ENABLED;rank.modulate=Color("ffd873")
+	rank.no_depth_test=true;root.add_child(rank);rank.top_level=true;d["rank_label"]=rank
+	_update_rank_label(d)
 	if parent==home_root:buildings.append(d)
 	return d
 
@@ -480,7 +484,11 @@ func _select_building_at(pos:Vector3)->void:
 	selected_building=best
 	if best<0:info_panel.hide();selection_ring.hide();return
 	info_panel.show();selection_ring.show();selection_ring.position=buildings[best].pos+Vector3(0,.1,0)
-	var b:Dictionary=buildings[best];selected_label.text="%s • Lv.%d"%[BUILDING_NAMES[b.type],b.level];selected_detail.text="HP %d/%d\nUpgrade cost %d Metal\nMap theme: %s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,MAP_NAMES[map_index]]
+	var b:Dictionary=buildings[best]
+	selected_label.text="%s • %s"%[BUILDING_NAMES[b.type],_rank_text(b.level)]
+	var weapon:String="Auto-defense unlocks at 5 stars"
+	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
+	selected_detail.text="HP %d/%d\nUpgrade: %d Metal\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,weapon]
 
 func _place_building(pos:Vector3)->void:
 	if mode!="base" or not has_colony or build_type<0:return
@@ -915,6 +923,7 @@ func _industry_tick(_delta:float)->void:
 	var jobs:Array[Vector3]=[]
 	for b in buildings:
 		b.node.visible=b.pos.distance_to(camera_focus)<85
+		_update_rank_label(b)
 		if b.get("job","")!="":jobs.append(b.pos)
 	for i in drone_visuals.size():
 		var base:Vector3=jobs[i] if i<jobs.size() else Vector3((i%5)*1.5-3,0,-5-floori(i/5.0)*2)
@@ -930,11 +939,11 @@ func _industry_tick(_delta:float)->void:
 
 func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->void:
 	for tower in defenders:
-		if tower.type not in [8,11] or tower.hp<=0 or tower.get("job","")=="build":continue
+		if not _can_fire(tower):continue
 		if not is_instance_valid(tower.node):continue
 		tower["fire_wait"]=float(tower.get("fire_wait",0))-delta
 		var target:Dictionary={}
-		var range_limit:float=(12.0 if tower.type==8 else 19.0)+minf(6.0,tower.level*.3)
+		var range_limit:float=_weapon_range(tower)
 		for unit in attackers:
 			if unit.get("hp",0)<=0 or not is_instance_valid(unit.node):continue
 			var distance:float=tower.pos.distance_to(unit.node.position)
@@ -945,8 +954,8 @@ func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->
 			var point:Vector3=target.node.global_position;point.y=turret.global_position.y
 			if turret.global_position.distance_to(point)>.01:turret.look_at(point,Vector3.UP,true)
 		if float(tower.fire_wait)>0:continue
-		tower["fire_wait"]=1.2 if tower.type==8 else 2.0
-		var damage:float=(2.0+difficulty*.8+tower.level*.3)*(2.0 if tower.type==11 else 1.0)
+		tower["fire_wait"]=2.0 if tower.type==11 else 1.2
+		var damage:float=_shot_damage(tower,difficulty)
 		target.hp-=damage
 		_laser(tower.node.global_position+Vector3(0,3,0),target.node.global_position)
 		if target.hp<=0:
@@ -954,11 +963,14 @@ func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->
 
 func _start_defense_drill()->void:
 	if mode!="base" or not home_attackers.is_empty():return
-	if building_levels[8]==0 and building_levels[11]==0:_toast("Complete a defense tower first.");return
+	var ready:=false
+	for b in buildings:
+		if _can_fire(b):ready=true;break
+	if not ready:_toast("Complete a defense tower or upgrade any building to 5 stars.");return
 	build_panel.hide();onboarding.refresh_guide()
 	var center:=Vector3.ZERO
 	for b in buildings:
-		if b.type in [8,11]:center=b.pos;break
+		if _can_fire(b):center=b.pos;break
 	for i in 3:
 		var n:Node3D=_unit_model(0,true);home_root.add_child(n)
 		n.position=center+Vector3(-4+i*4,3,11)
@@ -975,3 +987,22 @@ func _home_defense_tick(delta:float)->void:
 		enemy.node.position=enemy.node.position.move_toward(target,delta*.65)
 		if enemy.node.position.distance_to(target)<1:
 			enemy.node.queue_free();home_attackers.remove_at(i);_toast("Drill: enemy breached the perimeter. Add or upgrade defenses.")
+
+func _rank_text(level:int)->String:
+	return "★".repeat(level) if level<=5 else "★ × %d"%level
+
+func _update_rank_label(b:Dictionary)->void:
+	if not is_instance_valid(b.get("rank_label")):return
+	b.rank_label.text="CONSTRUCTING" if b.get("job","")=="build" else _rank_text(int(b.level))
+	b.rank_label.global_position=b.node.global_position+Vector3(0,5.2*(1+(b.level-1)*.025),0)
+
+func _can_fire(b:Dictionary)->bool:
+	return b.hp>0 and b.get("job","")!="build" and (b.type in [8,11] or b.level>=5)
+
+func _weapon_range(b:Dictionary)->float:
+	return (19.0 if b.type==11 else 12.0)+minf(6.0,b.level*.3)
+
+func _shot_damage(b:Dictionary,difficulty:int)->float:
+	var base:float=2.0+difficulty*.8+b.level*.3
+	var veteran_bonus:float=maxf(0,b.level-4)*1.5
+	return (base+veteran_bonus)*(2.0 if b.type==11 else 1.0)

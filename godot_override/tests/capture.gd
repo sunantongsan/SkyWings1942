@@ -224,6 +224,36 @@ func run()->void:
 	game._battle_tick(.1)
 	assert(game.mode=="base","A destroyed fleet loses the battle")
 	print("GOLD_MINERS_TEN_DRONES_EXPANDED_MAP_AND_DEFENSE_AI_PASSED")
+
+	# Every building uses the same completed-level five-star unlock.
+	for kind in 12:
+		var candidate:Dictionary=game._spawn_building(game.battle_root,kind,Vector3.ZERO,4,true)
+		assert(game._can_fire(candidate)==(kind in [8,11]),"Civilian buildings below 5 stars cannot fire")
+		candidate.level=5;game._update_rank_label(candidate)
+		assert(game._can_fire(candidate),"Every completed 5-star building can defend")
+		assert(candidate.rank_label.text=="★★★★★")
+		var damage5:float=game._shot_damage(candidate,1)
+		candidate.level=6;assert(game._shot_damage(candidate,1)>damage5)
+		candidate["job"]="build";assert(not game._can_fire(candidate))
+		candidate.node.queue_free()
+	var core:Dictionary=game.buildings[0]
+	core.level=4;game._refresh_progress()
+	game._select_building_at(core.pos);game._upgrade_selected()
+	assert(core.level==4 and not game._can_fire(core),"Do not unlock defense when the upgrade merely starts")
+	game._advance_colony(game.colony_time+121)
+	assert(core.level==5 and game._can_fire(core))
+	game._update_rank_label(core);assert(core.rank_label.text=="★★★★★")
+	var invader:Node3D=game._unit_model(0,true);game.home_root.add_child(invader);invader.position=core.pos+Vector3(0,3,8)
+	var foe:Dictionary={"node":invader,"hp":100.0}
+	core["fire_wait"]=0;game._defense_tick([core],[foe],1.3,1)
+	assert(foe.hp<100,"A five-star Core must actually damage an invader")
+	invader.queue_free()
+	game.camera_focus=core.pos;game._position_camera();game._select_building_at(core.pos)
+	await shot("12-five-star-core-defense")
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.buildings[0].level==5 and game._can_fire(game.buildings[0]),"Five-star defense persists on reload")
+	assert(game.buildings[0].rank_label.text=="★★★★★")
+	print("ALL_BUILDING_STAR_RANKS_AND_LEVEL_FIVE_RETALIATION_PASSED")
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()

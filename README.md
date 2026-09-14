@@ -79,3 +79,12 @@ Gold unlocks construction drones 2–10 for 200, 400, 800, 1500, 2500, 4000, 600
 Missile Bastion costs 1200 Metal + 200 Oil. Laser Towers and Bastions acquire targets, aim, fire and damage units. Galaxy worlds progress from level 1 to 15; every three levels adds a Bastion. Units have health and losing all deployed units ends the raid. DEFENSE DRILL spawns practice intruders at the player's towers without damaging colony structures; these are local AI exercises, not online attacks.
 
 The old 18×15 placement boundary and 300-building save cap are removed. Camera movement extends the terrain surface and distant building visuals are culled. There is no gameplay building-count cap, but device RAM, floating-point precision and simulation cost still impose practical limits; this is not a claim of infinite Android capacity.
+
+
+## v0.7 — Star ranks and universal five-star defense
+
+Existing models now show gold star ranks above every building, including AI buildings. Ranks one through five show individual stars; higher ranks use a compact star × level label. Unfinished construction displays CONSTRUCTING and never unlocks firing early. Selected building details show weapon unlock status, per-shot damage and range.
+
+Every completed building at level five or higher automatically acquires and fires at invading units. Laser Towers and Missile Bastions retain their early-level weapons. Per-shot damage rises with every level, with an additional veteran bonus from five stars onward. Civilian buildings fire from their existing structures without new models. This applies to both enemy outposts and the local home-defense drill. Existing save levels remain authoritative; no save reset is required.
+
+QA checks the unlock threshold for all 12 building types, higher-rank damage, unfinished construction, the real 4→5 upgrade deadline, a Core damaging an intruder, visible rank text and save/reload persistence.
