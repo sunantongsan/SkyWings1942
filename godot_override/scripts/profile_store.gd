@@ -9,6 +9,7 @@ func read_profile(path:String)->Dictionary:
 		if not FileAccess.file_exists(candidate):continue
 		var parsed=_parse_file(candidate)
 		if _valid(parsed):
+			parsed["cleared_obstacles"]=parsed.get("cleared_obstacles",[]).map(func(id):return int(id))
 			recovered_backup=candidate!=path
 			return parsed
 		load_error=true
