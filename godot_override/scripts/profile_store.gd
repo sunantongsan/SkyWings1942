@@ -42,6 +42,14 @@ func _valid(data:Variant)->bool:
 	if not _number(data.get("colony_time",0),0,1e12):return false
 	var queue=data.get("training_queue",[])
 	if not queue is Array or queue.size()>20:return false
+	if not _number(data.get("godot_coins",0),0,1e12):return false
+	if not _number(data.get("last_coin_day",-1),-1,1e9):return false
+	var cleared=data.get("cleared_obstacles",[])
+	if not cleared is Array or cleared.size()>360:return false
+	var ids:Dictionary={}
+	for id in cleared:
+		if not _number(id,0,359) or ids.has(int(id)):return false
+		ids[int(id)]=true
 	var previous:=0.0
 	for job in queue:
 		if not job is Dictionary:return false

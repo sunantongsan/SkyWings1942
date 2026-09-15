@@ -119,3 +119,14 @@ QA checks model and portrait imports, grounded placement, articulated walking, c
 - One serial production line per facility type; the three lines run concurrently. Additional buildings of the same type do not add lines. Highest completed, non-upgrading building level controls new orders. Already accepted jobs continue during upgrades.
 - Locked cards show the required facility level. Select an industrial building and tap PRODUCE, or use FLEET tabs. Existing units and accepted jobs remain valid on upgrading from v0.9; no save reset.
 - Construction drone and mining vehicle timers persist and share their matching production line. Offline catch-up retains the existing eight-hour resource cap.
+
+
+### v0.11 GODOT Coin and reinforcements
+
+GODOT Coin is an offline in-game currency. Claim 20 once per UTC day in the Coin menu (tap the balance beneath the game title, or BUILD → GODOT COIN). It uses device time and the local save; authoritative clock/anti-tamper validation requires a future online backend. Coins are not a blockchain token.
+
+Spend 1 Coin per remaining minute (rounded up) to finish a selected building job or the next unit on one production line. Later jobs on that line move forward without completing for free. Exchange 10 Coins for 1,000 Metal, Oil, Credits, or Crystal.
+
+BUILD → CLEAR ROCKS / TREES → tap an obstacle → BLAST. Clearing costs 100 Metal and 50 Oil. Each obstacle has a deterministic 25% drop chance for 1–5 Coins; removal persists across returning home and reloading. No repeat rewards or obstacle respawn in this version.
+
+The right-hand battle roster shows portraits and remaining reserves from the stock present at raid start. Tap a portrait, select squad size, then tap an outer edge to deploy before or during combat. Accepted reinforcements are charged once; deployed troops are consumed for the raid, and unused reserves remain at home. There are at most 24 living units on the field at a time for mobile performance; losses free deployment capacity. Undo is available only before ATTACK. Retreat and the 150-second battle timer still apply.

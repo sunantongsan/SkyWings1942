@@ -21,6 +21,13 @@ var build_panel:PanelContainer
 var units_panel:PanelContainer
 var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
+var coin_system:RefCounted
+var godot_coins:=0
+var last_coin_day:=-1
+var cleared_obstacles:Array=[]
+var raid_stock:=PackedInt32Array()
+var reserve_panel:PanelContainer
+var reserve_buttons:Dictionary={}
 var credits:=3000.0
 var metal:=10000.0
 var oil:=1000.0
@@ -116,6 +123,7 @@ func _ready()->void:
 	_setup_camera()
 	_setup_ui()
 	onboarding=preload("res://scripts/onboarding.gd").new(self)
+	coin_system=preload("res://scripts/coin_system.gd").new(self)
 	_load_profile()
 	_apply_map_theme(home_planet if has_colony else 0)
 	_setup_life()
@@ -136,6 +144,7 @@ func _process(delta:float)->void:
 	if top_refresh > 0.15:
 		_update_top_bar()
 		_update_work_display()
+		if mode=="battle":_refresh_deployment()
 		top_refresh = 0.0
 
 func _setup_environment()->void:
@@ -205,6 +214,10 @@ func _setup_ui()->void:
 	var bv:=VBoxContainer.new();brand.add_child(bv)
 	var title:=Label.new();title.text="GALAXY 1942";title.add_theme_font_size_override("font_size",23);bv.add_child(title)
 	status_label=Label.new();status_label.text="TERRA  /  HOME PLANET";status_label.add_theme_font_size_override("font_size",13);status_label.modulate=Color("79cdbf");bv.add_child(status_label)
+	status_label.mouse_filter=Control.MOUSE_FILTER_STOP
+	status_label.gui_input.connect(func(event:InputEvent):
+		if event is InputEventScreenTouch and event.pressed:coin_system.show_panel()
+		elif event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:coin_system.show_panel())
 	var colors:=[Color("ecc779"),Color("b4c8d6"),Color("edaa76"),Color("c995f2"),Color("82dec3"),Color("ffd065")]
 	for i in 6:
 		var card:=PanelContainer.new();card.size_flags_horizontal=Control.SIZE_EXPAND_FILL
@@ -229,6 +242,7 @@ func _setup_ui()->void:
 	iv.add_child(_button("PRODUCE",func():
 		if selected_building>=0 and buildings[selected_building].type in [6,12,13]:_show_production(buildings[selected_building].type)
 		else:_toast("Select a Star Hangar, Vehicle Factory or Barracks."),Vector2(0,54)))
+	iv.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(0,48)))
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
@@ -252,6 +266,8 @@ func _setup_ui()->void:
 func _make_build_panel()->PanelContainer:
 	var panel:=_panel("CONSTRUCTION  /  DEVELOP YOUR HOMEWORLD")
 	var actions:=HBoxContainer.new();panel.get_child(0).add_child(actions)
+	actions.add_child(_button("GODOT COIN / REWARDS",func():coin_system.show_panel(),Vector2(310,52)))
+	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(310,52)))
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
 	for i in BUILD_ORDER+[10,11,12,13]:
@@ -297,6 +313,7 @@ func _make_units_panel()->PanelContainer:
 		var button:=_button(BUILDING_NAMES[kind].to_upper(),func(k=kind):_show_production(k),Vector2(270,54))
 		if kind==production_kind:button.add_theme_stylebox_override("normal",_style(Color("176d75"),12,Color("69d9c8"),1))
 		tabs.add_child(button)
+	tabs.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(170,54)))
 	var grid:=_scroll_grid(panel,4)
 	for i in range(20):
 		if UNIT_FACILITY[i]!=production_kind:continue
@@ -351,7 +368,7 @@ func _create_roads(parent:Node3D)->void:
 	art.roads(parent)
 
 func _create_decor(parent:Node3D,theme:int)->void:
-	art.decor(parent,theme)
+	art.decor(parent,theme,cleared_obstacles if mode=="base" else [])
 
 func _apply_map_theme(idx:int)->void:
 	map_index=idx
@@ -392,6 +409,7 @@ func _begin_build(idx:int)->void:
 	var reason:=_build_lock_reason(idx)
 	if not reason.is_empty():_toast(reason);return
 	moving_building=-1
+	coin_system.clearing=false
 	build_type=idx;build_panel.hide();units_panel.hide();galaxy_panel.hide();info_panel.hide();selection_ring.hide()
 	_toast("Tap clear terrain to place "+BUILDING_NAMES[idx]+". The glowing site is a suggestion.")
 	onboarding.refresh_guide()
@@ -459,6 +477,7 @@ func _start_battle(idx:int)->void:
 	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],1+idx,true))
 	for i in floori(idx/3.0):
 		battle_targets.append(_spawn_building(battle_root,11,Vector3(-12+i*8,0,-12),1+idx,true))
+	raid_stock=unit_stock.duplicate()
 	awaiting_deployment=true;deployed_stock.resize(20);deployed_stock.fill(0);deployment_groups.clear()
 	deploy_count=8
 	for kind in 20:
@@ -467,15 +486,16 @@ func _start_battle(idx:int)->void:
 	_toast("Choose a squad, then tap an outer edge. Place several groups before ATTACK.");_refresh_progress();_show_deployment()
 
 func _deploy_fleet(pos:Vector3)->void:
-	if mode!="battle" or not awaiting_deployment:return
+	if mode!="battle":return
 	if absf(pos.x)>22 or absf(pos.z)>20 or (absf(pos.x)<16 and absf(pos.z)<13):
 		_toast("Deploy outside the enemy base, near the map edge.");return
 	var roster:Array[int]=[]
-	var available:int=unit_stock[deploy_kind]-deployed_stock[deploy_kind]
-	var amount:int=mini(mini(deploy_count,available),24-battle_units.size())
+	var available:int=raid_stock[deploy_kind]-deployed_stock[deploy_kind]
+	var amount:int=mini(mini(deploy_count,available),24-_active_units())
 	if amount<=0:_toast("No units remaining of this type, or deployment limit reached.");return
 	for i in amount:roster.append(deploy_kind)
 	deployment_groups.append(amount);deployed_stock[deploy_kind]+=amount
+	if not awaiting_deployment:unit_stock[deploy_kind]-=amount;_save_profile()
 	for i in roster.size():
 		var kind:int=roster[i]
 		var n:Node3D=_unit_model(kind,false)
@@ -486,7 +506,7 @@ func _deploy_fleet(pos:Vector3)->void:
 		n.position.y=_unit_height(kind)
 		battle_root.add_child(n);battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
 	_refresh_deployment()
-	_toast("Squad placed. Choose another type or location, then ATTACK.")
+	_toast("Squad placed. Choose another type or location, then ATTACK." if awaiting_deployment else "Reinforcements deployed!")
 
 func _battle_tick(delta:float)->void:
 	if awaiting_deployment:return
@@ -494,7 +514,7 @@ func _battle_tick(delta:float)->void:
 	var survivors:=0
 	for u in battle_units:
 		if u.get("hp",0)>0 and is_instance_valid(u.node):survivors+=1
-	if survivors==0:_finish_battle(false);return
+	if survivors==0 and _reserve_count()==0:_finish_battle(false);return
 	battle_elapsed+=delta;var total:=0.0;var alive_hp:=0.0;var alive:Array=[]
 	for e in battle_targets:
 		total+=e.max_hp
@@ -528,6 +548,8 @@ func _finish_battle(win:bool)->void:
 	if mode!="battle":return
 	if win:
 		mode="victory"
+		if is_instance_valid(reserve_panel):reserve_panel.hide()
+		if is_instance_valid(deployment_bar):deployment_bar.hide()
 		var reward:=Vector4(8000+battle_map*700,4200+battle_map*350,2600+battle_map*220,900+battle_map*90);credits+=reward.x;metal+=reward.y;oil+=reward.z;crystal+=reward.w
 		var l:Label=victory_panel.find_child("Reward",true,false);l.text="%s conquered\nDamage 100%%\n+%d Credits   +%d Metal   +%d Oil   +%d Crystal"%[MAP_NAMES[battle_map],int(reward.x),int(reward.y),int(reward.z),int(reward.w)];victory_panel.visible=true
 		if tutorial_step==12:tutorial_step=13
@@ -538,6 +560,7 @@ func _return_home()->void:
 	if not has_colony:return
 	mode="base";victory_panel.hide();battle_root.hide();home_root.show()
 	if is_instance_valid(deployment_bar):deployment_bar.hide()
+	if is_instance_valid(reserve_panel):reserve_panel.hide()
 	dock.show();_clear_missiles();_clear_wrecks()
 	_apply_map_theme(home_planet);_center_camera();_refresh_progress();_save_profile();_toast("Returned to "+MAP_NAMES[home_planet]+".")
 
@@ -559,7 +582,8 @@ func _update_top_bar()->void:
 	if resource_labels.size()!=6:return
 	var values:=[credits,metal,oil,crystal,power,gold]
 	for i in 6:resource_labels[i].text=_fmt(values[i])
-	status_label.text=(MAP_NAMES[maxi(home_planet,0)].to_upper()+"  /  HOME PLANET") if mode in ["base","welcome"] else "%s  /  %d%%"%[MAP_NAMES[battle_map].to_upper(),int(battle_damage)]
+	status_label.text=(MAP_NAMES[maxi(home_planet,0)].to_upper()) if mode in ["base","welcome"] else "%s  /  %d%%"%[MAP_NAMES[battle_map].to_upper(),int(battle_damage)]
+	status_label.text+=" • COIN %d"%godot_coins
 
 func _fmt(v:float)->String:
 	if v>=1000000:return "%.2fM"%(v/1000000.0)
@@ -701,14 +725,15 @@ func _pan(pos:Vector2,relative:Vector2)->void:
 	if now!=null and before!=null:camera_focus+=before-now;_clamp_camera()
 
 func _tap_world(pos:Vector2)->void:
-	if mode=="battle" and awaiting_deployment:
+	if mode=="battle":
 		var point=_ground_hit(pos)
 		if point!=null:_deploy_fleet(point)
 		return
 	if mode!="base":return
 	var h=_ground_hit(pos)
 	if h!=null:
-		if moving_building>=0:_move_building(h)
+		if coin_system.clearing:coin_system.select_obstacle(h)
+		elif moving_building>=0:_move_building(h)
 		elif build_type>=0:_place_building(h)
 		else:_select_building_at(h)
 
@@ -758,6 +783,8 @@ func _layout_ui()->void:
 	victory_panel.position=Vector2((size.x-720)/2,170);victory_panel.size=Vector2(720,330)
 	toast.position=Vector2(margin,size.y-114);toast.size=Vector2(size.x-margin*2,28)
 	if onboarding:onboarding.layout()
+	if coin_system:coin_system.layout()
+	if mode=="battle":_refresh_deployment()
 
 func _setup_life()->void:
 	if building_levels[6]==0:return
@@ -872,12 +899,13 @@ func _save_profile()->void:
 	if not has_colony or not profile_ready:return
 	var records:Array=[]
 	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
-	var data:Dictionary={"schema":1,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	var data:Dictionary={"schema":1,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
 	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.")
 
 func _load_profile()->void:
 	var data:Dictionary=profile_store.read_profile(profile_path)
 	if data.is_empty():return
+	godot_coins=int(data.get("godot_coins",0));last_coin_day=int(data.get("last_coin_day",-1));cleared_obstacles=data.get("cleared_obstacles",[])
 	drone_finish=float(data.get("drone_finish",0))
 	gold=float(data.get("gold",0));drone_count=int(data.get("drone_count",1));miner_count=int(data.get("miner_count",0));miner_finish=float(data.get("miner_finish",0))
 	has_colony=true;home_planet=int(data.home_planet);tutorial_step=int(data.tutorial_step);tutorial_dismissed=bool(data.get("tutorial_dismissed",false))
@@ -1109,6 +1137,31 @@ func _shot_damage(b:Dictionary,difficulty:int)->float:
 	var veteran_bonus:float=maxf(0,b.level-4)*1.5
 	return (base+veteran_bonus)*(2.0 if b.type==11 else 1.0)
 
+func _active_units()->int:
+	var count:=0
+	for unit in battle_units:
+		if unit.get("hp",0)>0:count+=1
+	return count
+
+func _reserve_count()->int:
+	var count:=0
+	for kind in raid_stock.size():count+=raid_stock[kind]-deployed_stock[kind]
+	return count
+
+func _build_reserve_panel()->void:
+	if is_instance_valid(reserve_panel):reserve_panel.queue_free()
+	reserve_buttons.clear()
+	reserve_panel=PanelContainer.new();reserve_panel.add_theme_stylebox_override("panel",_style(Color("102832"),12,Color("517582"),1));ui_root.add_child(reserve_panel)
+	var column:=VBoxContainer.new();reserve_panel.add_child(column)
+	var title:=Label.new();title.text="REINFORCEMENTS";title.add_theme_font_size_override("font_size",19);column.add_child(title)
+	var scroll:=preload("res://scripts/touch_scroll.gd").new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;column.add_child(scroll)
+	var cards:=VBoxContainer.new();cards.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(cards)
+	for kind in 20:
+		if raid_stock[kind]<=0:continue
+		var button:=_button(UNIT_NAMES[kind],func(k=kind):deploy_kind=k;deploy_picker.select(k);_refresh_deployment(),Vector2(240,82))
+		button.icon=_unit_icon(kind);button.add_theme_font_size_override("font_size",15);cards.add_child(button);reserve_buttons[kind]=button
+	column.add_child(_button("RETREAT",_return_home,Vector2(240,48)))
+
 func _show_deployment()->void:
 	if is_instance_valid(deployment_bar):deployment_bar.queue_free()
 	deployment_bar=HBoxContainer.new();deployment_bar.add_theme_constant_override("separation",10);ui_root.add_child(deployment_bar)
@@ -1125,16 +1178,27 @@ func _show_deployment()->void:
 	deployment_bar.add_child(_button("UNDO SQUAD",_undo_squad,Vector2(180,64)))
 	deployment_bar.add_child(_button("ATTACK",_launch_assault,Vector2(160,64)))
 	deploy_status=Label.new();deploy_status.add_theme_font_size_override("font_size",20);deployment_bar.add_child(deploy_status)
+	_build_reserve_panel()
 	dock.hide();_refresh_deployment()
 
 func _refresh_deployment()->void:
 	if not is_instance_valid(deployment_bar):return
 	deployment_bar.position=Vector2(24,get_viewport().get_visible_rect().size.y-85)
 	for kind in 20:
-		var available:int=unit_stock[kind]-deployed_stock[kind]
+		var available:int=raid_stock[kind]-deployed_stock[kind]
 		deploy_picker.set_item_text(kind,"%s (%d)"%[UNIT_NAMES[kind],available])
 		deploy_picker.set_item_disabled(kind,available<=0)
-	deploy_status.text="%d / 24 PLACED"%battle_units.size()
+	deployment_bar.get_child(2).visible=awaiting_deployment
+	deployment_bar.get_child(3).visible=awaiting_deployment
+	deploy_status.text="%d ACTIVE / %d RESERVE"%[_active_units(),_reserve_count()]
+	for kind in reserve_buttons:
+		var remaining:int=raid_stock[kind]-deployed_stock[kind]
+		reserve_buttons[kind].text="%s  ×%d"%[UNIT_NAMES[kind],remaining]
+		reserve_buttons[kind].disabled=remaining<=0
+		reserve_buttons[kind].modulate=Color("76f5dc") if kind==deploy_kind else Color.WHITE
+	if is_instance_valid(reserve_panel):
+		var screen:=get_viewport().get_visible_rect().size
+		reserve_panel.position=Vector2(screen.x-284,104);reserve_panel.size=Vector2(260,screen.y-205)
 
 func _undo_squad()->void:
 	if not awaiting_deployment or deployment_groups.is_empty():return
@@ -1148,7 +1212,10 @@ func _launch_assault()->void:
 	if battle_units.is_empty():_toast("Place at least one squad first.");return
 	awaiting_deployment=false
 	if is_instance_valid(deployment_bar):deployment_bar.hide()
-	dock.show();_toast("ATTACK — squads advancing!")
+	for kind in 20:unit_stock[kind]-=deployed_stock[kind]
+	_save_profile()
+	deployment_bar.show();_refresh_deployment()
+	dock.hide();_toast("ATTACK — tap an edge to deploy reserves!")
 
 func _weapon_effect(origin:Vector3,target:Node3D,destination:Vector3,rocket:bool)->void:
 	if not rocket:_laser(origin,destination);return

@@ -2,6 +2,7 @@ extends RefCounted
 ## Authored GLB instances, restrained environment dressing and mobile effects.
 const ROOT := "res://assets/models/"
 const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks"]
+var obstacles:Dictionary={}
 var scene_cache: Dictionary = {}
 var materials: Dictionary = {}
 var box_meshes: Dictionary = {}
@@ -98,7 +99,8 @@ func roads(parent: Node3D) -> void:
 
 	_batch_decor(parent)
 
-func decor(parent: Node3D, theme: int) -> void:
+func decor(parent: Node3D, theme: int, cleared:Array=[]) -> void:
+	obstacles.clear()
 	for child in parent.get_children():
 		parent.remove_child(child)
 		child.queue_free()
@@ -113,6 +115,7 @@ func decor(parent: Node3D, theme: int) -> void:
 		rock.position = Vector3(x,elevation(x,z)-0.03,z)
 		rock.scale = Vector3.ONE*rng.randf_range(0.7,2.4)
 		rock.rotation.y = rng.randf()*TAU
+		rock.set_meta("obstacle_id",i*4)
 		parent.add_child(rock)
 		if theme in [0,5,7] and i%2 == 0:
 			for j in 3:
@@ -121,8 +124,14 @@ func decor(parent: Node3D, theme: int) -> void:
 				var pz := z+rng.randf_range(-2.3,2.3)
 				plant.position = Vector3(px,elevation(px,pz),pz)
 				plant.scale = Vector3.ONE*rng.randf_range(0.9,1.9)
+				plant.set_meta("obstacle_id",i*4+j+1)
 				parent.add_child(plant)
 
+	for child in parent.get_children():
+		if child.has_meta("obstacle_id"):
+			var id:int=child.get_meta("obstacle_id")
+			if id in cleared:parent.remove_child(child);child.queue_free()
+			else:obstacles[id]=child.position
 	_batch_decor(parent)
 
 func _batch_decor(parent:Node3D)->void:

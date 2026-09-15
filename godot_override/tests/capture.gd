@@ -141,6 +141,7 @@ func run()->void:
 	await shot("05-galaxy-map")
 	game._start_battle(game.home_planet)
 	assert(game.mode=="base","The player cannot raid their own homeworld")
+	game.unit_stock[1]=4
 	game._start_battle(1)
 
 	assert(game.awaiting_deployment and game.battle_units.is_empty())
@@ -155,12 +156,17 @@ func run()->void:
 	await shot("13-separated-deployment-squads")
 	game._undo_squad();game._undo_squad()
 	assert(game.battle_units.is_empty() and game.deployed_stock[0]==0 and game.deployed_stock[1]==0)
-	game.unit_stock[1]=0;game.deploy_kind=0;game.deploy_count=8
+	game.deploy_kind=0;game.deploy_count=8
 	game._deploy_fleet(Vector3.ZERO);assert(game.awaiting_deployment,"Cannot deploy inside enemy base")
 	game._deploy_fleet(Vector3(0,0,16));game._launch_assault()
 	assert(not game.awaiting_deployment and game.battle_units.size()==8)
 	for u in game.battle_units:assert(u.type==0,"Only trained unit types may deploy")
 	await create_timer(0.4).timeout
+	game.deploy_kind=1;game.deploy_count=4
+	var reserve_before:int=game.unit_stock[1]
+	game._deploy_fleet(Vector3(-18,0,0))
+	assert(game.unit_stock[1]==reserve_before-4 and game.battle_units.size()==12,"Reinforcements consume only the deployed reserves")
+	game._deploy_fleet(Vector3(-18,0,0));assert(game.battle_units.size()==12,"Cannot deploy the same reserve twice")
 	await shot("06-battle")
 	game.set_process(false)
 	for u in game.battle_units:u["last_shot"]=100000.0
@@ -179,7 +185,7 @@ func run()->void:
 	assert(saved.tutorial_step==13 and saved.home_planet==2 and saved.buildings.size()==10)
 	game.queue_free();await process_frame
 	await open_game();game.onboarding.enter_colony()
-	assert(game.tutorial_step==13 and game.home_planet==2 and game.unit_stock[0]==8)
+	assert(game.tutorial_step==13 and game.home_planet==2 and game.unit_stock[0]==0)
 	assert(game.buildings[0].level==2)
 	game.tutorial_dismissed=true;game._refresh_progress()
 	root.size=Vector2i(1600,720);await process_frame;game._layout_ui()
@@ -280,7 +286,9 @@ func run()->void:
 	game._deploy_fleet(Vector3(0,0,16));game._launch_assault()
 	for u in game.battle_units:u.hp=0
 	game._battle_tick(.1)
-	assert(game.mode=="base","A destroyed fleet loses the battle")
+	assert(game.mode=="battle","Reserves keep the battle open after the active squad is destroyed")
+	game.deployed_stock=game.raid_stock.duplicate();game._battle_tick(.1)
+	assert(game.mode=="base","A destroyed fleet with no reserves loses the battle")
 	print("GOLD_MINERS_TEN_DRONES_EXPANDED_MAP_AND_DEFENSE_AI_PASSED")
 
 	# Every building uses the same completed-level five-star unlock.
@@ -361,11 +369,39 @@ func run()->void:
 	for model in lineup:
 		if is_instance_valid(model):model.queue_free()
 	print("GROUND_MODELS_PORTRAITS_WALK_RECOIL_AND_WRECKAGE_PASSED")
+	game.coin_system.claim_daily()
+	var coins:int=game.godot_coins
+	game.coin_system.claim_daily();assert(game.godot_coins==coins,"Daily reward cannot be claimed twice")
+	game.godot_coins=100
+	game._train_unit(0);game._train_unit(0)
+	var stock:int=game.unit_stock[0]
+	game.coin_system.speed_line(6)
+	assert(game.unit_stock[0]==stock+1 and game.training_queue.size()==1,"Speed-up finishes exactly one queued unit")
+	var balance:int=game.godot_coins
+	var previous_metal:float=game.metal
+	game.coin_system.exchange("Metal")
+	assert(game.godot_coins==balance-10 and game.metal==previous_metal+1000)
+	game.coin_system.obstacle_id=game.art.obstacles.keys()[0]
+	var removed:int=game.coin_system.obstacle_id
+	game.coin_system.clear_selected()
+	assert(removed in game.cleared_obstacles and not game.art.obstacles.has(removed))
+	balance=game.godot_coins;previous_metal=game.metal
+	game.coin_system.obstacle_id=removed;game.coin_system.clear_selected()
+	assert(game.godot_coins==balance and game.metal==previous_metal,"Cleared obstacles cannot pay twice")
+	game._select_building_at(game.buildings[0].pos)
+	var previous_level:int=game.buildings[0].level
+	game._upgrade_selected();assert(game.buildings[0].get("job","")=="upgrade")
+	game.coin_system.speed_build(0)
+	assert(game.buildings[0].level==previous_level+1 and game.buildings[0].get("job","")=="","Coin speed-up completes the selected building upgrade")
+	game.coin_system.show_panel();await shot("19-godot-coin-rewards")
+	game.coin_system.panel.hide()
+	print("COIN_DAILY_EXCHANGE_SPEEDUP_OBSTACLES_AND_REINFORCEMENTS_PASSED")
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()
 	var recovered:Dictionary=game.profile_store.read_profile(QA_SAVE)
 	assert(not recovered.is_empty() and game.profile_store.recovered_backup)
+	assert(recovered.godot_coins==game.godot_coins and recovered.last_coin_day==game.last_coin_day and removed in recovered.cleared_obstacles,"Coin balance, daily claims and obstacle removal persist")
 	game.profile_ready=false;game.queue_free();await process_frame
 	for suffix in ["",".bak",".tmp"]:
 		if FileAccess.file_exists(QA_SAVE+suffix):DirAccess.remove_absolute(QA_SAVE+suffix)
