@@ -174,3 +174,14 @@ The Galaxy faction now uses original exaggerated cartoon proportions: broad tors
 Attack Pigeon is a new Star Hangar level-1 unit, available after the existing Core-upgrade mission. Cost: 40 Credits + 5 Oil, training time 3 seconds on the shared Hangar production line. Stats: 90 HP, damage parameter 5, speed 4.2, airborne height 3.2. It flaps articulated wings and fires a tiny energy cannon; it is reusable until destroyed, not a self-destruct unit. Production cards, progress bars and charging use the same cost/time functions. Existing saves with 20 or 23 unit slots extend to 24 while preserving inventory and queues.
 
 CI verifies pigeon costs, duration, halfway progress, save/reload, model portrait, wing animation, forward orientation and movement; screenshots 32–34 show actual Godot models and the home colony. This is the first scrappy-cartoon art pass, with existing combat rules retained.
+
+
+### v0.17 Living garrison and battle celebrations
+
+Galaxy troops wear cobalt armor with navy fabric and gold accents; tanks have blue hulls, brass barrels and dark muzzle bores; aircraft use coral paint. Galaxy buildings gain crooked rusty wall plates, rivets, bent pipes and battered supply crates in addition to corrugated roofs.
+
+GARRISON focuses three automatic support yards once their production facilities exist: Airfield, Motor Pool and Parade Ground. Each board shows the exact completed owned stock including patrols, excluding unfinished training. At most nine stock-backed representative models per category are shown; one of those representatives patrols. No extra inventory is created. Yard space is reserved against building placement; pads are placed outside existing structures and decorations. Patrols move around the core, acquire existing hostile home intruders and fire real damaging weapons. The current home invasion source is the local defense drill; this does not add online attacks or change the drill's no-colony-damage rules.
+
+Victory plays an original synthesized brass fanfare and bounded colorful fireworks for six seconds. Defeat plays a short descending brass cue. SFX ON/OFF is saved locally, and returning home clears celebration effects. Audio is generated reproducibly from tools/build_audio.py without external music samples. Firework particles expire automatically.
+
+CI checks stock totals and representative limits, moving patrols, actual defensive damage, stock consumption updates, reserved pad space, 1280x720 controls, victory/defeat cue selection, mute behavior, and firework cleanup. Screenshots 35–36 show the yards and real victory effect.

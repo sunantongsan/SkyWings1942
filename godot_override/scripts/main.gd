@@ -21,6 +21,8 @@ var build_panel:PanelContainer
 var units_panel:PanelContainer
 var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
+var garrison:RefCounted
+var battle_feedback:RefCounted
 var status_bars:RefCounted
 var placement_guide:RefCounted
 var coin_system:RefCounted
@@ -130,6 +132,9 @@ func _ready()->void:
 	coin_system=preload("res://scripts/coin_system.gd").new(self)
 	placement_guide=preload("res://scripts/placement_guide.gd").new(self)
 	status_bars=preload("res://scripts/status_bars.gd").new(self)
+	garrison=preload("res://scripts/home_garrison.gd").new(self)
+	battle_feedback=preload("res://scripts/battle_feedback.gd").new(self)
+	battle_feedback.sound_button=dock.get_child(8);battle_feedback.set_enabled(battle_feedback.enabled,false)
 	_load_profile()
 	_apply_map_theme(home_planet if has_colony else 0)
 	_setup_life()
@@ -142,6 +147,8 @@ func _process(delta:float)->void:
 	placement_guide.tick()
 	if has_colony:_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()))
 	if mode=="battle": _battle_tick(delta)
+	garrison.tick(delta)
+	battle_feedback.tick(delta)
 	if mode=="base":_home_defense_tick(delta)
 	_projectile_tick(delta)
 	_visual_tick(delta)
@@ -250,6 +257,8 @@ func _setup_ui()->void:
 	dock.add_child(_button("+",func():_zoom(-3),Vector2(64,64)))
 	dock.add_child(_button("−",func():_zoom(3),Vector2(64,64)))
 	dock.add_child(_button("GUIDE",func():onboarding.show_help(),Vector2(104,64)))
+	var yard_button:=_button("GARRISON",func():garrison.focus(),Vector2(130,64));yard_button.add_theme_font_size_override("font_size",17);dock.add_child(yard_button)
+	var sound_button:=_button("SFX ON",func():battle_feedback.set_enabled(not battle_feedback.enabled),Vector2(80,64));sound_button.add_theme_font_size_override("font_size",15);dock.add_child(sound_button)
 	info_panel=PanelContainer.new();info_panel.custom_minimum_size=Vector2(286,0);info_panel.visible=false
 	info_panel.add_theme_stylebox_override("panel",_style(Color("112a36"),14,Color("75cabb"),1));ui_root.add_child(info_panel)
 	var iv:=VBoxContainer.new();iv.add_theme_constant_override("separation",12);info_panel.add_child(iv)
@@ -399,6 +408,7 @@ func _apply_map_theme(idx:int)->void:
 	terrain_material.set_shader_parameter("grass_color",grass)
 	sun.light_color=MAP_ACCENT[idx].lerp(Color("fff0d1"),.88)
 	_create_decor(decor_root,idx)
+	if garrison:garrison.signature=""
 
 func _unit_model(type:int,enemy:=false)->Node3D:
 	var model:Node3D=art.model(_unit_asset(type))
@@ -537,6 +547,7 @@ func _placement_reason(pos:Vector3)->String:
 		if not reason.is_empty():return reason
 		if metal<BUILDING_COST[build_type] or oil<_building_oil_cost(build_type):return "Not enough Metal or Oil."
 	else:return "Select a building first."
+	if garrison and garrison.blocked(pos):return "Keep the garrison yards clear."
 	for i in buildings.size():
 		if i!=moving_building and buildings[i].pos.distance_to(pos)<6.1:return "Too close to another building."
 	return ""
@@ -609,16 +620,18 @@ func _finish_battle(win:bool)->void:
 	if mode!="battle":return
 	if win:
 		mode="victory"
+		battle_feedback.victory()
 		if is_instance_valid(reserve_panel):reserve_panel.hide()
 		if is_instance_valid(deployment_bar):deployment_bar.hide()
 		var reward:=Vector4(8000+battle_map*700,4200+battle_map*350,2600+battle_map*220,900+battle_map*90);credits+=reward.x;metal+=reward.y;oil+=reward.z;crystal+=reward.w
 		var l:Label=victory_panel.find_child("Reward",true,false);l.text="%s conquered\nDamage 100%%\n+%d Credits   +%d Metal   +%d Oil   +%d Crystal"%[MAP_NAMES[battle_map],int(reward.x),int(reward.y),int(reward.z),int(reward.w)];victory_panel.visible=true
 		if tutorial_step==12:tutorial_step=13
 		_save_profile()
-	else:_return_home();_toast("FLEET WITHDREW")
+	else:_return_home();battle_feedback.defeat();_toast("FLEET WITHDREW — regroup and try again")
 
 func _return_home()->void:
 	if not has_colony:return
+	battle_feedback.clear()
 	mode="base";victory_panel.hide();battle_root.hide();home_root.show()
 	if is_instance_valid(deployment_bar):deployment_bar.hide()
 	if is_instance_valid(reserve_panel):reserve_panel.hide()
@@ -835,7 +848,8 @@ func _layout_ui()->void:
 		if screen.x>0:
 			margin=maxf(margin,maxf(safe.position.x,screen.x-safe.end.x)*size.x/float(screen.x)+8)
 	header.position=Vector2(margin,14);header.size=Vector2(size.x-margin*2,76)
-	dock.position=Vector2((size.x-996)/2,size.y-80)
+	var dock_width:float=dock.get_combined_minimum_size().x
+	dock.position=Vector2((size.x-dock_width)/2,size.y-80)
 	info_panel.position=Vector2(size.x-margin-286,110);info_panel.size=Vector2(286,260)
 	for panel in [build_panel,units_panel,galaxy_panel]:
 		if panel:panel.position=Vector2(margin,105);panel.size=Vector2(size.x-margin*2,size.y-260)
@@ -846,11 +860,7 @@ func _layout_ui()->void:
 	if mode=="battle":_refresh_deployment()
 
 func _setup_life()->void:
-	if building_levels[6]==0:return
-	var count:=mini(3,unit_stock[0]+unit_stock[1]+unit_stock[2])
-	for i in range(scouts.size(),count):
-		var ship:Node3D=art.model("fighter");ship.scale=Vector3.ONE*.48
-		home_root.add_child(ship);scouts.append(ship)
+	if garrison:garrison.sync()
 
 func _visual_tick(delta:float)->void:
 	if onboarding:onboarding.tick()

@@ -293,9 +293,9 @@ def fighter():
     return m
 
 manifest={'authorship':'Original GALAXY 1942 procedural mesh designs, no external assets','coordinates':'Y-up, metres, front +Z, ground y=0','assets':[]}
-from cartoon_models import scrap_roof, aircraft
+from cartoon_models import scrap_roof, aircraft, weathered_details
 for i,name in enumerate(NAMES):
-    asset=building(i);scrap_roof(asset,material,i);manifest['assets'].append(asset.export(name))
+    asset=building(i);scrap_roof(asset,material,i);weathered_details(asset,material,i);manifest['assets'].append(asset.export(name))
 manifest['assets'].append(aircraft(Model,material).export('fighter'))
 from unit_models import build_ground_assets
 manifest['assets'].extend(build_ground_assets(Model,material))

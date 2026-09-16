@@ -6,6 +6,7 @@ parser=argparse.ArgumentParser();parser.add_argument('--output',default='game');
 target=Path(args.output).resolve()
 if target==repo or repo.is_relative_to(target):raise SystemExit('Output must not replace source')
 subprocess.run([sys.executable,str(repo/'tools/build_models.py')],check=True)
+subprocess.run([sys.executable,str(repo/'tools/build_audio.py')],check=True)
 target.mkdir(parents=True,exist_ok=True)
 for name in ['project.godot','export_presets.cfg']:shutil.copy2(repo/'godot_src'/name,target/name)
 shutil.copytree(repo/'godot_override',target,dirs_exist_ok=True,ignore=shutil.ignore_patterns('*.import','.godot','*.uid'))

@@ -514,6 +514,7 @@ func run()->void:
 	print("COIN_DAILY_EXCHANGE_SPEEDUP_OBSTACLES_AND_REINFORCEMENTS_PASSED")
 	await check_godot_faction()
 	await check_cartoon_roster()
+	await check_living_garrison()
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()
@@ -635,3 +636,52 @@ func check_cartoon_roster()->void:
 	assert(bird.node.position.distance_to(Vector3.ZERO)<previous.distance_to(Vector3.ZERO),"Pigeon advances toward targets")
 	game._return_home()
 	print("CARTOON_ASSETS_PIGEON_COST_TIME_PROGRESS_FLIGHT_SAVE_AND_DEPLOYMENT_PASSED")
+
+func check_living_garrison()->void:
+	game._return_home();game.onboarding.guide.hide();game.info_panel.hide()
+	game.unit_stock.fill(0);game.unit_stock[0]=8;game.unit_stock[10]=6;game.unit_stock[18]=12;game.unit_stock[23]=4
+	game._apply_map_theme(0);game.garrison.sync();game.garrison.focus()
+	assert(game.garrison.counts==[12,6,12],"Garrison totals come from owned units")
+	assert(game.garrison.actors.size()==24,"Displayed units have a bounded budget")
+	var represented:Dictionary={};var patrols:=0
+	for actor in game.garrison.actors:
+		represented[actor.type]=int(represented.get(actor.type,0))+1
+		if actor.patrol:patrols+=1
+	for kind in represented:assert(represented[kind]<=game.unit_stock[kind],"Patrol and parked models never exceed real stock")
+	assert(patrols==3)
+	var stored:PackedInt32Array=game.unit_stock.duplicate()
+	var defender:Dictionary=game.garrison.actors[0]
+	var origin:Vector3=defender.node.position
+	game.garrison.tick(.2)
+	assert(defender.node.position.distance_to(origin)>.01,"Patrols actually move")
+	var intruder:Node3D=game._unit_model(0,true);game.home_root.add_child(intruder)
+	intruder.position=defender.node.position+Vector3(1,0,0)
+	var enemy:Dictionary={"node":intruder,"type":0,"hp":100.0,"max_hp":100.0,"target":Vector3.ZERO}
+	game.home_attackers.append(enemy);game.visual_time+=2;game.garrison.tick(.1)
+	assert(enemy.hp<100,"Patrols damage hostile units without tower assistance")
+	assert(game.unit_stock==stored,"Patrolling does not mint or spend units")
+	intruder.queue_free();game.home_attackers.clear()
+	game._begin_build(1)
+	assert(not game._placement_reason(game.garrison.pads[0]).is_empty(),"Construction cannot cover the active yards")
+	game.build_type=-1;game.placement_guide.tick();game.toast.hide()
+	await shot("35-airfield-motor-pool-and-parade-ground")
+	game.unit_stock[0]-=3;game.garrison.sync()
+	assert(game.garrison.counts[0]==9,"Yard counts follow consumed reserves")
+	root.size=Vector2i(1280,720);await process_frame;game._layout_ui();await process_frame
+	assert(game.dock.get_global_rect().position.x>=0 and game.dock.get_global_rect().end.x<=1280,"Garrison and SFX buttons fit landscape phones")
+	game._start_battle(1);game._finish_battle(true)
+	assert(game.battle_feedback.last_cue=="victory_bugle" and game.battle_feedback.active)
+	for i in 4:game.battle_feedback.tick(.43)
+	assert(game.battle_feedback.bursts>=4 and game.battle_feedback.fireworks.get_child_count()>0,"Victory creates colored fireworks")
+	assert(game.battle_feedback.player.stream.get_length()>1,"Victory bugle contains real audio")
+	await create_timer(.35).timeout
+	await shot("36-victory-fireworks-and-bugle")
+	game._return_home()
+	assert(not game.battle_feedback.active and game.battle_feedback.fireworks.get_child_count()==0,"Returning home clears fireworks")
+	game._start_battle(1);game._finish_battle(false)
+	assert(game.mode=="base" and game.battle_feedback.last_cue=="defeat_brass","Defeat plays its own cue")
+	game.battle_feedback.set_enabled(false,false);game.battle_feedback.play("victory_bugle")
+	assert(not game.battle_feedback.player.playing,"SFX mute is honored")
+	game.battle_feedback.set_enabled(true,false)
+	game._save_profile()
+	print("GARRISON_STOCK_COUNTS_PATROL_DEFENSE_FIREWORKS_AUDIO_AND_LANDSCAPE_PASSED")

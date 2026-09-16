@@ -9,8 +9,8 @@ def oval(m,pos,radii,mat=0,n=16):
 
 def infantry(Model,material,kind):
     m=Model('ffd77a' if kind==19 else '64ded2')
-    m.materials[0]=material('scratched_olive_armor','8caa78',.12,.73)
-    m.materials[1]=material('dark_green_fabric','344b44',0,.95)
+    m.materials[0]=material('cobalt_armor','286bb4',.12,.73)
+    m.materials[1]=material('navy_fabric','18374e',0,.95)
     m.materials.extend([material('warm_skin','d6a077',0,.85),material('eye_white','fff3d8',0,.6)])
     # Torso dwarfs the short legs; wide jaw and oversized helmet read from RTS height.
     for side,part in [(-1,'LeftLeg'),(1,'RightLeg')]:
@@ -27,6 +27,7 @@ def infantry(Model,material,kind):
     oval(m,(0,1.87,.23),(.48,.23,.38),7)
     oval(m,(0,2.31,0),(.64,.37,.53),0)
     m.block((1.18,.12,.94),(0,2.2,.09),0,.15)
+    m.block((.18,.07,.7),(0,2.66,.02),5,.02)
     for x in [-.21,.21]:
         oval(m,(x,2.1,.46),(.14,.12,.07),8,10)
         oval(m,(x,2.08,.52),(.06,.07,.025),2,8)
@@ -88,7 +89,7 @@ def aircraft(Model,material,pigeon=False):
         m.block((.32,.28,.62),(0,-.25,-.4),1,.07)
         m.block((.2,.2,.12),(0,-.25,-.77),4,.04)
     else:
-        m.materials[0]=material('faded_teal_paint','78a99c',.25,.7)
+        m.materials[0]=material('coral_aircraft_paint','d7563b',.25,.7)
         oval(m,(0,.25,-.7),(1.0,.75,1.12),0)
         oval(m,(0,.25,-1.5),(.83,.56,.45),5)
         oval(m,(0,.7,-.71),(.64,.51,.72),6)
@@ -112,7 +113,7 @@ def aircraft(Model,material,pigeon=False):
 def scrap_roof(m,material,kind):
     # Keep sci-fi silhouettes, add hand-repaired shelters on non-moving modules.
     roofs={0:[(-2.25,1.82,1.25,1.7,1.9),(2.25,1.82,1.25,1.7,1.9)],1:[(-1.95,1.93,0,1.35,1.8)],2:[(-1,1.92,0,2.55,3.65)],3:[(0,1.45,1.6,4,.95)],4:[(0,1.35,-2,2.6,1)],5:[(0,2.89,0,4.35,3.8)],6:[(0,3.47,-.25,5.9,4.9)],7:[(-1.65,1.92,1.2,2,1.55)],8:[(-1.7,.95,-1.45,1.25,1.5)],9:[(0,1.08,2.05,2,1)],10:[(-.9,3.38,-.3,2.85,3.25)],11:[(-1.85,1.02,-1.4,1.2,1.5)],12:[(0,3.66,0,5.2,4.9)],13:[(0,3.11,-.5,5,3.8)]}
-    m.materials[0]=material('faded_colony_enamel','8ea69a',.2,.77)
+    m.materials[0]=material('weathered_colony_enamel','697f72',.2,.77)
     indices=[]
     for name,color in [('old_zinc','87948a'),('rust','93593b'),('flaking_ochre','aa8b53'),('patch_blue','507b80')]:
         indices.append(len(m.materials));m.materials.append(material(name,color,.35 if name=='old_zinc' else .1,.9))
@@ -134,3 +135,23 @@ def scrap_roof(m,material,kind):
             m.block((w*.18,.055,d*.16),(cx+x,y,cz+z),indices[2+k%2],.01,yaw=rng.uniform(-.2,.2))
             for dx in [-w*.06,w*.06]:m.drum(.035,.045,(cx+x+dx,y+.04,cz+z),2,6)
         m.strut((cx,cy+.43,cz-d/2),(cx,cy+.46,cz+d/2),.12,indices[1])
+
+
+def weathered_details(m,material,kind):
+    rust=len(m.materials);m.materials.append(material('deep_rust_edges','8c4c2e',.08,.95))
+    patch=len(m.materials);m.materials.append(material('old_painted_patch','bf9a60',.05,.94))
+    m.part='ScrapRepairs'
+    for side in [-1,1]:
+        x=side*(2.65 if kind in [6,12,13] else 2.15)
+        # Crooked plates, visible rivets, crossed supports and a bent external pipe.
+        m.block((.14,.75,1.25),(x,1.0,-.5),rust,.04,yaw=side*.09)
+        m.block((.16,.35,.55),(x+side*.09,1.08,-.35),patch,.02,yaw=-side*.13)
+        for z in [-.85,-.25]:m.block((.06,.07,.07),(x+side*.16,1.22,z),3,.01)
+        m.strut((x,.6,-1.35),(x,1.42,-.3),.07,rust)
+        m.strut((x,.58,.65),(x,1.07,.82),.09,rust)
+        m.strut((x,1.07,.82),(x-side*.25,1.3,.82),.09,rust)
+    # Two damaged supply crates make the settlement feel lived in.
+    for i in range(2):
+        x=-2+i*.7;z=2.0
+        m.block((.52,.45,.55),(x,.76,z),patch,.05,yaw=.13*i)
+        m.strut((x-.2,.99,z-.2),(x+.2,.99,z+.2),.045,rust)
