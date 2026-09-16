@@ -46,6 +46,8 @@ func yard_clear(pos:Vector3,owner:int)->bool:
 		if i==owner:continue
 		var other:Vector3=host.buildings[i].pos
 		if absf(pos.x-other.x)<9 and absf(pos.z-other.z)<8:return false
+	for obstacle in host.art.obstacles.values():
+		if absf(pos.x-obstacle.x)<9 and absf(pos.z-obstacle.z)<8:return false
 	for i in pads.size():
 		if owners[i]==owner:continue
 		if absf(pos.x-pads[i].x)<14 and absf(pos.z-pads[i].z)<11:return false
@@ -123,7 +125,7 @@ func focus()->void:
 	if is_instance_valid(host.coin_system.panel):host.coin_system.panel.hide()
 	focus_index=(focus_index+1)%pads.size()
 	anchor=(pads[focus_index]+host.buildings[owners[focus_index]].pos)*.5
-	host.camera_focus=anchor;host.camera.size=28;host._position_camera()
+	host.camera_focus=anchor;host.camera.size=maxf(28,pads[focus_index].distance_to(host.buildings[owners[focus_index]].pos)+18);host._position_camera()
 	host._toast("READY: %d AIR • %d VEHICLES • %d TROOPS — patrols are included in these totals"%counts)
 func steer(pos:Vector3,destination:Vector3,step:float,air:bool)->Vector3:
 	var next:=pos.move_toward(destination,step)

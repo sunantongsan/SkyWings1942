@@ -138,7 +138,7 @@ jobs:
       - name: Package editable Godot project
         run: |
           cd game
-          zip -qr ../GALAXY1942-Godot-Source.zip . -x '.godot/*' 'build/*'
+          zip -qr ../GALAXY1942-Godot-Source.zip . -x '.godot/*' 'build/*' 'android/build/.gradle/*' 'android/build/build/*' 'android/build/.cxx/*'
 
       - name: Upload editable project and individual models
         uses: actions/upload-artifact@v4

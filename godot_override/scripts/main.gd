@@ -1092,7 +1092,7 @@ func _update_work_display()->void:
 	work_label.size=Vector2(get_viewport().get_visible_rect().size.x-48,32)
 	if selected_building>=0 and info_panel.visible:
 		var b:Dictionary=buildings[selected_building]
-		if b.get("job","")!="":selected_detail.text="%s in progress\n%d seconds remaining"%[str(b.job).capitalize(),maxi(0,int(ceil(float(b.finish)-colony_time)))]
+		if b.get("job","")!="":selected_detail.text="%s in progress\n%s remaining"%[str(b.job).capitalize(),_duration(float(b.finish)-colony_time)]
 
 func _begin_move()->void:
 	if mode!="base" or selected_building<0:return
