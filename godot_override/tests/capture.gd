@@ -342,6 +342,8 @@ func run()->void:
 	assert(is_equal_approx(game.status_bars.world_rows[str(healthy.node.get_instance_id())].hp.value,50),"Unit health bar uses current and maximum HP")
 	assert(is_equal_approx(game.status_bars.world_rows[str(game.battle_targets[1].node.get_instance_id())].hp.value,25),"Building health bar tracks damage")
 	assert(game.status_bars.raid_bar.visible and game.status_bars.raid_bar.value<100)
+	await process_frame
+	assert(game.status_bars.world_rows[str(healthy.node.get_instance_id())].hp.size.y<=8,"Army health bars remain thin instead of inheriting panel padding")
 	await shot("24-health-bars-and-battle-timer")
 	await shot("23-unrestricted-mixed-army")
 	game._return_home()

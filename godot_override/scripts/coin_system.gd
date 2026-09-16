@@ -103,7 +103,7 @@ func show_obstacle()->void:
 	host.selection_ring.position=host.art.obstacles[obstacle_id]+Vector3(0,.1,0);host.selection_ring.show()
 	panel.get_child(0).get_child(0).get_child(1).pressed.connect(func():host.selection_ring.hide())
 	var label:=Label.new();label.text="Remove with 1 construction drone\n100 Metal + 50 Oil • 20 seconds";label.add_theme_font_size_override("font_size",17);panel.get_child(0).add_child(label)
-	obstacle_bar=host.status_bars.make_bar(320,20,Color("62dcf1"));obstacle_bar.show_percentage=true;panel.get_child(0).add_child(obstacle_bar)
+	obstacle_bar=host.status_bars.make_bar(320,20,Color("62dcf1"));obstacle_bar.show_percentage=true;obstacle_bar.add_theme_font_size_override("font_size",14);panel.get_child(0).add_child(obstacle_bar)
 	remove_button=host._button("REMOVE • 100 M / 50 O",clear_selected,Vector2(320,54));panel.get_child(0).add_child(remove_button)
 	layout();update_obstacle_panel()
 func update_obstacle_panel()->void:

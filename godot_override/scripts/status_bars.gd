@@ -20,8 +20,12 @@ func _init(game:Node3D)->void:
 	raid_text=Label.new();raid_text.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;raid_text.add_theme_font_size_override("font_size",15);raid_text.mouse_filter=Control.MOUSE_FILTER_IGNORE;host.ui_root.add_child(raid_text)
 	job_panel.hide();raid_bar.hide();raid_text.hide()
 func make_bar(width:float,height:float,color:Color)->ProgressBar:
-	var bar:=ProgressBar.new();bar.min_value=0;bar.max_value=100;bar.show_percentage=false;bar.custom_minimum_size=Vector2(width,height);bar.size=bar.custom_minimum_size;bar.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	bar.add_theme_stylebox_override("background",host._style(Color("08151e"),4,Color("456270"),1));bar.add_theme_stylebox_override("fill",host._style(color,3,color,0))
+	var bar:=ProgressBar.new();bar.min_value=0;bar.max_value=100;bar.show_percentage=false;bar.add_theme_font_size_override("font_size",1);bar.custom_minimum_size=Vector2(width,height);bar.size=bar.custom_minimum_size;bar.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var background:StyleBoxFlat=host._style(Color("08151e"),3,Color("456270"),1)
+	var fill:StyleBoxFlat=host._style(color,2,Color("10232c"),1)
+	for style in [background,fill]:
+		style.content_margin_left=0;style.content_margin_right=0;style.content_margin_top=0;style.content_margin_bottom=0
+	bar.add_theme_stylebox_override("background",background);bar.add_theme_stylebox_override("fill",fill)
 	return bar
 func progress(start:float,finish:float)->float:
 	return clampf((host.colony_time-start)/maxf(.001,finish-start),0,1)*100.0
@@ -30,7 +34,7 @@ func blocked()->bool:
 func world_row(key:String,pos:Vector3,health:float,maximum:float,work:float=-1.0,title:String="",building:bool=false)->void:
 	if not world_rows.has(key):
 		var root:=Control.new();root.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(root)
-		var hp:=make_bar(104 if building else 46,10 if building else 7,Color("5de295"));root.add_child(hp)
+		var hp:=make_bar(104 if building else 36,8 if building else 6,Color("5de295"));root.add_child(hp)
 		var label:=Label.new();label.add_theme_font_size_override("font_size",13);label.add_theme_color_override("font_outline_color",Color("07151c"));label.add_theme_constant_override("outline_size",4);label.mouse_filter=Control.MOUSE_FILTER_IGNORE;root.add_child(label)
 		var task:=make_bar(104,9,Color("62dcf1"));root.add_child(task)
 		world_rows[key]={"root":root,"hp":hp,"label":label,"task":task}
@@ -40,7 +44,7 @@ func world_row(key:String,pos:Vector3,health:float,maximum:float,work:float=-1.0
 	var bounds:Rect2=host.get_viewport().get_visible_rect()
 	if not bounds.grow(40).has_point(point):row.root.hide()
 	var has_work:bool=work>=0
-	row.root.position=point-Vector2(52 if building else 23,54 if has_work else 22)
+	row.root.position=point-Vector2(52 if building else 18,54 if has_work else 22)
 	row.hp.visible=maximum>0
 	row.hp.value=clampf(health/maxf(1,maximum),0,1)*100
 	var color:=Color("5de295") if row.hp.value>50 else (Color("ffd36b") if row.hp.value>25 else Color("ff6575"))
