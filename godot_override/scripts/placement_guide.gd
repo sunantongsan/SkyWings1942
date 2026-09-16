@@ -32,7 +32,7 @@ func update_cursor()->void:
 	footprint.material_override.albedo_color=Color(.1,1,.3,.5) if error.is_empty() else Color(1,.1,.1,.55)
 	caption.position=pos+Vector3(0,2,0);caption.text="CAN PLACE" if error.is_empty() else error.to_upper()
 func tick()->void:
-	var visible:bool=(host.mode=="battle" or (host.mode=="base" and (host.build_type>=0 or host.moving_building>=0))) and not host.build_panel.visible and not host.units_panel.visible and not host.galaxy_panel.visible and not host.victory_panel.visible
+	var visible:bool=((host.mode=="battle" and host._reserve_count()>0) or (host.mode=="base" and (host.build_type>=0 or host.moving_building>=0))) and not host.build_panel.visible and not host.units_panel.visible and not host.galaxy_panel.visible and not host.victory_panel.visible
 	if host.onboarding and host.onboarding.screen.visible:visible=false
 	if host.coin_system and is_instance_valid(host.coin_system.panel) and host.coin_system.panel.visible:visible=false
 	tiles.visible=visible;footprint.visible=visible;caption.visible=visible
