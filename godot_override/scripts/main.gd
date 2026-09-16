@@ -21,6 +21,8 @@ var build_panel:PanelContainer
 var units_panel:PanelContainer
 var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
+var rewarded_ads:RefCounted
+var ad_button:Button
 var garrison:RefCounted
 var battle_feedback:RefCounted
 var status_bars:RefCounted
@@ -135,6 +137,7 @@ func _ready()->void:
 	garrison=preload("res://scripts/home_garrison.gd").new(self)
 	battle_feedback=preload("res://scripts/battle_feedback.gd").new(self)
 	battle_feedback.sound_button=dock.get_child(8);battle_feedback.set_enabled(battle_feedback.enabled,false)
+	rewarded_ads=preload("res://scripts/rewarded_ads.gd").new(self)
 	_load_profile()
 	_apply_map_theme(home_planet if has_colony else 0)
 	_setup_life()
@@ -153,6 +156,7 @@ func _process(delta:float)->void:
 	_projectile_tick(delta)
 	_visual_tick(delta)
 	status_bars.tick()
+	rewarded_ads.tick()
 	autosave_time+=delta
 	if autosave_time>=10.0:_save_profile();autosave_time=0.0
 	top_refresh += delta
@@ -261,13 +265,16 @@ func _setup_ui()->void:
 	var sound_button:=_button("SFX ON",func():battle_feedback.set_enabled(not battle_feedback.enabled),Vector2(80,64));sound_button.add_theme_font_size_override("font_size",15);dock.add_child(sound_button)
 	info_panel=PanelContainer.new();info_panel.custom_minimum_size=Vector2(286,0);info_panel.visible=false
 	info_panel.add_theme_stylebox_override("panel",_style(Color("112a36"),14,Color("75cabb"),1));ui_root.add_child(info_panel)
-	var iv:=VBoxContainer.new();iv.add_theme_constant_override("separation",12);info_panel.add_child(iv)
+	var info_scroll:=ScrollContainer.new();info_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;info_panel.add_child(info_scroll)
+	var iv:=VBoxContainer.new();iv.size_flags_horizontal=Control.SIZE_EXPAND_FILL;iv.add_theme_constant_override("separation",8);info_scroll.add_child(iv)
+	info_scroll.set_script(preload("res://scripts/touch_scroll.gd"))
 	selected_label=Label.new();selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
 	selected_detail=Label.new();selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
 	iv.add_child(_button("PRODUCE",func():
 		if selected_building>=0 and buildings[selected_building].type in [6,12,13,16]:_show_production(buildings[selected_building].type)
 		else:_toast("Select a production building or Summoning Sanctum."),Vector2(0,54)))
 	iv.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(0,48)))
+	ad_button=_button("WATCH AD • −50s",func():rewarded_ads.request_build(selected_building),Vector2(0,44));iv.add_child(ad_button)
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
@@ -323,6 +330,7 @@ func _production_level(kind:int)->int:
 func _unit_lock_reason(idx:int)->String:
 	if tutorial_step<11:return "Complete the Core upgrade mission"
 	if _production_level(UNIT_FACILITY[idx])<UNIT_TIER[idx]:return "%s level %d required"%[BUILDING_NAMES[UNIT_FACILITY[idx]],UNIT_TIER[idx]]
+	if garrison and garrison.stock(UNIT_FACILITY[idx])+garrison.queued(UNIT_FACILITY[idx])>=garrison.capacity(UNIT_FACILITY[idx]):return "Yard full. Upgrade or build another producer."
 	return ""
 
 func _show_production(kind:int)->void:
@@ -332,7 +340,7 @@ func _show_production(kind:int)->void:
 
 func _make_units_panel()->PanelContainer:
 	var level:=_production_level(production_kind)
-	var panel:=_panel("%s / LEVEL %d / QUEUED %d OF 20"%[BUILDING_NAMES[production_kind].to_upper(),level,training_queue.size()])
+	var panel:=_panel("%s / LV %d / %d + %d QUEUED / %d CAPACITY"%[BUILDING_NAMES[production_kind].to_upper(),level,garrison.stock(production_kind) if garrison else 0,garrison.queued(production_kind) if garrison else 0,garrison.capacity(production_kind) if garrison else 0])
 	var tabs:=HBoxContainer.new();panel.get_child(0).add_child(tabs)
 	for kind in [6,12,13,16]:
 		var button:=_button("GODOT SANCTUM" if kind==16 else BUILDING_NAMES[kind].to_upper(),func(k=kind):_show_production(k),Vector2(225,54))
@@ -456,10 +464,20 @@ func _upgrade_selected()->void:
 	if metal<cost:_toast("NOT ENOUGH METAL");return
 	if _builder_busy():_toast("Construction drone busy. Wait for the current job.");return
 	metal-=cost
-	b["job"]="upgrade";b["started"]=colony_time;b["finish"]=colony_time+30*b.level
+	b["job"]="upgrade";b["started"]=colony_time;b["finish"]=colony_time+_upgrade_seconds(b.level+1)
 	_add_work_marker(b)
 	_refresh_progress();_save_profile();_select_building_at(b.pos)
 	_toast("Upgrade started. The new level unlocks when construction finishes.")
+
+func _upgrade_seconds(target_level:int)->int:
+	const TIMES:=[0,0,30,120,300,900,1800,3600,7200,14400,28800]
+	if target_level<TIMES.size():return TIMES[maxi(2,target_level)]
+	return mini(172800,28800+(target_level-10)*14400)
+func _duration(seconds:float)->String:
+	var n:=maxi(0,ceili(seconds))
+	if n>=3600:return "%dh %dm"%[n/3600,(n%3600)/60]
+	if n>=60:return "%dm %ds"%[n/60,n%60]
+	return "%ds"%n
 
 func _unit_credit_cost(kind:int)->int:return 40 if kind==23 else 180+kind*35
 func _unit_oil_cost(kind:int)->int:return 5 if kind==23 else int(_unit_credit_cost(kind)*.4)
@@ -547,7 +565,7 @@ func _placement_reason(pos:Vector3)->String:
 		if not reason.is_empty():return reason
 		if metal<BUILDING_COST[build_type] or oil<_building_oil_cost(build_type):return "Not enough Metal or Oil."
 	else:return "Select a building first."
-	if garrison and garrison.blocked(pos):return "Keep the garrison yards clear."
+	if garrison and garrison.blocked(pos,moving_building):return "Keep the garrison yards clear."
 	for i in buildings.size():
 		if i!=moving_building and buildings[i].pos.distance_to(pos)<6.1:return "Too close to another building."
 	return ""
@@ -675,8 +693,9 @@ func _select_building_at(pos:Vector3)->void:
 	selected_label.text="%s • %s"%[BUILDING_NAMES[b.type],_rank_text(b.level)]
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
-	selected_detail.text="HP %d/%d\nUpgrade: %d Metal\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,weapon]
+	selected_detail.text="HP %d/%d\nUpgrade: %d Metal • %s\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,_duration(_upgrade_seconds(b.level+1)),weapon]
 	if b.type in [6,12,13,16]:
+		selected_detail.text+="\nYard: %d slots → %d next star"%[garrison.capacity_for_level(b.level),garrison.capacity_for_level(b.level+1)]
 		var next_units:Array[String]=[]
 		for kind in range(UNIT_NAMES.size()):
 			if UNIT_FACILITY[kind]==b.type and UNIT_TIER[kind]==b.level+1:next_units.append(UNIT_NAMES[kind])
@@ -850,7 +869,7 @@ func _layout_ui()->void:
 	header.position=Vector2(margin,14);header.size=Vector2(size.x-margin*2,76)
 	var dock_width:float=dock.get_combined_minimum_size().x
 	dock.position=Vector2((size.x-dock_width)/2,size.y-80)
-	info_panel.position=Vector2(size.x-margin-286,110);info_panel.size=Vector2(286,260)
+	info_panel.position=Vector2(size.x-margin-286,110);info_panel.size=Vector2(286,size.y-210)
 	for panel in [build_panel,units_panel,galaxy_panel]:
 		if panel:panel.position=Vector2(margin,105);panel.size=Vector2(size.x-margin*2,size.y-260)
 	victory_panel.position=Vector2((size.x-720)/2,170);victory_panel.size=Vector2(720,330)
@@ -1087,7 +1106,7 @@ func _move_building(pos:Vector3)->void:
 	var reason:=_placement_reason(pos)
 	if not reason.is_empty():_toast(reason);return
 	var b:Dictionary=buildings[moving_building];b.pos=pos;b.node.position=pos;moving_building=-1
-	_sync_industry_visuals();_save_profile();_select_building_at(pos);_toast("Structure relocated.")
+	garrison.signature="";garrison.sync();_sync_industry_visuals();_save_profile();_select_building_at(pos);_toast("Structure and attached yard relocated.")
 
 func _building_oil_cost(kind:int)->int:
 	return [300,150,250,200][kind-14] if kind>=14 else (350 if kind==10 else (200 if kind==11 else 0))

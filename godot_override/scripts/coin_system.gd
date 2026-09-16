@@ -24,6 +24,7 @@ func show_panel()->void:
 	host.ui_root.add_child(panel);host.build_panel.hide();host.units_panel.hide();host.info_panel.hide()
 	var grid:GridContainer=host._scroll_grid(panel,3)
 	var daily:Button=host._button("DAILY LOGIN\n+20 GODOT COIN",claim_daily,Vector2(320,86));daily.disabled=day()<=host.last_coin_day;grid.add_child(daily)
+	grid.add_child(host._button("AD PRIVACY OPTIONS",func():host.rewarded_ads.privacy(),Vector2(320,86)))
 	for resource in ["Metal","Oil","Credits","Crystal"]:
 		grid.add_child(host._button("10 COIN → 1,000 "+resource,func(r=resource):exchange(r),Vector2(320,86)))
 	grid.add_child(host._button("CLEAR ROCKS / TREES\n100 Metal + 50 Oil • 1 drone • 20s",begin_clear,Vector2(320,86)))
@@ -31,6 +32,7 @@ func show_panel()->void:
 		var b:Dictionary=host.buildings[i]
 		if b.get("job","")=="":continue
 		grid.add_child(host._button("FINISH %s\n%s • %d COIN"%[b.job.to_upper(),host.BUILDING_NAMES[b.type],price(b.finish)],func(index=i):speed_build(index),Vector2(320,86)))
+		grid.add_child(host._button("WATCH AD • −50s\n"+host.BUILDING_NAMES[b.type],func(index=i):host.rewarded_ads.request_build(index),Vector2(320,86)))
 	for kind in [6,12,13,16]:
 		var finish:=first_finish(kind)
 		if finish<=host.colony_time:continue

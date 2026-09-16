@@ -44,6 +44,19 @@ jobs:
           cp -r templates/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
           godot --version
 
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build native Google rewarded ads plugin
+        run: |
+          gradle -p android_ads assembleRelease --no-daemon
+          cp android_ads/build/outputs/aar/galaxy-ads-release.aar game/addons/galaxy_ads/GalaxyAds.aar
+          mkdir -p game/android/build
+          unzip -q "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_source.zip" -d game/android/build
+          touch game/android/.gdignore
+          echo "${GODOT_VERSION}.stable" > game/android/.build_version
+
       - name: Configure Godot Android SDK paths
         run: |
           mkdir -p "$HOME/.config/godot"
@@ -111,6 +124,8 @@ jobs:
         run: |
           AAPT="$ANDROID_SDK_ROOT/build-tools/35.0.1/aapt"
           "$AAPT" dump xmltree game/build/GALAXY1942-Godot-debug.apk AndroidManifest.xml > manifest.txt
+          grep -q "com.google.android.gms.ads.APPLICATION_ID" manifest.txt
+          grep -q "org.godotengine.plugin.v2.GalaxyAds" manifest.txt
           grep -E "screenOrientation.*0x0|screenOrientation.*landscape|screenOrientation.*0x6" manifest.txt
 
       - name: Upload APK

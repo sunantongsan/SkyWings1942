@@ -264,7 +264,7 @@ func run()->void:
 	assert(game.buildings.back().pos.x==172,"Expanded colony positions survive save/load")
 	game._advance_colony(game.colony_time+16)
 	assert(not game._builder_busy())
-	game._begin_build(11);game._place_building(Vector3(35,0,10));game._advance_colony(game.colony_time+46)
+	game._begin_build(11);game._place_building(Vector3(35,0,-15));game._advance_colony(game.colony_time+46)
 	assert(game.building_levels[11]==1)
 	game.camera_focus=Vector3(35,0,3);game._position_camera();game._update_work_display()
 	await shot("09-gold-refinery-and-miner")
@@ -364,7 +364,7 @@ func run()->void:
 	core.level=4;game._refresh_progress()
 	game._select_building_at(core.pos);game._upgrade_selected()
 	assert(core.level==4 and not game._can_fire(core),"Do not unlock defense when the upgrade merely starts")
-	game._advance_colony(game.colony_time+121)
+	game._advance_colony(float(core.finish)+1)
 	assert(core.level==5 and game._can_fire(core))
 	game._update_rank_label(core);assert(core.rank_label.text=="★★★★★")
 	var invader:Node3D=game._unit_model(0,true);game.home_root.add_child(invader);invader.position=core.pos+Vector3(0,3,8)
@@ -515,6 +515,7 @@ func run()->void:
 	await check_godot_faction()
 	await check_cartoon_roster()
 	await check_living_garrison()
+	await check_yards_and_rewards()
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()
@@ -685,3 +686,67 @@ func check_living_garrison()->void:
 	game.battle_feedback.set_enabled(true,false)
 	game._save_profile()
 	print("GARRISON_STOCK_COUNTS_PATROL_DEFENSE_FIREWORKS_AUDIO_AND_LANDSCAPE_PASSED")
+
+class FakeAdBridge extends RefCounted:
+	var ready:=true
+	var requested:=""
+	var loads:=0
+	func is_ready()->bool:return ready
+	func prepare()->void:loads+=1
+	func show_rewarded(token:String)->void:requested=token
+
+func check_yards_and_rewards()->void:
+	game._return_home();game.unit_stock.fill(0);game.training_queue.clear()
+	game.credits=100000;game.oil=100000;game.metal=100000
+	var factory:Dictionary
+	var factory_index:=-1
+	for i in game.buildings.size():
+		if game.buildings[i].type==12:factory=game.buildings[i];factory_index=i;break
+	assert(factory_index>=0)
+	factory.level=1;factory.pos=Vector3(140,0,30);factory.node.position=factory.pos
+	game.garrison.sync()
+	var pad_index:int=game.garrison.owners.find(factory_index)
+	assert(pad_index>=0 and game.garrison.pads[pad_index].distance_to(factory.pos)==9,"Yard is physically attached to its producer")
+	game.unit_stock[10]=9;game._train_unit(10)
+	assert(game.garrison.stock(12)+game.garrison.queued(12)==10)
+	var credits:float=game.credits;game._train_unit(10)
+	assert(game.credits==credits and game.garrison.queued(12)==1,"Queued units reserve capacity; full yards cannot charge")
+	game._advance_colony(float(game.training_queue[0].finish)+1)
+	assert(game.unit_stock[10]==10)
+	factory.level=2;game._refresh_progress();assert(game.garrison.capacity(12)==15)
+	assert(game._unit_lock_reason(10).is_empty(),"Completed stars unlock more capacity")
+	game.unit_stock[10]=20;game.garrison.sync();assert(game.garrison.stock(12)==20 and not game._unit_lock_reason(10).is_empty(),"Legacy excess units are kept without allowing further overfill")
+	game.selected_building=factory_index;game._begin_move();game._move_building(Vector3(160,0,30))
+	pad_index=game.garrison.owners.find(factory_index)
+	assert(game.garrison.pads[pad_index].distance_to(factory.pos)==9,"Moving the producer moves its apron")
+	game.unit_stock[10]=8;game.garrison.sync()
+	game.camera_focus=factory.pos+Vector3(0,0,4);game.camera.size=25;game._position_camera();game.info_panel.hide();game.toast.hide()
+	await shot("37-attached-factory-yard-and-star-capacity")
+	assert(game._upgrade_seconds(2)==30 and game._upgrade_seconds(5)==900 and game._upgrade_seconds(10)==28800)
+	for level in range(3,101):assert(game._upgrade_seconds(level)>=game._upgrade_seconds(level-1))
+	var ads:RefCounted=game.rewarded_ads
+	var native:Object=ads.bridge
+	var fake:=FakeAdBridge.new();ads.bridge=fake
+	game.selected_building=factory_index;game._upgrade_selected()
+	var initial:float=factory.finish
+	ads.request_build(factory_index);var token:String=fake.requested
+	ads._earned("wrong-token");assert(factory.finish==initial)
+	ads._closed(token);assert(factory.finish==initial,"Closing early grants no reward")
+	fake.ready=false;ads.request_build(factory_index);assert(fake.loads==1 and ads.pending.is_empty(),"Offline/loading never fakes a reward")
+	fake.ready=true;ads.request_build(factory_index);token=fake.requested
+	game.selected_building=0
+	ads._earned(token);assert(is_equal_approx(factory.finish,initial-50),"Exactly 50s is applied to the original selected job")
+	ads._earned(token);ads._closed(token);assert(is_equal_approx(factory.finish,initial-50),"Duplicate callbacks cannot reward twice")
+	ads.request_build(factory_index);token=fake.requested
+	game._advance_colony(factory.finish+1)
+	var completed_level:int=factory.level;ads._earned(token)
+	assert(factory.level==completed_level and factory.get("job","")=="","A finished job cannot transfer its reward to another job")
+	game.selected_building=factory_index;game._upgrade_selected()
+	game._advance_colony(factory.finish-20)
+	ads.request_build(factory_index);ads._earned(fake.requested)
+	assert(factory.get("job","")=="","Short remaining work clamps to completion")
+	game.selected_building=factory_index;game._upgrade_selected();game._select_building_at(factory.pos);ads.tick()
+	assert(game.ad_button.visible and game.ad_button.text.contains("50"))
+	await shot("38-optional-watch-ad-upgrade")
+	ads.bridge=native;game._save_profile()
+	print("ATTACHED_YARDS_CAPACITY_LEGACY_STOCK_AND_REWARDED_50_SECOND_SAFETY_PASSED")

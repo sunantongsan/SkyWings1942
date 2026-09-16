@@ -1,0 +1,12 @@
+plugins { id 'com.android.library' version '8.6.1' }
+android {
+    namespace 'com.galaxy1942.ads'
+    compileSdk 35
+    defaultConfig { minSdk 23 }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+dependencies {
+    compileOnly 'org.godotengine:godot:4.4.1.stable'
+    implementation 'com.google.android.gms:play-services-ads:24.0.0'
+    implementation 'com.google.android.ump:user-messaging-platform:3.1.0'
+}

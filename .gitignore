@@ -9,3 +9,7 @@ godot_override/assets/icons/
 __pycache__/
 
 godot_override/assets/audio/*.wav
+
+android_ads/.gradle/
+android_ads/build/
+*.aar

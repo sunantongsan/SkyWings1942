@@ -9,47 +9,84 @@ var counts:=[0,0,0]
 var signature:=""
 var refresh:=0.0
 var anchor:=Vector3(0,0,56)
-var roster_panel:PanelContainer
+var owners:Array[int]=[]
+var focus_index:=-1
+const FACILITIES:=[6,12,13,16]
 const TITLES:=["AIRFIELD","MOTOR POOL","PARADE GROUND"]
 func _init(game:Node3D)->void:
 	host=game;root=Node3D.new();root.name="HomeGarrison";host.home_root.add_child(root)
 func category(kind:int)->int:
 	if host._is_air_unit(kind) or kind in [16,17]:return 0
 	return 1 if kind in [10,11,12,13,14,21] else 2
-func available(group:int)->bool:
-	return host._production_level([6,12,13][group])>0 or (group==2 and host._production_level(16)>0) or counts[group]>0
+func capacity_for_level(level:int)->int:return 10+5*(maxi(1,level)-1)
+func capacity(facility:int)->int:
+	var total:=0
+	for b in host.buildings:
+		if b.type==facility and b.get("job","")!="build":total+=capacity_for_level(b.level)
+	return total
+func stock(facility:int)->int:
+	var total:=0
+	for kind in host.unit_stock.size():
+		if host.UNIT_FACILITY[kind]==facility:total+=host.unit_stock[kind]
+	return total
+func queued(facility:int)->int:
+	var total:=0
+	for job in host.training_queue:
+		if host.UNIT_FACILITY[int(job.type)]==facility:total+=1
+	return total
 func box(parent:Node3D,size:Vector3,pos:Vector3,color:Color)->void:
 	host.art.cuboid(parent,size,pos,color)
-func blocked(pos:Vector3)->bool:
-	for pad in pads:
-		if absf(pos.x-pad.x)<7.5 and absf(pos.z-pad.z)<6.5:return true
+func blocked(pos:Vector3,ignore:int=-1)->bool:
+	for i in pads.size():
+		if owners[i]==ignore:continue
+		if absf(pos.x-pads[i].x)<9 and absf(pos.z-pads[i].z)<8:return true
 	return false
-func find_anchor()->Vector3:
-	var center:=Vector3.ZERO
-	if not host.buildings.is_empty():center=host.buildings[0].pos
-	for ring in range(0,30):
-		var candidate:Vector3=center+Vector3(0,0,42+ring*16)
-		var clear:=true
-		for b in host.buildings:
-			if absf(b.pos.x-candidate.x)<27 and absf(b.pos.z-candidate.z)<12:clear=false;break
-		if clear:
-			for pos in host.art.obstacles.values():
-				if absf(pos.x-candidate.x)<25 and absf(pos.z-candidate.z)<10:clear=false;break
-		if clear:return candidate
-	return center+Vector3(0,0,540)
+func yard_clear(pos:Vector3,owner:int)->bool:
+	for i in host.buildings.size():
+		if i==owner:continue
+		var other:Vector3=host.buildings[i].pos
+		if absf(pos.x-other.x)<9 and absf(pos.z-other.z)<8:return false
+	for i in pads.size():
+		if owners[i]==owner:continue
+		if absf(pos.x-pads[i].x)<14 and absf(pos.z-pads[i].z)<11:return false
+	return true
+func yard_position(pos:Vector3,owner:int)->Vector3:
+	# Prefer an attached apron; old crowded saves get the nearest clear apron + service road.
+	for distance in [9.0,15.0,22.0,30.0,42.0,56.0]:
+		for direction in [Vector3(0,0,1),Vector3(1,0,0),Vector3(-1,0,0),Vector3(0,0,-1)]:
+			var candidate:Vector3=pos+direction*distance
+			if yard_clear(candidate,owner):return candidate
+	return pos+Vector3(0,0,70)
 func sync()->void:
-	var key:String=str(host.unit_stock)
-	for b in host.buildings:key+=str([b.type,b.pos,b.get("job","")])
+	var key:String=str(host.unit_stock)+str(host.training_queue.size())
+	for b in host.buildings:key+=str([b.type,b.level,b.pos,b.get("job","")])
 	if key==signature:return
 	signature=key
 	for child in root.get_children():root.remove_child(child);child.queue_free()
-	actors.clear();pads.clear();labels.clear();counts=[0,0,0]
+	actors.clear();pads.clear();owners.clear();labels.clear();counts=[0,0,0]
 	for kind in host.unit_stock.size():counts[category(kind)]+=host.unit_stock[kind]
 	if not host.has_colony:return
-	anchor=find_anchor()
-	for group in 3:
-		if not available(group):continue
-		var pos:Vector3=anchor+Vector3((group-1)*16,0,0);pads.append(pos)
+	var remaining:PackedInt32Array=host.unit_stock.duplicate()
+	for index in host.buildings.size():
+		var building:Dictionary=host.buildings[index]
+		if building.type not in FACILITIES:continue
+		var facility:int=building.type
+		var group:int=0 if facility==6 else (1 if facility==12 else 2)
+		var pos:Vector3=yard_position(building.pos,index);pads.append(pos);owners.append(index)
+		var connector:=Node3D.new();root.add_child(connector)
+		connector.position=(pos+building.pos)*.5;connector.look_at(pos,Vector3.UP)
+		box(connector,Vector3(2.3,.12,pos.distance_to(building.pos)),Vector3(0,.05,0),Color("34484e"))
+		box(connector,Vector3(.12,.02,pos.distance_to(building.pos)),Vector3(0,.13,0),Color("efb952"))
+		var inventory:Dictionary={};var ready:=0
+		var room:int=capacity_for_level(building.level)
+		# Legacy excess stock is preserved; admission checks prevent further overfilling.
+		var last:=true
+		for later in range(index+1,host.buildings.size()):
+			if host.buildings[later].type==facility:last=false
+		for kind in remaining.size():
+			if host.UNIT_FACILITY[kind]!=facility:continue
+			var count:int=remaining[kind] if last else mini(remaining[kind],maxi(0,room-ready))
+			if count>0:inventory[kind]=count;remaining[kind]-=count;ready+=count
 		var yard:=Node3D.new();root.add_child(yard);yard.position=pos
 		box(yard,Vector3(13,.15,10),Vector3(0,.08,0),Color("34484e"))
 		for side in [-1,1]:box(yard,Vector3(.12,.03,9.5),Vector3(side*6.2,.17,0),Color("efb952"))
@@ -60,28 +97,33 @@ func sync()->void:
 			for x in [-1.0,1.0]:box(yard,Vector3(.15,.03,2),Vector3(x,.18,0),Color("ffd471"))
 			box(yard,Vector3(2,.03,.15),Vector3(0,.18,0),Color("ffd471"))
 		var label:=Label3D.new();label.font_size=38;label.pixel_size=.019;label.outline_size=7;label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;label.no_depth_test=true
-		label.text="%s\n%d READY • %d PATROL"%[TITLES[group],counts[group],mini(1,counts[group])];label.position=Vector3(0,3.5,-5);yard.add_child(label);labels.append(label)
-		# At most nine representatives per category, drawn from real owned quantities.
+		label.text="%s • %s\n%d / %d READY • %d QUEUED"%["RUNE COURT" if facility==16 else TITLES[group],host._rank_text(building.level),ready,room,queued(facility)];label.position=Vector3(0,3.5,-5);yard.add_child(label);labels.append(label)
+		if building.get("job","")=="build":label.text+="\nUNDER CONSTRUCTION";continue
+		# Bounded representative models, always backed by this facility's allocated stock.
+		var limit:=6 if group==1 else 9
 		var kinds:Array[int]=[];var used:Dictionary={}
-		for kind in host.unit_stock.size():
-			if category(kind)==group and host.unit_stock[kind]>0:kinds.append(kind);used[kind]=1
-		while kinds.size()<mini(9,counts[group]):
+		for kind in inventory:
+			if kinds.size()<limit:kinds.append(kind);used[kind]=1
+		while kinds.size()<mini(limit,ready):
 			for kind in used:
-				if used[kind]<host.unit_stock[kind] and kinds.size()<9:kinds.append(kind);used[kind]+=1
-		for i in mini(9,kinds.size()):
+				if used[kind]<inventory[kind] and kinds.size()<limit:kinds.append(kind);used[kind]+=1
+		for i in kinds.size():
+			if actors.size()>=60:break
 			var kind:int=kinds[i];var actor:Node3D=host._unit_model(kind);root.add_child(actor)
-			var parked:Vector3=pos+Vector3((i%3-1)*3.8,.22,floori(i/3.0)*2.8-3)
+			var parked:Vector3=pos+Vector3((i%3-1)*3.8,.22,floori(i/3.0)*(4.3 if group==1 else 2.8)-3)
 			if kind==23:parked.y=.85
 			elif kind in [16,17]:parked.y=1.0
 			actor.position=parked
-			actors.append({"node":actor,"type":kind,"patrol":i==0,"group":group,"parked":parked,"waypoint":group,"last_shot":-10.0})
+			actors.append({"node":actor,"type":kind,"patrol":i==0,"group":group,"parked":parked,"waypoint":group,"last_shot":-10.0,"owner":index})
 func focus()->void:
 	if host.mode!="base":return
 	sync()
 	if pads.is_empty():host._toast("Build a Star Hangar, Vehicle Factory or Barracks first.");return
 	host.build_panel.hide();host.units_panel.hide();host.info_panel.hide();host.galaxy_panel.hide()
 	if is_instance_valid(host.coin_system.panel):host.coin_system.panel.hide()
-	host.camera_focus=anchor;host.camera.size=44;host._position_camera()
+	focus_index=(focus_index+1)%pads.size()
+	anchor=(pads[focus_index]+host.buildings[owners[focus_index]].pos)*.5
+	host.camera_focus=anchor;host.camera.size=28;host._position_camera()
 	host._toast("READY: %d AIR • %d VEHICLES • %d TROOPS — patrols are included in these totals"%counts)
 func steer(pos:Vector3,destination:Vector3,step:float,air:bool)->Vector3:
 	var next:=pos.move_toward(destination,step)

@@ -185,3 +185,53 @@ GARRISON focuses three automatic support yards once their production facilities 
 Victory plays an original synthesized brass fanfare and bounded colorful fireworks for six seconds. Defeat plays a short descending brass cue. SFX ON/OFF is saved locally, and returning home clears celebration effects. Audio is generated reproducibly from tools/build_audio.py without external music samples. Firework particles expire automatically.
 
 CI checks stock totals and representative limits, moving patrols, actual defensive damage, stock consumption updates, reserved pad space, 1280x720 controls, victory/defeat cue selection, mute behavior, and firework cleanup. Screenshots 35–36 show the yards and real victory effect.
+
+## v0.18 — connected production yards and optional Google rewarded ads
+
+Each Star Hangar, Vehicle Factory, Barracks and Summoning Sanctum owns an attached
+apron connected by a painted service road. Moving a producer regenerates its apron.
+Existing crowded colonies use the nearest clear cardinal apron. GARRISON cycles
+between producers. Labels show ready stock, slots and facility-wide queued orders.
+Representative models are bounded (6 vehicles / 9 others per yard; 60 total); the
+labels, rather than the number of visible models, report exact inventory.
+
+Completed producers provide **10 + 5 × (stars − 1)** slots each, pooled by producer
+type. Training reserves a slot immediately. Upgrading retains the old capacity until
+completion; a new building contributes capacity only when completed. Existing
+stock above the new limit is preserved; further training waits for free capacity.
+Construction drones and mining workers retain their separate existing limits.
+This does not impose any new raid deployment limit.
+
+Upgrade durations by target star: 2:30s, 3:2m, 4:5m, 5:15m, 6:30m, 7:1h,
+8:2h, 9:4h, 10:8h; each subsequent star adds 4h, capped at 48h. Level-one
+construction/tutorial timings stay short. Existing jobs retain their saved deadlines.
+These are original prototype balance values, not copied Clash of Clans values.
+
+WATCH AD is optional and applies up to **50 seconds** to the selected construction
+or upgrade. Closing early, load failure, no inventory or being offline grants nothing;
+normal timers keep running. A unique in-session token and original job identity
+prevent duplicate callbacks or applying the reward to a different selected job.
+A job that finishes during the ad does not transfer its reward. There is no fake ad
+fallback. Coin instant completion is still a separate option.
+
+### Android AdMob test integration
+
+`android_ads/` builds our small Godot v2 Java bridge into `GalaxyAds.aar`.
+The editor export plugin supplies Google Mobile Ads 24.0.0 and UMP 3.1.0 dependencies;
+GitHub Actions builds the AAR and exports the APK with Godot's Gradle template.
+The SDK uses UMP consent before requests and exposes AD PRIVACY OPTIONS in the
+Coin / Speed Ups menu. No banner, forced interstitial or app-open ads are enabled.
+
+**This APK uses Google's demo App ID and rewarded unit ID only. It cannot earn
+revenue or establish whether the owner's AdMob account is approved.** On-device
+network/ad rendering/consent flows must be tested on Android; desktop QA uses a
+mock bridge solely to test reward bookkeeping, not to pretend an ad was watched.
+
+Before a monetized release, obtain the game's real AdMob App ID and rewarded unit ID,
+check app readiness / Policy Center / serving restrictions in the owner's AdMob UI,
+configure Privacy & messaging and the app's privacy policy / Play Data safety / target
+audience settings, then replace the two demo IDs in the native manifest and Java
+bridge. Do not test live inventory by clicking your own ads. Google references:
+- https://developers.google.com/admob/android/rewarded
+- https://developers.google.com/admob/android/privacy
+- https://docs.godotengine.org/en/4.4/tutorials/platform/android/android_plugin.html
