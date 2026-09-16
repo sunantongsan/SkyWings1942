@@ -335,6 +335,14 @@ func run()->void:
 		for target in game.battle_targets:
 			if target.hp>0:closest=minf(closest,Vector2(unit.node.position.x,unit.node.position.z).distance_to(Vector2(target.pos.x,target.pos.z)))
 		assert(closest<distances[i],"Every distant living unit advances toward a living target")
+	var healthy:Dictionary=game.battle_units[1]
+	healthy.hp=healthy.max_hp*.5
+	game.battle_targets[1].hp=game.battle_targets[1].max_hp*.25
+	game.status_bars.tick()
+	assert(is_equal_approx(game.status_bars.world_rows[str(healthy.node.get_instance_id())].hp.value,50),"Unit health bar uses current and maximum HP")
+	assert(is_equal_approx(game.status_bars.world_rows[str(game.battle_targets[1].node.get_instance_id())].hp.value,25),"Building health bar tracks damage")
+	assert(game.status_bars.raid_bar.visible and game.status_bars.raid_bar.value<100)
+	await shot("24-health-bars-and-battle-timer")
 	await shot("23-unrestricted-mixed-army")
 	game._return_home()
 	print("PLACEMENT_COLORS_UNRESTRICTED_ARMIES_FACING_AND_ADVANCE_PASSED")
@@ -429,13 +437,26 @@ func run()->void:
 	var previous_metal:float=game.metal
 	game.coin_system.exchange("Metal")
 	assert(game.godot_coins==balance-10 and game.metal==previous_metal+1000)
-	game.coin_system.obstacle_id=game.art.obstacles.keys()[0]
-	var removed:int=game.coin_system.obstacle_id
+	var removed:=-1
+	for id in game.art.obstacles:
+		var clear_of_buildings:=true
+		for building in game.buildings:
+			if building.pos.distance_to(game.art.obstacles[id])<6:clear_of_buildings=false
+		if clear_of_buildings:removed=int(id);break
+	assert(removed>=0)
+	var obstacle_pos:Vector3=game.art.obstacles[removed]
+	game.coin_system.panel.hide();game.coin_system.clearing=false
+	game.camera_focus=obstacle_pos;game._position_camera();game.camera.size=24
+	var selection_cost:float=game.metal
+	await touch_at(game.camera.unproject_position(obstacle_pos))
+	assert(game.coin_system.obstacle_id==removed and game.coin_system.panel.visible and game.selection_ring.visible,"Tap obstacle directly to select it")
+	assert(game.metal==selection_cost and game.clearing_jobs.is_empty(),"Selecting does not spend resources")
+	await shot("25-direct-obstacle-selection")
 	var before_clear_metal:float=game.metal
 	var before_clear_oil:float=game.oil
 	var saved_drone_count:int=game.drone_count
 	game.drone_count=1
-	game.coin_system.clear_selected()
+	await touch_at(game.coin_system.remove_button.get_global_rect().get_center())
 	assert(game.clearing_jobs.size()==1 and game._builder_busy(),"Clearing reserves a construction drone")
 	assert(game.metal==before_clear_metal-100 and game.oil==before_clear_oil-50)
 	assert(removed not in game.cleared_obstacles and game.art.obstacles.has(removed),"Obstacle remains until drone finishes")
@@ -455,7 +476,15 @@ func run()->void:
 	await touch_at(coin_card.get_global_rect().get_center())
 	assert(is_instance_valid(game.coin_system.panel) and game.coin_system.panel.visible,"Coin resource card opens its menu")
 	game.coin_system.panel.hide()
+	game._advance_colony(float(clear_job.started)+10)
+	await touch_at(game.camera.unproject_position(Vector3(clear_job.pos[0],0,clear_job.pos[2])))
+	game.coin_system.tick();game.status_bars.tick()
+	assert(game.coin_system.obstacle_bar.visible and is_equal_approx(game.coin_system.obstacle_bar.value,50),"Reselected obstacle shows halfway progress")
+	assert(game.coin_system.remove_button.disabled,"Active removal cannot be purchased again")
+	await shot("26-obstacle-removal-progress")
+	game.coin_system.panel.hide()
 	game._advance_colony(float(clear_job.finish)+1)
+	game.status_bars.tick();assert(not game.status_bars.world_rows.has("clear_"+str(removed)),"Completed job removes its progress bar")
 	assert(game.clearing_jobs.is_empty() and not game._builder_busy())
 	assert(removed in game.cleared_obstacles and not game.art.obstacles.has(removed))
 	var coin_after_clear:int=game.godot_coins
@@ -467,10 +496,19 @@ func run()->void:
 	game._select_building_at(game.buildings[0].pos)
 	var previous_level:int=game.buildings[0].level
 	game._upgrade_selected();assert(game.buildings[0].get("job","")=="upgrade")
+	var upgrade_job:Dictionary=game.buildings[0]
+	game._advance_colony((float(upgrade_job.started)+float(upgrade_job.finish))*.5)
+	game._train_unit(10);game._train_unit(18)
+	game.units_panel.hide();game.coin_system.panel.hide();game.info_panel.hide()
+	game.camera_focus=upgrade_job.pos;game.camera.size=36;game._position_camera();game.status_bars.tick()
+	assert(is_equal_approx(game.status_bars.world_rows[str(upgrade_job.node.get_instance_id())].task.value,50),"Upgrade bar reflects elapsed time")
+	assert(game.status_bars.jobs().size()>=3,"Independent production and building timers each have progress bars")
+	await shot("27-construction-and-production-progress")
 	game.coin_system.speed_build(0)
 	assert(game.buildings[0].level==previous_level+1 and game.buildings[0].get("job","")=="","Coin speed-up completes the selected building upgrade")
 	game.coin_system.show_panel();await shot("19-godot-coin-rewards")
 	game.coin_system.panel.hide()
+	print("DIRECT_OBSTACLE_SELECTION_HEALTH_AND_TIMED_PROGRESS_BARS_PASSED")
 	print("COIN_DAILY_EXCHANGE_SPEEDUP_OBSTACLES_AND_REINFORCEMENTS_PASSED")
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()

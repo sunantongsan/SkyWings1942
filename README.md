@@ -127,7 +127,7 @@ GODOT Coin is an offline in-game currency. Claim 20 once per UTC day in the Coin
 
 Spend 1 Coin per remaining minute (rounded up) to finish a selected building job or the next unit on one production line. Later jobs on that line move forward without completing for free. Exchange 10 Coins for 1,000 Metal, Oil, Credits, or Crystal.
 
-BUILD → CLEAR ROCKS / TREES → tap an obstacle → ASSIGN DRONE TO CLEAR. Clearing costs 100 Metal and 50 Oil, occupies one free construction drone, and takes 20 seconds. The drone flies to the target and uses a work beam; the obstacle disappears with an effect only on completion. Active jobs persist and finish during offline catch-up. Each obstacle has a deterministic 25% drop chance for 1–5 Coins; removal persists across returning home and reloading. No repeat rewards or obstacle respawn in this version.
+Tap a rock or tree directly → review cost → REMOVE. Clearing costs 100 Metal and 50 Oil, occupies one free construction drone, and takes 20 seconds. The drone flies to the target and uses a work beam; the obstacle disappears with an effect only on completion. Active jobs persist and finish during offline catch-up. Each obstacle has a deterministic 25% drop chance for 1–5 Coins; removal persists across returning home and reloading. No repeat rewards or obstacle respawn in this version.
 
 The right-hand battle roster shows portraits and remaining reserves from the stock present at raid start. Tap a portrait, select squad size, then tap an outer edge to deploy before or during combat. Accepted reinforcements are charged once; deployed troops are consumed for the raid, and unused reserves remain at home. From v0.13 there is no active-unit deployment cap: ALL RESERVES sends every remaining unit of the selected type. Very large armies can affect performance on lower-end devices. Undo is available only before ATTACK. Retreat and the 150-second battle timer still apply.
 
@@ -140,3 +140,10 @@ v0.12 adds an original SVG coin emblem and a seventh resource card showing GODOT
 Green/red terrain overlays show valid/blocked building locations and the exact permitted raid deployment bands. The cursor footprint uses the same validation as the actual placement action, including spacing, builders, resources and reserves. Moving an existing building also shows its valid footprint. Touch-down previews the point; a stationary release places it, while drags pan and pinch zoom remains available.
 
 Deployment formations stay inside the permitted bands instead of expanding away from the battlefield. All remaining units can deploy before or during an assault. Aircraft use their actual -Z nose direction; ground troops use +Z. Each unit immediately excludes destroyed targets and aims its turret after turning the body.
+
+
+### v0.14 health and work progress
+
+Direct obstacle selection opens a compact removal panel and selection ring. Selection is free; REMOVE spends Metal/Oil and assigns a free drone. Selecting an active removal shows its progress with repeat ordering disabled. The old clearing menu remains available.
+
+Screen-projected health bars track current/max HP for home and enemy buildings, deployed units and drill enemies. Bars turn amber/red as HP falls and disappear for destroyed entities. Cyan work bars cover building construction/upgrades and obstacle clearing; a scrollable ACTIVE JOBS panel includes every building, clearing, training, mining-vehicle and construction-drone timer, distinguishing queued from active work. Raids show a time-remaining bar. Existing save timers drive the UI, including offline catch-up and Coin speed-ups.

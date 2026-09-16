@@ -21,6 +21,7 @@ var build_panel:PanelContainer
 var units_panel:PanelContainer
 var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
+var status_bars:RefCounted
 var placement_guide:RefCounted
 var coin_system:RefCounted
 var godot_coins:=0
@@ -127,6 +128,7 @@ func _ready()->void:
 	onboarding=preload("res://scripts/onboarding.gd").new(self)
 	coin_system=preload("res://scripts/coin_system.gd").new(self)
 	placement_guide=preload("res://scripts/placement_guide.gd").new(self)
+	status_bars=preload("res://scripts/status_bars.gd").new(self)
 	_load_profile()
 	_apply_map_theme(home_planet if has_colony else 0)
 	_setup_life()
@@ -142,6 +144,7 @@ func _process(delta:float)->void:
 	if mode=="base":_home_defense_tick(delta)
 	_projectile_tick(delta)
 	_visual_tick(delta)
+	status_bars.tick()
 	autosave_time+=delta
 	if autosave_time>=10.0:_save_profile();autosave_time=0.0
 	top_refresh += delta
@@ -546,7 +549,7 @@ func _deploy_fleet(pos:Vector3)->void:
 		n.position.y=_unit_height(kind)
 		battle_root.add_child(n)
 		n.look_at(Vector3(0,n.position.y,0),Vector3.UP,kind>=10)
-		battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
+		battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"max_hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
 	_refresh_deployment()
 	_toast("Squad placed. Choose another type or location, then ATTACK." if awaiting_deployment else "Reinforcements deployed!")
 
@@ -774,7 +777,10 @@ func _tap_world(pos:Vector2)->void:
 		if coin_system.clearing:coin_system.select_obstacle(h)
 		elif moving_building>=0:_move_building(h)
 		elif build_type>=0:_place_building(h)
-		else:_select_building_at(h)
+		else:
+			_select_building_at(h)
+			if selected_building<0:coin_system.select_obstacle(h,false)
+			elif is_instance_valid(coin_system.panel):coin_system.panel.hide()
 
 func _panel(title:String)->PanelContainer:
 	var p:=PanelContainer.new()
@@ -1027,7 +1033,7 @@ func _update_work_display()->void:
 		var left:int=maxi(0,int(ceil(float(b.finish)-colony_time)))
 		var progress:float=clampf((colony_time-float(b.started))/maxf(1,float(b.finish)-float(b.started)),0,1)
 		if b.job=="build":b.node.scale=Vector3(1,.2+.8*progress,1)
-		if is_instance_valid(b.get("work_marker")):b.work_marker.text="%s %d%% • %ds"%[str(b.job).to_upper(),int(progress*100),left]
+		if is_instance_valid(b.get("work_marker")):b.work_marker.hide();b.work_marker.text="%s %d%% • %ds"%[str(b.job).to_upper(),int(progress*100),left]
 		lines.append("DRONE: %s • %ds"%[BUILDING_NAMES[b.type],left])
 	if not training_queue.is_empty():lines.append("TRAINING: %s • %ds • %d queued"%[UNIT_NAMES[int(training_queue[0].type)],maxi(0,int(ceil(float(training_queue[0].finish)-colony_time))),training_queue.size()])
 	var summary:="DRONES %d / 10 • "%drone_count
@@ -1150,7 +1156,7 @@ func _start_defense_drill()->void:
 	for i in 3:
 		var n:Node3D=_unit_model(0,true);home_root.add_child(n)
 		n.position=center+Vector3(-4+i*4,3,11)
-		home_attackers.append({"node":n,"type":0,"hp":20.0,"target":center})
+		home_attackers.append({"node":n,"type":0,"hp":20.0,"max_hp":20.0,"target":center})
 	camera_focus=center;_position_camera()
 	_toast("DEFENSE DRILL: towers auto-target approaching enemies. No colony damage.")
 

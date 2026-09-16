@@ -5,14 +5,19 @@ var clearing:=false
 var obstacle_id:=-1
 var work_markers:Dictionary={}
 var last_beam:=-1.0
+var obstacle_panel:=false
+var obstacle_bar:ProgressBar
+var remove_button:Button
 func _init(game:Node3D)->void:host=game
 func day()->int:return floori(maxf(host.colony_time,Time.get_unix_time_from_system())/86400.0)
 func price(finish:float)->int:return maxi(1,ceili((finish-host.colony_time)/60.0))
 func layout()->void:
 	if not is_instance_valid(panel):return
 	var size:Vector2=host.get_viewport().get_visible_rect().size
-	panel.position=Vector2(24,105);panel.size=Vector2(size.x-48,size.y-220)
+	if obstacle_panel:panel.position=Vector2(size.x-394,108);panel.size=Vector2(370,260)
+	else:panel.position=Vector2(24,105);panel.size=Vector2(size.x-48,size.y-220)
 func show_panel()->void:
+	obstacle_panel=false
 	if host.mode!="base" or not host.has_colony:return
 	if is_instance_valid(panel):panel.queue_free()
 	panel=host._panel("GODOT COIN • %d / DAILY REWARDS & SPEED UPS"%host.godot_coins)
@@ -80,13 +85,37 @@ func begin_clear()->void:
 	clearing=true;obstacle_id=-1;host.build_type=-1;host.moving_building=-1
 	if is_instance_valid(panel):panel.hide()
 	host.build_panel.hide();host.units_panel.hide();host._toast("Tap a rock or tree. Review the cost, then assign a free drone to clear it.")
-func select_obstacle(pos:Vector3)->void:
+func select_obstacle(pos:Vector3,notify_miss:bool=true)->void:
 	var best:=4.0;obstacle_id=-1
 	for id in host.art.obstacles:
 		var distance:float=pos.distance_to(host.art.obstacles[id])
 		if distance<best:best=distance;obstacle_id=id
-	if obstacle_id<0:host._toast("Tap closer to a rock or tree.");return
-	clearing=false;show_panel()
+	if obstacle_id<0:
+		if notify_miss:host._toast("Tap closer to a rock or tree.")
+		if obstacle_panel and is_instance_valid(panel):panel.hide()
+		return
+	clearing=false;show_obstacle()
+func show_obstacle()->void:
+	if is_instance_valid(panel):panel.queue_free()
+	obstacle_panel=true
+	panel=host._panel("ROCK" if obstacle_id%4==0 else "ALIEN TREE");host.ui_root.add_child(panel)
+	host.info_panel.hide();host.build_panel.hide();host.units_panel.hide();host.selected_building=-1
+	host.selection_ring.position=host.art.obstacles[obstacle_id]+Vector3(0,.1,0);host.selection_ring.show()
+	panel.get_child(0).get_child(0).get_child(1).pressed.connect(func():host.selection_ring.hide())
+	var label:=Label.new();label.text="Remove with 1 construction drone\n100 Metal + 50 Oil • 20 seconds";label.add_theme_font_size_override("font_size",17);panel.get_child(0).add_child(label)
+	obstacle_bar=host.status_bars.make_bar(320,20,Color("62dcf1"));obstacle_bar.show_percentage=true;panel.get_child(0).add_child(obstacle_bar)
+	remove_button=host._button("REMOVE • 100 M / 50 O",clear_selected,Vector2(320,54));panel.get_child(0).add_child(remove_button)
+	layout();update_obstacle_panel()
+func update_obstacle_panel()->void:
+	if not obstacle_panel or not is_instance_valid(panel) or not panel.visible:return
+	var active:=false
+	for job in host.clearing_jobs:
+		if int(job.id)==obstacle_id:
+			active=true;obstacle_bar.value=host.status_bars.progress(job.started,job.finish)
+			remove_button.text="REMOVING • %ds"%maxi(0,ceili(float(job.finish)-host.colony_time))
+	obstacle_bar.visible=active
+	remove_button.disabled=active or host._builder_busy() or host.metal<100 or host.oil<50
+	if not active:remove_button.text="DRONES BUSY" if host._builder_busy() else ("NOT ENOUGH RESOURCES" if host.metal<100 or host.oil<50 else "REMOVE • 100 M / 50 O")
 func clear_selected()->void:
 	if host.mode!="base" or obstacle_id<0 or obstacle_id in host.cleared_obstacles or not host.art.obstacles.has(obstacle_id):return
 	for job in host.clearing_jobs:
@@ -96,7 +125,7 @@ func clear_selected()->void:
 	var pos:Vector3=host.art.obstacles[obstacle_id]
 	host.metal-=100;host.oil-=50
 	host.clearing_jobs.append({"id":obstacle_id,"pos":[pos.x,0,pos.z],"started":host.colony_time,"finish":host.colony_time+20})
-	obstacle_id=-1;clearing=false
+	obstacle_id=-1;clearing=false;host.selection_ring.hide()
 	host._refresh_progress();host._sync_industry_visuals();host._save_profile()
 	if is_instance_valid(panel):panel.hide()
 	host.camera_focus=pos;host._position_camera()
@@ -106,6 +135,9 @@ func complete_clear(job:Dictionary)->void:
 	var id:int=int(job.id)
 	if id in host.cleared_obstacles:return
 	host.cleared_obstacles.append(id)
+	if obstacle_panel and obstacle_id==id:
+		if is_instance_valid(panel):panel.hide()
+		host.selection_ring.hide();obstacle_id=-1
 	var rng:=RandomNumberGenerator.new();rng.seed=1942+host.home_planet*10000+id*73
 	var reward:int=rng.randi_range(1,5) if rng.randf()<.25 else 0
 	host.godot_coins+=reward
@@ -114,6 +146,7 @@ func complete_clear(job:Dictionary)->void:
 		host._create_decor(host.decor_root,host.home_planet)
 
 func tick()->void:
+	update_obstacle_panel()
 	var active:Dictionary={}
 	for i in host.clearing_jobs.size():
 		var job:Dictionary=host.clearing_jobs[i]
@@ -122,6 +155,7 @@ func tick()->void:
 		if not work_markers.has(id):
 			var label:=Label3D.new();label.font_size=40;label.pixel_size=.018;label.outline_size=8;label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;label.modulate=Color("63e6ef")
 			host.home_root.add_child(label);label.position=target+Vector3(0,5,0);work_markers[id]=label
+		work_markers[id].hide()
 		work_markers[id].text="DRONE CLEARING • %ds"%maxi(0,ceili(float(job.finish)-host.colony_time))
 		if host.mode=="base" and i<host.drone_visuals.size() and host.visual_time-last_beam>.4:
 			var drone:Node3D=host.drone_visuals[i]
