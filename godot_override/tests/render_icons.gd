@@ -1,5 +1,5 @@
 extends SceneTree
-var names := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks"]
+var names := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire"]
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -20,7 +20,7 @@ func run() -> void:
 	env.environment=environment;viewport.add_child(env)
 	var light:=DirectionalLight3D.new();light.rotation_degrees=Vector3(-45,-30,0);light.light_energy=1.5;viewport.add_child(light)
 	var camera:=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=8.5;camera.position=Vector3(8,7,10);viewport.add_child(camera);camera.look_at(Vector3(0,1.7,0));camera.current=true
-	var units:=["mining_vehicle","construction_drone","fighter","battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander"]
+	var units:=["mining_vehicle","construction_drone","fighter","battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander","rune_guardian","crystal_golem","starweaver"]
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://assets/icons/units"))
 	for name in names+units:
 		var folder:="units" if name in units else "buildings"

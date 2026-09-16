@@ -147,3 +147,21 @@ Deployment formations stay inside the permitted bands instead of expanding away 
 Direct obstacle selection opens a compact removal panel and selection ring. Selection is free; REMOVE spends Metal/Oil and assigns a free drone. Selecting an active removal shows its progress with repeat ordering disabled. The old clearing menu remains available.
 
 Screen-projected health bars track current/max HP for home and enemy buildings, deployed units and drill enemies. Bars turn amber/red as HP falls and disappear for destroyed entities. Cyan work bars cover building construction/upgrades and obstacle clearing; a scrollable ACTIVE JOBS panel includes every building, clearing, training, mining-vehicle and construction-drone timer, distinguishing queued from active work. Raids show a time-remaining bar. Existing save timers drive the UI, including offline catch-up and Coin speed-ups.
+
+
+### v0.15 Godot fantasy faction and placement visibility
+
+Deployment colors are now drawn by the terrain shader (green outer bands, red forbidden center/outside), with a visible grid and boundary. They do not rely on a transparent MultiMesh overlay. Raid entry closes home menus; depleted troop selections advance to an available reserve type. Colors remain while reinforcements are available, before and after ATTACK, and disappear on returning home.
+
+Full-health home buildings hide health bars unless selected. Damaged buildings and combat units retain bars. Construction/upgrade progress remains visible.
+
+The Godot faction joins the existing colony after the Core upgrade tutorial: build Godot Citadel → Astral Well → Summoning Sanctum / Runebolt Spire. Original GLBs use ivory moonstone, gold ribs, amethyst crystals, pointed arches and animated rune rings. Each asset has its own model and Godot-rendered portrait.
+
+| Building | Metal / Oil | Build time | Function |
+|---|---:|---:|---|
+| Godot Citadel | 1800 / 300 | 50s | Unlocks Godot structures; retaliates from 5 stars |
+| Astral Well | 1000 / 150 | 30s | Produces 220 Power per level |
+| Summoning Sanctum | 1500 / 250 | 45s | Independent unit production line |
+| Runebolt Spire | 1300 / 200 | 35s | Auto-targeting arcane bolt defense from level 1 |
+
+Sanctum levels 1 / 2 / 3 unlock Rune Guardian (armored lancer), Crystal Golem (slow heavy attacker), and Starweaver (long-range mage). Animated limbs, traveling violet bolts, recoil and existing wreck effects work in real battles. Noctis, Nebularis, Ruins and Wormhole have Godot AI outposts with increasing difficulty. This is an allied buildable faction set, not a replacement for the original starting tutorial or an online faction system. Old 20-unit saves migrate to 23 units without resetting progress.

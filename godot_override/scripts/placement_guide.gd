@@ -28,14 +28,16 @@ func update_cursor()->void:
 	var pos:Vector3=pointer if has_pointer else host.camera_focus
 	if host.mode!="battle":pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
 	var error:=reason(pos)
-	footprint.position=pos+Vector3(0,.11,0);footprint.scale=Vector3.ONE*(.4 if host.mode=="battle" else 1.0)
+	footprint.position=pos+Vector3(0,.16,0);footprint.scale=Vector3.ONE*(.4 if host.mode=="battle" else 1.0)
 	footprint.material_override.albedo_color=Color(.1,1,.3,.5) if error.is_empty() else Color(1,.1,.1,.55)
 	caption.position=pos+Vector3(0,2,0);caption.text="CAN PLACE" if error.is_empty() else error.to_upper()
 func tick()->void:
 	var visible:bool=((host.mode=="battle" and host._reserve_count()>0) or (host.mode=="base" and (host.build_type>=0 or host.moving_building>=0))) and not host.build_panel.visible and not host.units_panel.visible and not host.galaxy_panel.visible and not host.victory_panel.visible
 	if host.onboarding and host.onboarding.screen.visible:visible=false
 	if host.coin_system and is_instance_valid(host.coin_system.panel) and host.coin_system.panel.visible:visible=false
-	tiles.visible=visible;footprint.visible=visible;caption.visible=visible
+	host.terrain_material.set_shader_parameter("deployment_active",visible and host.mode=="battle")
+	host.terrain_material.set_shader_parameter("deployment_available",host.mode=="battle" and reason(Vector3(20,0,0)).is_empty())
+	tiles.visible=visible and host.mode!="battle";footprint.visible=visible and has_pointer;caption.visible=visible and has_pointer
 	if not visible:cache_key="";has_pointer=false;return
 	update_cursor()
 	var center:=Vector3.ZERO if host.mode=="battle" else Vector3(snappedf(host.camera_focus.x,2),0,snappedf(host.camera_focus.z,2))
@@ -55,7 +57,7 @@ func tick()->void:
 		return
 	var positions:Array[Vector3]=[]
 	for x in range(-24,25,2):
-		for z in range(-22,23,2):positions.append(center+Vector3(x,.07,z))
+		for z in range(-22,23,2):positions.append(center+Vector3(x,.12,z))
 	tiles.multimesh.instance_count=positions.size()
 	for i in positions.size():
 		var pos:Vector3=positions[i]

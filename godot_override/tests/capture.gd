@@ -512,6 +512,7 @@ func run()->void:
 	game.coin_system.panel.hide()
 	print("DIRECT_OBSTACLE_SELECTION_HEALTH_AND_TIMED_PROGRESS_BARS_PASSED")
 	print("COIN_DAILY_EXCHANGE_SPEEDUP_OBSTACLES_AND_REINFORCEMENTS_PASSED")
+	await check_godot_faction()
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()
@@ -525,3 +526,65 @@ func run()->void:
 	print("GALAXY_VISUAL_AND_GAMEPLAY_CHECKS_PASSED")
 	print("NEW_COLONY_TOUCH_ORDER_SAVE_RELOAD_AND_RAID_PASSED")
 	quit(0)
+
+func check_godot_faction()->void:
+	game._advance_colony(game.colony_time+500)
+	game._return_home();game.onboarding.guide.hide();game.info_panel.hide()
+	game.selected_building=-1;game.status_bars.tick()
+	for b in game.buildings:
+		if b.hp==b.max_hp:assert(not game.status_bars.world_rows[str(b.node.get_instance_id())].hp.visible,"Healthy home buildings hide their HP bars")
+	var core:Dictionary=game.buildings[0]
+	game._select_building_at(core.pos);game.status_bars.tick()
+	assert(game.status_bars.world_rows[str(core.node.get_instance_id())].hp.visible,"Selection reveals health")
+	game.info_panel.hide();core.hp-=1;game.status_bars.tick()
+	assert(game.status_bars.world_rows[str(core.node.get_instance_id())].hp.visible,"Damaged home buildings reveal health")
+	core.hp=core.max_hp
+	var old_save:Dictionary=game.profile_store.read_profile(QA_SAVE)
+	old_save.unit_stock.resize(20)
+	assert(game.profile_store._valid(old_save),"Previous 20-unit saves remain valid")
+	game.metal=100000;game.oil=100000;game.credits=100000
+	assert(not game._build_lock_reason(16).is_empty(),"Godot production requires its Citadel and Well")
+	for kind in [14,15,16,17]:
+		game._begin_build(kind)
+		assert(game.build_type==kind,"Godot structure unlock order")
+		var pos:=Vector3(34+(kind-14)%2*9,0,45+floori((kind-14)/2.0)*9)
+		game._place_building(pos)
+		assert(game.buildings.back().type==kind and game.buildings.back().job=="build")
+		game._advance_colony(game.colony_time+game.BUILD_SECONDS[kind]+1)
+	assert(game.building_levels[14]==1 and game.building_levels[15]==1 and game.building_levels[16]==1)
+	assert(game._can_fire(game.buildings.back()),"Runebolt Spire attacks at level one")
+	assert(game._unit_lock_reason(20).is_empty() and not game._unit_lock_reason(21).is_empty())
+	game._train_unit(20);game._advance_colony(game.colony_time+60)
+	assert(game.unit_stock[20]==1)
+	var sanctum_index:int=game.buildings.size()-2
+	game.selected_building=sanctum_index;game._upgrade_selected();game._advance_colony(game.colony_time+500)
+	assert(game._unit_lock_reason(21).is_empty() and not game._unit_lock_reason(22).is_empty())
+	game.selected_building=sanctum_index;game._upgrade_selected();game._advance_colony(game.colony_time+500)
+	game._train_unit(21);game._train_unit(22);game._advance_colony(game.colony_time+200)
+	assert(game.unit_stock[21]==1 and game.unit_stock[22]==1)
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.unit_stock.size()==23 and game.unit_stock[22]==1 and game.building_levels[16]==3,"Faction buildings and troops survive reload")
+	game.camera_focus=Vector3(38,0,51);game.camera.size=29;game._position_camera()
+	game.info_panel.hide();game.onboarding.guide.hide()
+	var showcase:Array=[]
+	for kind in range(20,23):
+		var actor:Node3D=game._unit_model(kind);game.home_root.add_child(actor);actor.position=Vector3(33+(kind-20)*4,0,62);showcase.append(actor)
+	await shot("28-godot-fantasy-colony")
+	game._show_production(16);await shot("29-godot-summoning-roster");game.units_panel.hide()
+	for actor in showcase:actor.queue_free()
+	game.unit_stock[20]=4;game.unit_stock[21]=4;game.unit_stock[22]=4
+	game._start_battle(4);game.deploy_kind=20;game.deploy_count=4;game.placement_guide.tick()
+	assert(game.battle_targets[0].type==14 and game.terrain_material.get_shader_parameter("deployment_active"),"Godot rival bases have persistent terrain deployment colors")
+	await shot("30-godot-deployment-colors")
+	game._deploy_fleet(Vector3(0,0,15));game._launch_assault();game.deploy_kind=22;game.placement_guide.tick()
+	assert(game.terrain_material.get_shader_parameter("deployment_active"),"Colors remain after ATTACK while reserves exist")
+	game._deploy_fleet(Vector3(-18,0,0));game.deploy_kind=21;game._deploy_fleet(Vector3(18,0,0))
+	for i in 45:game._battle_tick(.1);game.visual_time+=.1;game._projectile_tick(.1)
+	var magic:=false
+	for bolt in game.missiles:
+		if bolt.get("arcane",false):magic=true
+	assert(magic,"Godot forces and defenses fire visible arcane projectiles")
+	await shot("31-godot-battle-magic")
+	game._return_home();game.placement_guide.tick()
+	assert(not game.terrain_material.get_shader_parameter("deployment_active"),"Battle overlay clears on returning home")
+	print("GODOT_FACTION_MODELS_UNLOCKS_TRAINING_COMBAT_SAVE_AND_DEPLOYMENT_COLORS_PASSED")

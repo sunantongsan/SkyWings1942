@@ -74,6 +74,9 @@ func tick()->void:
 		var job:String=entity.get("job","")
 		var work:float=progress(entity.started,entity.finish) if job!="" else -1.0
 		world_row(key,entity.node.global_position+Vector3(0,height,0),entity.hp,entity.get("max_hp",entity.hp),work,"%s %d%%"%[job.to_upper(),int(work)],building)
+		if host.mode=="base" and building:
+			var selected:bool=host.selected_building>=0 and host.selected_building<host.buildings.size() and host.buildings[host.selected_building].node==entity.node and host.info_panel.visible
+			world_rows[key].hp.visible=selected or entity.hp<entity.get("max_hp",entity.hp)
 	if host.mode=="base":
 		for job in host.clearing_jobs:
 			var key:="clear_"+str(int(job.id));active[key]=true

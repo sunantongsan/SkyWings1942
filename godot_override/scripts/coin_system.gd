@@ -31,7 +31,7 @@ func show_panel()->void:
 		var b:Dictionary=host.buildings[i]
 		if b.get("job","")=="":continue
 		grid.add_child(host._button("FINISH %s\n%s • %d COIN"%[b.job.to_upper(),host.BUILDING_NAMES[b.type],price(b.finish)],func(index=i):speed_build(index),Vector2(320,86)))
-	for kind in [6,12,13]:
+	for kind in [6,12,13,16]:
 		var finish:=first_finish(kind)
 		if finish<=host.colony_time:continue
 		grid.add_child(host._button("FINISH NEXT UNIT\n%s • %d COIN"%[host.BUILDING_NAMES[kind],price(finish)],func(k=kind):speed_line(k),Vector2(320,86)))

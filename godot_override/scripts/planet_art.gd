@@ -1,7 +1,7 @@
 extends RefCounted
 ## Authored GLB instances, restrained environment dressing and mobile effects.
 const ROOT := "res://assets/models/"
-const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks"]
+const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire"]
 var obstacles:Dictionary={}
 var scene_cache: Dictionary = {}
 var materials: Dictionary = {}
@@ -23,7 +23,7 @@ func building(kind: int, enemy: bool) -> Node3D:
 					red.albedo_color = Color("ff6952")
 					red.emission = Color("ff452c")
 					mesh.set_surface_override_material(i, red)
-	if kind == 9:
+	if kind in [9,14]:
 		var shield := MeshInstance3D.new()
 		shield.name = "ShieldField"
 		var sphere := SphereMesh.new()
@@ -40,12 +40,12 @@ func building(kind: int, enemy: bool) -> Node3D:
 		shield.material_override = mat
 		shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(shield)
-	if kind in [0,1,4,9]:
+	if kind in [0,1,4,9,14,15,16,17]:
 		var halo:=MeshInstance3D.new()
 		var plane:=QuadMesh.new();plane.size=Vector2(2.3,2.3);halo.mesh=plane
 		halo.position=Vector3(0,4.3 if kind==0 else 2.2,0)
 		var glow:=ShaderMaterial.new();glow.shader=load("res://shaders/energy_halo.gdshader")
-		if kind==4:glow.set_shader_parameter("tint",Color("c58bff"))
+		if kind==4 or kind>=14:glow.set_shader_parameter("tint",Color("c58bff"))
 		if enemy:glow.set_shader_parameter("tint",Color("ff805c"))
 		halo.material_override=glow;halo.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;root.add_child(halo)
 	return root

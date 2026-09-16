@@ -1,8 +1,8 @@
 extends Node3D
 
-const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks"]
-const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000]
-const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander"]
+const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire"]
+const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300]
+const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander","Rune Guardian","Crystal Golem","Starweaver"]
 const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mechanis","Toxicus","Nebularis","Asteroid Belt","Ruins","Orbit Station","Moon Base","Gas Giant","Wormhole"]
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
 const MAP_ACCENT := [Color("42d884"),Color("ff6a36"),Color("9de7ff"),Color("ffc05c"),Color("7688ff"),Color("43d7ff"),Color("9faeba"),Color("83e342"),Color("d268ff"),Color("c2b19c"),Color("ffce81"),Color("5ae8ff"),Color("e5e6ea"),Color("ff9f5c"),Color("a968ff")]
@@ -52,7 +52,7 @@ var build_type:=-1
 var moving_building:=-1
 var selected_unit:=0
 var buildings:Array[Dictionary]=[]
-var building_levels:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0,0,0,0])
+var building_levels:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])
 var unit_stock:=PackedInt32Array([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])
 var drag_camera:=false
 var touch_points:={}
@@ -98,7 +98,7 @@ var unit_icon_cache:Dictionary={}
 const GROUND_ASSETS := ["battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander"]
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
-const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25]
+const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25,20,0,40,30]
 var home_planet := -1
 var has_colony := false
 var tutorial_step := 0
@@ -111,16 +111,17 @@ var profile_ready := false
 var roads_root:Node3D
 var landing_marker:MeshInstance3D
 var landing_label:Label3D
-const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30]
+const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35]
 var colony_time := 0.0
 var training_queue:Array = []
 var production_kind:=6
-const UNIT_FACILITY := [6,6,6,6,6,6,6,6,6,6,12,12,12,12,13,13,6,6,13,13]
-const UNIT_TIER := [1,2,2,3,4,3,4,5,6,7,1,3,2,4,3,2,2,2,1,5]
+const UNIT_FACILITY := [6,6,6,6,6,6,6,6,6,6,12,12,12,12,13,13,6,6,13,13,16,16,16]
+const UNIT_TIER := [1,2,2,3,4,3,4,5,6,7,1,3,2,4,3,2,2,2,1,5,1,2,3]
 var work_label:Label
 
 
 func _ready()->void:
+	unit_stock.resize(UNIT_NAMES.size())
 	_setup_environment()
 	_setup_world()
 	_setup_camera()
@@ -255,8 +256,8 @@ func _setup_ui()->void:
 	selected_label=Label.new();selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
 	selected_detail=Label.new();selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
 	iv.add_child(_button("PRODUCE",func():
-		if selected_building>=0 and buildings[selected_building].type in [6,12,13]:_show_production(buildings[selected_building].type)
-		else:_toast("Select a Star Hangar, Vehicle Factory or Barracks."),Vector2(0,54)))
+		if selected_building>=0 and buildings[selected_building].type in [6,12,13,16]:_show_production(buildings[selected_building].type)
+		else:_toast("Select a production building or Summoning Sanctum."),Vector2(0,54)))
 	iv.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(0,48)))
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
@@ -285,7 +286,7 @@ func _make_build_panel()->PanelContainer:
 	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(310,52)))
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
-	for i in BUILD_ORDER+[10,11,12,13]:
+	for i in BUILD_ORDER+[10,11,12,13,14,15,16,17]:
 		var b:=_asset_button(BUILDING_NAMES[i],"%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
 		var reason:=_build_lock_reason(i)
 		b.disabled=not reason.is_empty()
@@ -324,13 +325,14 @@ func _make_units_panel()->PanelContainer:
 	var level:=_production_level(production_kind)
 	var panel:=_panel("%s / LEVEL %d / QUEUED %d OF 20"%[BUILDING_NAMES[production_kind].to_upper(),level,training_queue.size()])
 	var tabs:=HBoxContainer.new();panel.get_child(0).add_child(tabs)
-	for kind in [6,12,13]:
-		var button:=_button(BUILDING_NAMES[kind].to_upper(),func(k=kind):_show_production(k),Vector2(270,54))
+	for kind in [6,12,13,16]:
+		var button:=_button("GODOT SANCTUM" if kind==16 else BUILDING_NAMES[kind].to_upper(),func(k=kind):_show_production(k),Vector2(225,54))
+		button.add_theme_font_size_override("font_size",17)
 		if kind==production_kind:button.add_theme_stylebox_override("normal",_style(Color("176d75"),12,Color("69d9c8"),1))
 		tabs.add_child(button)
 	tabs.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(170,54)))
 	var grid:=_scroll_grid(panel,4)
-	for i in range(20):
+	for i in range(UNIT_NAMES.size()):
 		if UNIT_FACILITY[i]!=production_kind:continue
 		var cost:int=180+i*35
 		var reason:=_unit_lock_reason(i)
@@ -353,7 +355,7 @@ func _make_galaxy_panel()->PanelContainer:
 	var panel:=_panel("GALAXY MAP / AI OUTPOSTS")
 	var grid:=_scroll_grid(panel,5)
 	for i in 15:
-		var b:=_asset_button(MAP_NAMES[i],"LEVEL %02d / %s"%[i+1,"EASY" if i<3 else ("NORMAL" if i<7 else ("HARD" if i<11 else "EXTREME"))],"",Vector2(200,130))
+		var b:=_asset_button(MAP_NAMES[i],("GODOT / LV %02d / %s" if i in [4,8,10,14] else "LEVEL %02d / %s")%[i+1,"EASY" if i<3 else ("NORMAL" if i<7 else ("HARD" if i<11 else "EXTREME"))],"",Vector2(200,130))
 		b.add_theme_stylebox_override("normal",_style(MAP_ACCENT[i].darkened(0.82),12,MAP_ACCENT[i].darkened(0.35),1))
 		if i==home_planet:
 			b.disabled=true
@@ -361,7 +363,7 @@ func _make_galaxy_panel()->PanelContainer:
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
 
-func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks"][i]
+func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire"][i]
 
 func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->Dictionary:
 	var root:Node3D=art.building(type,enemy)
@@ -449,7 +451,7 @@ func _upgrade_selected()->void:
 
 func _train_unit(idx:int)->void:
 	if mode!="base":return
-	if idx<0 or idx>=20:return
+	if idx<0 or idx>=UNIT_NAMES.size():return
 	var reason:=_unit_lock_reason(idx)
 	if not reason.is_empty():_toast(reason);return
 	var c:=180+idx*35
@@ -483,19 +485,21 @@ func _start_battle(idx:int)->void:
 	if idx==home_planet:_toast("This world is your home. Choose a rival outpost.");return
 	if Array(unit_stock).reduce(func(a,b):return a+b,0)<=0:_toast("Train a fleet before attacking.");return
 	build_type=-1;landing_marker.hide();landing_label.hide()
+	build_panel.hide();units_panel.hide()
+	if is_instance_valid(coin_system.panel):coin_system.panel.hide()
 	_save_profile()
 	mode="battle";battle_map=idx;galaxy_panel.visible=false;info_panel.hide();selection_ring.hide();home_root.visible=false;battle_root.visible=true
 	for c in battle_root.get_children():c.queue_free()
 	_clear_wrecks()
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
-	var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[0,8,8,9,6,2,3]
+	var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[14,17,17,15,16,14,15] if idx in [4,8,10,14] else [0,8,8,9,6,2,3]
 	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],1+idx,true))
 	for i in floori(idx/3.0):
-		battle_targets.append(_spawn_building(battle_root,11,Vector3(-12+i*8,0,-12),1+idx,true))
+		battle_targets.append(_spawn_building(battle_root,17 if idx in [4,8,10,14] else 11,Vector3(-12+i*8,0,-12),1+idx,true))
 	raid_stock=unit_stock.duplicate()
-	awaiting_deployment=true;deployed_stock.resize(20);deployed_stock.fill(0);deployment_groups.clear()
+	awaiting_deployment=true;deployed_stock.resize(UNIT_NAMES.size());deployed_stock.fill(0);deployment_groups.clear()
 	deploy_count=8
-	for kind in 20:
+	for kind in UNIT_NAMES.size():
 		if unit_stock[kind]>0:deploy_kind=kind;break
 	camera_focus=Vector3.ZERO;_position_camera();camera.size=44
 	_toast("Choose a squad, then tap an outer edge. Place several groups before ATTACK.");_refresh_progress();_show_deployment()
@@ -550,6 +554,9 @@ func _deploy_fleet(pos:Vector3)->void:
 		battle_root.add_child(n)
 		n.look_at(Vector3(0,n.position.y,0),Vector3.UP,kind>=10)
 		battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"max_hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
+		if kind>=20:
+			var stats:Array=[[480.0,27.0,3.4],[1050.0,45.0,2.0],[330.0,36.0,3.0]][kind-20]
+			var unit:Dictionary=battle_units.back();unit.hp=stats[0];unit.max_hp=stats[0];unit.damage=stats[1];unit.speed=stats[2]
 	_refresh_deployment()
 	_toast("Squad placed. Choose another type or location, then ATTACK." if awaiting_deployment else "Reinforcements deployed!")
 
@@ -587,7 +594,7 @@ func _battle_tick(delta:float)->void:
 				var parts:Dictionary=n.get_meta("parts",{})
 				if parts.has("Weapon"):muzzle=parts.Weapon.global_position+parts.Weapon.global_basis.z*1.4
 				_fire_animation(n);_muzzle_flash(muzzle)
-				_weapon_effect(muzzle,target.node,target.pos+Vector3(0,1.8,0),u.type in [2,6,7,10,11,12,13])
+				_weapon_effect(muzzle,target.node,target.pos+Vector3(0,1.8,0),u.type in [2,6,7,10,11,12,13],u.type>=20)
 				u["last_shot"]=visual_time
 			if target.hp<=0 and is_instance_valid(target.node):_destroy_entity(target,true)
 
@@ -649,9 +656,9 @@ func _select_building_at(pos:Vector3)->void:
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
 	selected_detail.text="HP %d/%d\nUpgrade: %d Metal\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,weapon]
-	if b.type in [6,12,13]:
+	if b.type in [6,12,13,16]:
 		var next_units:Array[String]=[]
-		for kind in range(20):
+		for kind in range(UNIT_NAMES.size()):
 			if UNIT_FACILITY[kind]==b.type and UNIT_TIER[kind]==b.level+1:next_units.append(UNIT_NAMES[kind])
 		selected_detail.text+="\nNext level: "+(", ".join(next_units) if not next_units.is_empty() else "More HP and stronger defense")
 
@@ -881,8 +888,12 @@ func _found_colony(planet:int)->void:
 	_save_profile();onboarding.enter_colony()
 
 func _build_lock_reason(kind:int)->String:
-	if kind<0 or kind>=14:return "Unknown structure."
+	if kind<0 or kind>=BUILDING_NAMES.size():return "Unknown structure."
 	if _builder_busy():return "Construction drone busy."
+	if kind>=14:
+		if tutorial_step<11:return "Complete the Core upgrade mission"
+		if kind>14 and building_levels[14]==0:return "Build a Godot Citadel first"
+		if kind>15 and building_levels[15]==0:return "Build an Astral Well first"
 	if kind==0 and building_levels[0]>0:return "Your colony already has a Galactic Core."
 	if kind<10 and tutorial_step<10 and kind!=BUILD_ORDER[tutorial_step]:return "Next: "+BUILDING_NAMES[BUILD_ORDER[tutorial_step]]
 	if kind>=10 and building_levels[3]==0:return "Complete an Oil Processor first."
@@ -902,7 +913,7 @@ func _recalculate_colony()->void:
 	for b in buildings:
 		if b.get("job","")=="build":power-=POWER_DEMAND[b.type];continue
 		building_levels[b.type]=maxi(building_levels[b.type],b.level)
-		if b.type==1:power+=300*b.level
+		if b.type in [1,15]:power+=(300 if b.type==1 else 220)*b.level
 		else:power-=POWER_DEMAND[b.type]
 
 func _refresh_progress()->void:
@@ -954,7 +965,7 @@ func _load_profile()->void:
 	drone_finish=float(data.get("drone_finish",0))
 	gold=float(data.get("gold",0));drone_count=int(data.get("drone_count",1));miner_count=int(data.get("miner_count",0));miner_finish=float(data.get("miner_finish",0))
 	has_colony=true;home_planet=int(data.home_planet);tutorial_step=int(data.tutorial_step);tutorial_dismissed=bool(data.get("tutorial_dismissed",false))
-	credits=float(data.resources[0]);metal=float(data.resources[1]);oil=float(data.resources[2]);crystal=float(data.resources[3]);unit_stock=PackedInt32Array(data.unit_stock)
+	credits=float(data.resources[0]);metal=float(data.resources[1]);oil=float(data.resources[2]);crystal=float(data.resources[3]);unit_stock=PackedInt32Array(data.unit_stock);unit_stock.resize(UNIT_NAMES.size())
 	colony_time=float(data.get("colony_time",Time.get_unix_time_from_system()))
 	training_queue=data.get("training_queue",[])
 	for b in data.buildings:
@@ -1062,7 +1073,7 @@ func _move_building(pos:Vector3)->void:
 	_sync_industry_visuals();_save_profile();_select_building_at(pos);_toast("Structure relocated.")
 
 func _building_oil_cost(kind:int)->int:
-	return 350 if kind==10 else (200 if kind==11 else 0)
+	return [300,150,250,200][kind-14] if kind>=14 else (350 if kind==10 else (200 if kind==11 else 0))
 
 func _buy_drone()->void:
 	if not has_colony or mode!="base":return
@@ -1140,7 +1151,7 @@ func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->
 		tower["fire_wait"]=2.0 if tower.type==11 else 1.2
 		var damage:float=_shot_damage(tower,difficulty)
 		target.hp-=damage
-		_weapon_effect(tower.node.global_position+Vector3(0,3,0),target.node,target.node.global_position,tower.type==11)
+		_weapon_effect(tower.node.global_position+Vector3(0,3,0),target.node,target.node.global_position,tower.type==11,tower.type>=14)
 		if target.hp<=0:_destroy_entity(target,false)
 
 func _start_defense_drill()->void:
@@ -1179,15 +1190,15 @@ func _update_rank_label(b:Dictionary)->void:
 	b.rank_label.global_position=b.node.global_position+Vector3(0,5.2*(1+(b.level-1)*.025),0)
 
 func _can_fire(b:Dictionary)->bool:
-	return b.hp>0 and b.get("job","")!="build" and (b.type in [8,11] or b.level>=5)
+	return b.hp>0 and b.get("job","")!="build" and (b.type in [8,11,17] or b.level>=5)
 
 func _weapon_range(b:Dictionary)->float:
-	return (19.0 if b.type==11 else 12.0)+minf(6.0,b.level*.3)
+	return (19.0 if b.type in [11,17] else 12.0)+minf(6.0,b.level*.3)
 
 func _shot_damage(b:Dictionary,difficulty:int)->float:
 	var base:float=2.0+difficulty*.8+b.level*.3
 	var veteran_bonus:float=maxf(0,b.level-4)*1.5
-	return (base+veteran_bonus)*(2.0 if b.type==11 else 1.0)
+	return (base+veteran_bonus)*(2.0 if b.type==11 else (1.6 if b.type==17 else 1.0))
 
 func _active_units()->int:
 	var count:=0
@@ -1208,7 +1219,7 @@ func _build_reserve_panel()->void:
 	var title:=Label.new();title.text="REINFORCEMENTS";title.add_theme_font_size_override("font_size",19);column.add_child(title)
 	var scroll:=preload("res://scripts/touch_scroll.gd").new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;column.add_child(scroll)
 	var cards:=VBoxContainer.new();cards.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(cards)
-	for kind in 20:
+	for kind in UNIT_NAMES.size():
 		if raid_stock[kind]<=0:continue
 		var button:=_button(UNIT_NAMES[kind],func(k=kind):deploy_kind=k;deploy_picker.select(k);_refresh_deployment(),Vector2(240,82))
 		button.icon=_unit_icon(kind);button.add_theme_font_size_override("font_size",15);cards.add_child(button);reserve_buttons[kind]=button
@@ -1219,7 +1230,7 @@ func _show_deployment()->void:
 	deployment_bar=HBoxContainer.new();deployment_bar.add_theme_constant_override("separation",10);ui_root.add_child(deployment_bar)
 	deploy_picker=OptionButton.new();deploy_picker.custom_minimum_size=Vector2(300,64);deploy_picker.add_theme_font_size_override("font_size",20)
 	deployment_bar.add_child(deploy_picker)
-	for kind in 20:
+	for kind in UNIT_NAMES.size():
 		deploy_picker.add_icon_item(_unit_icon(kind),UNIT_NAMES[kind],kind)
 	deploy_picker.select(deploy_kind)
 	deploy_picker.item_selected.connect(func(index:int):deploy_kind=index;_refresh_deployment())
@@ -1235,8 +1246,11 @@ func _show_deployment()->void:
 
 func _refresh_deployment()->void:
 	if not is_instance_valid(deployment_bar):return
+	if raid_stock[deploy_kind]-deployed_stock[deploy_kind]<=0:
+		for kind in UNIT_NAMES.size():
+			if raid_stock[kind]>deployed_stock[kind]:deploy_kind=kind;deploy_picker.select(kind);break
 	deployment_bar.position=Vector2(24,get_viewport().get_visible_rect().size.y-85)
-	for kind in 20:
+	for kind in UNIT_NAMES.size():
 		var available:int=raid_stock[kind]-deployed_stock[kind]
 		deploy_picker.set_item_text(kind,"%s (%d)"%[UNIT_NAMES[kind],available])
 		deploy_picker.set_item_disabled(kind,available<=0)
@@ -1264,19 +1278,19 @@ func _launch_assault()->void:
 	if battle_units.is_empty():_toast("Place at least one squad first.");return
 	awaiting_deployment=false
 	if is_instance_valid(deployment_bar):deployment_bar.hide()
-	for kind in 20:unit_stock[kind]-=deployed_stock[kind]
+	for kind in UNIT_NAMES.size():unit_stock[kind]-=deployed_stock[kind]
 	_save_profile()
 	deployment_bar.show();_refresh_deployment()
 	dock.hide();_toast("ATTACK — tap an edge to deploy reserves!")
 
-func _weapon_effect(origin:Vector3,target:Node3D,destination:Vector3,rocket:bool)->void:
-	if not rocket:_laser(origin,destination);return
+func _weapon_effect(origin:Vector3,target:Node3D,destination:Vector3,rocket:bool,arcane:bool=false)->void:
+	if not rocket and not arcane:_laser(origin,destination);return
 	if missiles.size()>=64:return
 	var body:=MeshInstance3D.new();var shape:=SphereMesh.new();shape.radius=.16;shape.height=.6;body.mesh=shape
-	body.material_override=art.mat(Color("ffd57a"),true);world_root.add_child(body);body.position=origin
+	body.material_override=art.mat(Color("c887ff") if arcane else Color("ffd57a"),true);world_root.add_child(body);body.position=origin
 	var exhaust:=MeshInstance3D.new();var plume:=SphereMesh.new();plume.radius=.12;plume.height=.75;exhaust.mesh=plume
-	exhaust.material_override=art.mat(Color("ff692f"),true);body.add_child(exhaust);exhaust.position.y=-.4
-	missiles.append({"node":body,"target":target,"destination":destination,"age":0.0,"context":mode})
+	exhaust.material_override=art.mat(Color("7cf4ed") if arcane else Color("ff692f"),true);body.add_child(exhaust);exhaust.position.y=-.4
+	missiles.append({"node":body,"target":target,"destination":destination,"age":0.0,"context":mode,"arcane":arcane})
 
 func _projectile_tick(delta:float)->void:
 	for i in range(missiles.size()-1,-1,-1):
@@ -1288,7 +1302,7 @@ func _projectile_tick(delta:float)->void:
 		if is_instance_valid(rocket.target):rocket.destination=rocket.target.global_position+Vector3(0,.8,0)
 		var direction:Vector3=rocket.destination-rocket.node.position
 		if direction.length()<.5 or rocket.age>4:
-			var flash:=_sphere(.35,art.mat(Color("ffd28a"),true));world_root.add_child(flash);flash.position=rocket.node.position
+			var flash:=_sphere(.35,art.mat(Color("c887ff") if rocket.get("arcane",false) else Color("ffd28a"),true));world_root.add_child(flash);flash.position=rocket.node.position
 			var fade:=create_tween();fade.tween_property(flash,"scale",Vector3.ONE*2.2,.15);fade.tween_callback(flash.queue_free)
 			rocket.node.queue_free();missiles.remove_at(i);continue
 		rocket.node.position=rocket.node.position.move_toward(rocket.destination,delta*24)
@@ -1301,6 +1315,7 @@ func _clear_missiles()->void:
 	missiles.clear()
 
 func _unit_asset(kind:int)->String:
+	if kind>=20:return ["rune_guardian","crystal_golem","starweaver"][kind-20]
 	return "fighter" if kind<10 else GROUND_ASSETS[kind-10]
 
 func _unit_height(kind:int)->float:
@@ -1310,7 +1325,7 @@ func _unit_height(kind:int)->float:
 
 func _attack_range(kind:int)->float:
 	if kind<10:return 2.5
-	if kind in [12,13,15]:return 12.0
+	if kind in [12,13,15,22]:return 12.0
 	return 7.0 if kind in [10,11,14] else 5.5
 
 func _unit_icon(kind:int)->Texture2D:

@@ -299,6 +299,8 @@ from unit_models import build_ground_assets
 manifest['assets'].extend(build_ground_assets(Model))
 manifest['assets'].append(mining_vehicle().export('mining_vehicle'))
 manifest['assets'].append(construction_drone().export('construction_drone'))
+from godot_faction_models import build_faction_assets
+manifest['assets'].extend(build_faction_assets(Model,material))
 # Reusable angular geology, organic crown plants; merged into material surfaces.
 for seed in range(3):
     m=Model();m.materials[0]=material('weathered_stone','697a75',.05,.95);rng=random.Random(seed+1942)
