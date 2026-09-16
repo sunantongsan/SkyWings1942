@@ -129,7 +129,14 @@ Spend 1 Coin per remaining minute (rounded up) to finish a selected building job
 
 BUILD → CLEAR ROCKS / TREES → tap an obstacle → ASSIGN DRONE TO CLEAR. Clearing costs 100 Metal and 50 Oil, occupies one free construction drone, and takes 20 seconds. The drone flies to the target and uses a work beam; the obstacle disappears with an effect only on completion. Active jobs persist and finish during offline catch-up. Each obstacle has a deterministic 25% drop chance for 1–5 Coins; removal persists across returning home and reloading. No repeat rewards or obstacle respawn in this version.
 
-The right-hand battle roster shows portraits and remaining reserves from the stock present at raid start. Tap a portrait, select squad size, then tap an outer edge to deploy before or during combat. Accepted reinforcements are charged once; deployed troops are consumed for the raid, and unused reserves remain at home. There are at most 24 living units on the field at a time for mobile performance; losses free deployment capacity. Undo is available only before ATTACK. Retreat and the 150-second battle timer still apply.
+The right-hand battle roster shows portraits and remaining reserves from the stock present at raid start. Tap a portrait, select squad size, then tap an outer edge to deploy before or during combat. Accepted reinforcements are charged once; deployed troops are consumed for the raid, and unused reserves remain at home. From v0.13 there is no active-unit deployment cap: ALL RESERVES sends every remaining unit of the selected type. Very large armies can affect performance on lower-end devices. Undo is available only before ATTACK. Retreat and the 150-second battle timer still apply.
 
 
 v0.12 adds an original SVG coin emblem and a seventh resource card showing GODOT COIN and its live balance. Clearing shares the same ten-drone limit as building and upgrades. Repeated orders, busy drones and insufficient resources never charge again.
+
+
+### v0.13 placement and army behavior
+
+Green/red terrain overlays show valid/blocked building locations and the exact permitted raid deployment bands. The cursor footprint uses the same validation as the actual placement action, including spacing, builders, resources and reserves. Moving an existing building also shows its valid footprint. Touch-down previews the point; a stationary release places it, while drags pan and pinch zoom remains available.
+
+Deployment formations stay inside the permitted bands instead of expanding away from the battlefield. All remaining units can deploy before or during an assault. Aircraft use their actual -Z nose direction; ground troops use +Z. Each unit immediately excludes destroyed targets and aims its turret after turning the body.

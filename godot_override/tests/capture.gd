@@ -291,6 +291,54 @@ func run()->void:
 	assert(game.mode=="base","A destroyed fleet with no reserves loses the battle")
 	print("GOLD_MINERS_TEN_DRONES_EXPANDED_MAP_AND_DEFENSE_AI_PASSED")
 
+	# Preview shares placement checks, and armies can exceed the old active-unit cap.
+	game._begin_build(1);game.placement_guide.pointer=Vector3.ZERO;game.placement_guide.has_pointer=true;game.placement_guide.tick()
+	assert(not game._placement_reason(Vector3.ZERO).is_empty())
+	assert(game.placement_guide.footprint.material_override.albedo_color.r>game.placement_guide.footprint.material_override.albedo_color.g)
+	var buildings_before:int=game.buildings.size();game._place_building(Vector3.ZERO)
+	assert(game.buildings.size()==buildings_before,"Red construction footprint cannot be placed")
+	game.placement_guide.pointer=Vector3(-30,0,-20);game.placement_guide.tick()
+	assert(game._placement_reason(Vector3(-30,0,-20)).is_empty())
+	assert(game.placement_guide.footprint.material_override.albedo_color.g>game.placement_guide.footprint.material_override.albedo_color.r)
+	await shot("21-green-red-building-placement")
+	game._place_building(Vector3(-30,0,-20));assert(game.buildings.size()==buildings_before+1)
+	game._advance_colony(game.colony_time+16)
+	game.unit_stock[0]=60;game.unit_stock[10]=30;game.unit_stock[18]=35
+	game._start_battle(1);game.deploy_kind=0;game.deploy_count=0
+	game.placement_guide.tick()
+	assert(game._deployment_reason(Vector3.ZERO)!="" and game._deployment_reason(Vector3(-18,0,0))=="")
+	await shot("22-green-red-deployment-zones")
+	game._deploy_fleet(Vector3(-18,0,0));assert(game.battle_units.size()==60)
+	game._launch_assault()
+	game.deploy_kind=10;game._deploy_fleet(Vector3(18,0,0))
+	game.deploy_kind=18;game._deploy_fleet(Vector3(0,0,18))
+	assert(game.battle_units.size()==125 and game.unit_stock[0]==0 and game.unit_stock[10]==0 and game.unit_stock[18]==0,"Deploy ALL before and during battle without a 24-unit cap")
+	for unit in game.battle_units:
+		var pos:Vector3=unit.node.position
+		assert(absf(pos.x)<=22 and absf(pos.z)<=20 and (absf(pos.x)>=16 or absf(pos.z)>=13),"Every unit spawns inside deployment bands")
+		var forward:Vector3=-unit.node.global_basis.z if unit.type<10 else unit.node.global_basis.z
+		assert(forward.normalized().dot(Vector3(-pos.x,0,-pos.z).normalized())>.99,"Models face the enemy rather than flying backwards")
+	# A destroyed nearby target must not hold up later units in the same simulation tick.
+	game.battle_targets[0].hp=0
+	var distances:Array[float]=[]
+	for unit in game.battle_units:
+		var closest:=INF
+		for target in game.battle_targets:
+			if target.hp>0:closest=minf(closest,Vector2(unit.node.position.x,unit.node.position.z).distance_to(Vector2(target.pos.x,target.pos.z)))
+		distances.append(closest)
+	game.battle_units[0].hp=0;game.battle_units[0].node.free()
+	game._battle_tick(.1)
+	for i in game.battle_units.size():
+		var unit:Dictionary=game.battle_units[i]
+		if unit.hp<=0 or distances[i]<=game._attack_range(unit.type):continue
+		var closest:=INF
+		for target in game.battle_targets:
+			if target.hp>0:closest=minf(closest,Vector2(unit.node.position.x,unit.node.position.z).distance_to(Vector2(target.pos.x,target.pos.z)))
+		assert(closest<distances[i],"Every distant living unit advances toward a living target")
+	await shot("23-unrestricted-mixed-army")
+	game._return_home()
+	print("PLACEMENT_COLORS_UNRESTRICTED_ARMIES_FACING_AND_ADVANCE_PASSED")
+
 	# Every building uses the same completed-level five-star unlock.
 	for kind in 12:
 		var candidate:Dictionary=game._spawn_building(game.battle_root,kind,Vector3.ZERO,4,true)

@@ -21,6 +21,7 @@ var build_panel:PanelContainer
 var units_panel:PanelContainer
 var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
+var placement_guide:RefCounted
 var coin_system:RefCounted
 var godot_coins:=0
 var last_coin_day:=-1
@@ -125,6 +126,7 @@ func _ready()->void:
 	_setup_ui()
 	onboarding=preload("res://scripts/onboarding.gd").new(self)
 	coin_system=preload("res://scripts/coin_system.gd").new(self)
+	placement_guide=preload("res://scripts/placement_guide.gd").new(self)
 	_load_profile()
 	_apply_map_theme(home_planet if has_colony else 0)
 	_setup_life()
@@ -134,6 +136,7 @@ func _ready()->void:
 	onboarding.welcome()
 
 func _process(delta:float)->void:
+	placement_guide.tick()
 	if has_colony:_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()))
 	if mode=="battle": _battle_tick(delta)
 	if mode=="base":_home_defense_tick(delta)
@@ -494,26 +497,56 @@ func _start_battle(idx:int)->void:
 	camera_focus=Vector3.ZERO;_position_camera();camera.size=44
 	_toast("Choose a squad, then tap an outer edge. Place several groups before ATTACK.");_refresh_progress();_show_deployment()
 
+func _deployment_reason(pos:Vector3)->String:
+	if not pos.is_finite():return "Invalid position."
+	if absf(pos.x)>22 or absf(pos.z)>20 or (absf(pos.x)<16 and absf(pos.z)<13):return "Deploy in the green outer area."
+	if raid_stock.size()<=deploy_kind or raid_stock[deploy_kind]-deployed_stock[deploy_kind]<=0:return "No reserves of this type."
+	return ""
+
+func _deployment_positions(anchor:Vector3,amount:int)->Array[Vector3]:
+	var cells:Array[Vector3]=[]
+	for x in range(-22,23,2):
+		for z in range(-20,21,2):
+			if abs(x)>=16 or abs(z)>=14:cells.append(Vector3(x,0,z))
+	cells.sort_custom(func(a,b):return a.distance_squared_to(anchor)<b.distance_squared_to(anchor))
+	var positions:Array[Vector3]=[]
+	for i in amount:positions.append(cells[i%cells.size()])
+	return positions
+
+func _placement_reason(pos:Vector3)->String:
+	if not pos.is_finite():return "Invalid position."
+	if mode!="base":return "Return home to build."
+	if moving_building>=0:
+		if moving_building>=buildings.size() or buildings[moving_building].get("job","")!="":return "Wait for construction to finish."
+	elif build_type>=0:
+		var reason:=_build_lock_reason(build_type)
+		if not reason.is_empty():return reason
+		if metal<BUILDING_COST[build_type] or oil<_building_oil_cost(build_type):return "Not enough Metal or Oil."
+	else:return "Select a building first."
+	for i in buildings.size():
+		if i!=moving_building and buildings[i].pos.distance_to(pos)<6.1:return "Too close to another building."
+	return ""
+
 func _deploy_fleet(pos:Vector3)->void:
 	if mode!="battle":return
-	if absf(pos.x)>22 or absf(pos.z)>20 or (absf(pos.x)<16 and absf(pos.z)<13):
-		_toast("Deploy outside the enemy base, near the map edge.");return
+	var reason:=_deployment_reason(pos)
+	if not reason.is_empty():_toast(reason);return
 	var roster:Array[int]=[]
 	var available:int=raid_stock[deploy_kind]-deployed_stock[deploy_kind]
-	var amount:int=mini(mini(deploy_count,available),24-_active_units())
-	if amount<=0:_toast("No units remaining of this type, or deployment limit reached.");return
+	var amount:int=available if deploy_count==0 else mini(deploy_count,available)
+	if amount<=0:_toast("No reserves remaining of this type.");return
 	for i in amount:roster.append(deploy_kind)
 	deployment_groups.append(amount);deployed_stock[deploy_kind]+=amount
 	if not awaiting_deployment:unit_stock[deploy_kind]-=amount;_save_profile()
+	var positions:=_deployment_positions(pos,amount)
 	for i in roster.size():
 		var kind:int=roster[i]
 		var n:Node3D=_unit_model(kind,false)
-		var outward:Vector3=Vector3(signf(pos.x),0,0) if absf(pos.x)>absf(pos.z) else Vector3(0,0,signf(pos.z))
-		var lateral:=Vector3(outward.z,0,-outward.x)
-		var spacing:=2.7 if kind in [10,11,12,13,14] else 1.4
-		n.position=pos+lateral*(i%6-2.5)*spacing+outward*floori(i/6.0)*spacing
+		n.position=positions[i]
 		n.position.y=_unit_height(kind)
-		battle_root.add_child(n);battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
+		battle_root.add_child(n)
+		n.look_at(Vector3(0,n.position.y,0),Vector3.UP,kind>=10)
+		battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
 	_refresh_deployment()
 	_toast("Squad placed. Choose another type or location, then ATTACK." if awaiting_deployment else "Reinforcements deployed!")
 
@@ -531,16 +564,18 @@ func _battle_tick(delta:float)->void:
 	battle_damage=100.0*(1.0-alive_hp/max(1.0,total))
 	if alive.is_empty() or battle_elapsed>150:_finish_battle(alive.is_empty());return
 	for u in battle_units:
+		if u.get("hp",0)<=0 or not is_instance_valid(u.node):continue
 		var n:Node3D=u.node
-		if not is_instance_valid(n) or u.get("hp",0)<=0:continue
-		var target:Dictionary=alive[0];var best:=Vector2(n.position.x,n.position.z).distance_to(Vector2(target.pos.x,target.pos.z))
+		var target:Dictionary={};var best:=INF
 		for e in alive:
-			var d:=Vector2(n.position.x,n.position.z).distance_to(Vector2(e.pos.x,e.pos.z))
-			if d<best:best=d;target=e
+			if e.hp<=0 or not is_instance_valid(e.node):continue
+			var distance:float=Vector2(n.position.x,n.position.z).distance_to(Vector2(e.pos.x,e.pos.z))
+			if distance<best:best=distance;target=e
+		if target.is_empty():continue
 		var moving:bool=best>_attack_range(u.type)
-		_animate_unit(u,delta,moving,target.pos)
 		if moving:n.position=n.position.move_toward(Vector3(target.pos.x,n.position.y,target.pos.z),u.speed*delta)
-		if best>.01:n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP,true)
+		if best>.01:n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP,u.type>=10)
+		_animate_unit(u,delta,moving,target.pos)
 		if not moving:
 			if target.hp<=0:continue
 			target.hp-=u.damage*delta*2.2
@@ -619,15 +654,10 @@ func _select_building_at(pos:Vector3)->void:
 
 func _place_building(pos:Vector3)->void:
 	if mode!="base" or not has_colony or build_type<0:return
-	var reason:=_build_lock_reason(build_type)
+	pos=Vector3(snappedf(pos.x,1.0),0,snappedf(pos.z,1.0))
+	var reason:=_placement_reason(pos)
 	if not reason.is_empty():_toast(reason);return
-	pos.x=snappedf(pos.x,1.0);pos.z=snappedf(pos.z,1.0)
-	pos.y=0
-	if not pos.is_finite():return
-	for b in buildings:
-		if b.pos.distance_to(pos)<6.1:_toast("TOO CLOSE TO ANOTHER BUILDING");return
 	var cost:int=BUILDING_COST[build_type]
-	if metal<cost or oil<_building_oil_cost(build_type):_toast("Not enough Metal or Oil.");return
 	var kind:=build_type
 	metal-=cost;oil-=_building_oil_cost(kind)
 	var structure:Dictionary=_spawn_building(home_root,kind,pos,1,false)
@@ -644,6 +674,7 @@ func _unhandled_input(event:InputEvent)->void:
 	if event is InputEventMouse and event.device==-1:return
 	if onboarding and onboarding.screen.visible:return
 	if galaxy_panel.visible or build_panel.visible or units_panel.visible or victory_panel.visible:return
+	if event is InputEventMouseMotion or event is InputEventMouseButton or event is InputEventScreenTouch or event is InputEventScreenDrag:placement_guide.point_at(event.position)
 	if event is InputEventMouseButton:
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP and event.pressed:_zoom(-2);return
 		if event.button_index==MOUSE_BUTTON_WHEEL_DOWN and event.pressed:_zoom(2);return
@@ -1019,9 +1050,8 @@ func _begin_move()->void:
 func _move_building(pos:Vector3)->void:
 	if mode!="base" or moving_building<0:return
 	pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
-	if not pos.is_finite():return
-	for i in buildings.size():
-		if i!=moving_building and buildings[i].pos.distance_to(pos)<6.1:_toast("Leave space around other buildings.");return
+	var reason:=_placement_reason(pos)
+	if not reason.is_empty():_toast(reason);return
 	var b:Dictionary=buildings[moving_building];b.pos=pos;b.node.position=pos;moving_building=-1
 	_sync_industry_visuals();_save_profile();_select_building_at(pos);_toast("Structure relocated.")
 
@@ -1188,7 +1218,7 @@ func _show_deployment()->void:
 	deploy_picker.select(deploy_kind)
 	deploy_picker.item_selected.connect(func(index:int):deploy_kind=index;_refresh_deployment())
 	var quantity:=OptionButton.new();quantity.custom_minimum_size=Vector2(170,64);quantity.add_theme_font_size_override("font_size",20)
-	for count in [1,4,8,24]:quantity.add_item("SQUAD %d"%count,count)
+	for count in [1,4,8,24,0]:quantity.add_item("ALL RESERVES" if count==0 else "SQUAD %d"%count,count)
 	quantity.select(2);quantity.item_selected.connect(func(index:int):deploy_count=quantity.get_item_id(index))
 	deployment_bar.add_child(quantity)
 	deployment_bar.add_child(_button("UNDO SQUAD",_undo_squad,Vector2(180,64)))
