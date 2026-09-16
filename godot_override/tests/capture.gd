@@ -513,6 +513,7 @@ func run()->void:
 	print("DIRECT_OBSTACLE_SELECTION_HEALTH_AND_TIMED_PROGRESS_BARS_PASSED")
 	print("COIN_DAILY_EXCHANGE_SPEEDUP_OBSTACLES_AND_REINFORCEMENTS_PASSED")
 	await check_godot_faction()
+	await check_cartoon_roster()
 	# Verify the last-good backup can recover an invalid primary file.
 	game._save_profile();game._save_profile()
 	var file:=FileAccess.open(QA_SAVE,FileAccess.WRITE);file.store_string("corrupt");file.close()
@@ -563,7 +564,7 @@ func check_godot_faction()->void:
 	game._train_unit(21);game._train_unit(22);game._advance_colony(game.colony_time+200)
 	assert(game.unit_stock[21]==1 and game.unit_stock[22]==1)
 	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
-	assert(game.unit_stock.size()==23 and game.unit_stock[22]==1 and game.building_levels[16]==3,"Faction buildings and troops survive reload")
+	assert(game.unit_stock.size()==24 and game.unit_stock[22]==1 and game.building_levels[16]==3,"Faction buildings and troops survive reload")
 	game.camera_focus=Vector3(38,0,51);game.camera.size=29;game._position_camera()
 	game.info_panel.hide();game.onboarding.guide.hide()
 	var showcase:Array=[]
@@ -591,3 +592,46 @@ func check_godot_faction()->void:
 	game._return_home();game.placement_guide.tick()
 	assert(not game.terrain_material.get_shader_parameter("deployment_active"),"Battle overlay clears on returning home")
 	print("GODOT_FACTION_MODELS_UNLOCKS_TRAINING_COMBAT_SAVE_AND_DEPLOYMENT_COLORS_PASSED")
+
+func check_cartoon_roster()->void:
+	game._return_home();game._advance_colony(game.colony_time+300)
+	game.onboarding.guide.hide();game.units_panel.hide();game.info_panel.hide()
+	if is_instance_valid(game.coin_system.panel):game.coin_system.panel.hide()
+	var credits_before:float=game.credits;var oil_before:float=game.oil
+	game._train_unit(23)
+	assert(game.training_queue.size()==1 and game.training_queue[0].finish-game.colony_time==3,"Pigeon takes three seconds in an idle Hangar")
+	assert(game.credits==credits_before-40 and game.oil==oil_before-5,"Pigeon costs match the displayed price")
+	game._advance_colony(game.colony_time+1.5);game.status_bars.tick()
+	assert(is_equal_approx(game.status_bars.job_rows.back().bar.value,50),"Pigeon progress uses its real three-second duration")
+	game._advance_colony(game.colony_time+1.6);assert(game.unit_stock[23]==1)
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.unit_stock.size()==24 and game.unit_stock[23]==1,"New pigeon stock survives save/reload")
+	assert(game._unit_icon(23)!=null or DisplayServer.get_name()=="headless")
+	game.onboarding.guide.hide();game.info_panel.hide();game.toast.hide()
+	# Close-up of actual game-ready models, not an illustration.
+	var lineup:Array=[]
+	for i in 4:
+		var kind:int=[18,10,0,23][i]
+		var model:Node3D=game._unit_model(kind);game.home_root.add_child(model)
+		model.position=Vector3(-7+i*4.6,1.8 if kind in [0,23] else 0,73)
+		model.rotation.y=PI if game._is_air_unit(kind) else 0.0
+		lineup.append(model)
+	game.camera_focus=Vector3(0,0,73);game.camera.size=16;game._position_camera()
+	await shot("32-cartoon-soldier-tank-aircraft-pigeon")
+	for model in lineup:model.queue_free()
+	game._center_camera();game.camera.size=36;game._position_camera()
+	await shot("33-scrap-metal-home-colony")
+	game._show_production(6);await shot("34-pigeon-hangar-production");game.units_panel.hide()
+	game._start_battle(1);game.deploy_kind=23;game.deploy_count=1;game._deploy_fleet(Vector3(0,0,15))
+	var bird:Dictionary=game.battle_units.back()
+	assert(bird.type==23 and bird.hp==90 and bird.damage==5 and is_equal_approx(bird.node.position.y,3.2))
+	var direction:Vector3=Vector3(-bird.node.position.x,0,-bird.node.position.z).normalized()
+	assert((-bird.node.global_basis.z).dot(direction)>.99,"Pigeon faces the enemy beak-first")
+	game._animate_unit(bird,.1,true,Vector3.ZERO)
+	assert(absf(bird.node.get_meta("parts").LeftWing.rotation.z)>.1,"Pigeon has animated wing pivots")
+	game._launch_assault()
+	var previous:Vector3=bird.node.position
+	game._battle_tick(.1)
+	assert(bird.node.position.distance_to(Vector3.ZERO)<previous.distance_to(Vector3.ZERO),"Pigeon advances toward targets")
+	game._return_home()
+	print("CARTOON_ASSETS_PIGEON_COST_TIME_PROGRESS_FLIGHT_SAVE_AND_DEPLOYMENT_PASSED")

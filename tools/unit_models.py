@@ -1,9 +1,9 @@
 """Original GALAXY 1942 ground force GLBs with independently animated parts."""
 NAMES=['battle_tank','siege_tank','artillery','rocket_launcher','mech_warrior','sniper_unit','shield_drone','repair_drone','assault_soldier','elite_commander']
 def tracked(Model,kind):
-    m=Model('70deff' if kind==10 else 'ffbd69');length=3.2 if kind==10 else 3.8
-    m.block((2.1,.65,length),(0,.75,0),1,.18);m.block((1.9,.2,length-.2),(0,1.13,0),0,.1)
-    for x in [-1.1,1.1]:
+    m=Model('70deff' if kind==10 else 'ffbd69');length=2.5 if kind==10 else 2.9
+    m.block((1.85,.65,length),(0,.75,0),1,.18);m.block((1.7,.2,length-.2),(0,1.13,0),0,.1)
+    for x in [-.95,.95]:
         m.block((.6,.72,length+.2),(x,.43,0),2,.15)
         for i in range(12):
             z=-length/2+i*length/11
@@ -12,11 +12,11 @@ def tracked(Model,kind):
     for x in [-.65,.65]:
         for z in [-1.1,-.8,-.5]:m.block((.4,.07,.08),(x,1.27,z),2,.01)
     m.part='Turret';m.pivots['Turret']=(0,1.25,0)
-    m.block((1.8,.65,1.7),(0,1.57,0),0,.18);m.drum(.32,.12,(.35,1.98,-.35),3,12)
+    m.block((1.55,.8,1.45),(0,1.57,0),0,.18);m.drum(.32,.12,(.35,1.98,-.35),3,12)
     m.part='Weapon';m.pivots['Weapon']=(0,1.7,.5)
     if kind in [10,11]:
-        for x in ([0] if kind==10 else [-.4,.4]):
-            m.block((.24,.24,2.3),(x,1.7,1.7),3,.04);m.block((.4,.35,.5),(x,1.7,2.85),1,.07);m.block((.2,.2,.03),(x,1.7,3.12),4,.02)
+        for x in ([0] if kind==10 else [-.57,.57]):
+            m.block((.48,.48,1.75),(x,1.83,1.4),3,.04);m.block((1.05,.95,.8),(x,1.83,2.25),1,.07);m.block((.73,.65,.04),(x,1.83,2.67),4,.02)
     elif kind==12:
         m.strut((0,1.7,.2),(0,2.6,3.4),.3,3);m.strut((0,2.5,3.05),(0,2.7,3.75),.5,1)
     else:
@@ -60,5 +60,6 @@ def utility(Model,kind):
         m.block((.13,.03,.45),(0,.31,0),4,.01);m.block((.4,.03,.13),(0,.31,0),4,.01)
     return m
 
-def build_ground_assets(Model):
-    return [(tracked(Model,k) if k<=13 else utility(Model,k) if k in [16,17] else infantry(Model,k)).export(name) for k,name in enumerate(NAMES,10)]
+def build_ground_assets(Model,material):
+    from cartoon_models import infantry as cartoon_infantry
+    return [(tracked(Model,k) if k<=13 else utility(Model,k) if k in [16,17] else cartoon_infantry(Model,material,k)).export(name) for k,name in enumerate(NAMES,10)]

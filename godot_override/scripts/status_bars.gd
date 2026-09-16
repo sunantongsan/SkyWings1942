@@ -57,7 +57,7 @@ func jobs()->Array:
 	for b in host.buildings:
 		if b.get("job","")!="":result.append({"name":str(b.job).to_upper()+" • "+host.BUILDING_NAMES[b.type],"start":float(b.started),"finish":float(b.finish)})
 	for job in host.clearing_jobs:result.append({"name":"CLEAR "+("ROCK" if int(job.id)%4==0 else "TREE"),"start":float(job.started),"finish":float(job.finish)})
-	for job in host.training_queue:result.append({"name":host.UNIT_NAMES[int(job.type)],"start":float(job.finish)-5-int(job.type)*2,"finish":float(job.finish)})
+	for job in host.training_queue:result.append({"name":host.UNIT_NAMES[int(job.type)],"start":float(job.finish)-host._unit_train_seconds(int(job.type)),"finish":float(job.finish)})
 	if host.drone_finish>0:result.append({"name":"CONSTRUCTION DRONE","start":host.drone_finish-15,"finish":host.drone_finish})
 	if host.miner_finish>0:result.append({"name":"MINING VEHICLE","start":host.miner_finish-15,"finish":host.miner_finish})
 	return result
@@ -70,7 +70,7 @@ func tick()->void:
 		if entity.get("hp",0)<=0 or not is_instance_valid(entity.node):continue
 		var building:bool=entity.has("rank_label")
 		var key:=str(entity.node.get_instance_id());active[key]=true
-		var height:float=5.4*entity.node.scale.y if building else (1.1 if int(entity.get("type",0))<10 else (3.8 if int(entity.get("type",0))==21 else 3.2 if int(entity.get("type",0))==22 else 2.2))
+		var height:float=5.4*entity.node.scale.y if building else (1.1 if host._is_air_unit(int(entity.get("type",0))) else (3.8 if int(entity.get("type",0))==21 else 3.2 if int(entity.get("type",0))==22 else 2.2))
 		var job:String=entity.get("job","")
 		var work:float=progress(entity.started,entity.finish) if job!="" else -1.0
 		world_row(key,entity.node.global_position+Vector3(0,height,0),entity.hp,entity.get("max_hp",entity.hp),work,"%s %d%%"%[job.to_upper(),int(work)],building)

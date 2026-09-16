@@ -293,12 +293,15 @@ def fighter():
     return m
 
 manifest={'authorship':'Original GALAXY 1942 procedural mesh designs, no external assets','coordinates':'Y-up, metres, front +Z, ground y=0','assets':[]}
-for i,name in enumerate(NAMES):manifest['assets'].append(building(i).export(name))
-manifest['assets'].append(fighter().export('fighter'))
+from cartoon_models import scrap_roof, aircraft
+for i,name in enumerate(NAMES):
+    asset=building(i);scrap_roof(asset,material,i);manifest['assets'].append(asset.export(name))
+manifest['assets'].append(aircraft(Model,material).export('fighter'))
 from unit_models import build_ground_assets
-manifest['assets'].extend(build_ground_assets(Model))
+manifest['assets'].extend(build_ground_assets(Model,material))
 manifest['assets'].append(mining_vehicle().export('mining_vehicle'))
 manifest['assets'].append(construction_drone().export('construction_drone'))
+manifest['assets'].append(aircraft(Model,material,True).export('attack_pigeon'))
 from godot_faction_models import build_faction_assets
 manifest['assets'].extend(build_faction_assets(Model,material))
 # Reusable angular geology, organic crown plants; merged into material surfaces.

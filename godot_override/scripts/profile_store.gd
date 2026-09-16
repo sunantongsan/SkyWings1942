@@ -36,7 +36,7 @@ func _valid(data:Variant)->bool:
 	if not data.resources is Array or data.resources.size()!=4:return false
 	for value in data.resources:
 		if not _number(value,0,1e12):return false
-	if not data.unit_stock is Array or data.unit_stock.size() not in [20,23]:return false
+	if not data.unit_stock is Array or data.unit_stock.size() not in [20,23,24]:return false
 	for value in data.unit_stock:
 		if not _number(value,0,1000000):return false
 	if not data.buildings is Array :return false
@@ -54,7 +54,7 @@ func _valid(data:Variant)->bool:
 	var previous:=0.0
 	for job in queue:
 		if not job is Dictionary:return false
-		if not _number(job.get("type",-1),0,22) or not _number(job.get("finish",-1),previous,1e12):return false
+		if not _number(job.get("type",-1),0,23) or not _number(job.get("finish",-1),previous,1e12):return false
 		previous=float(job.finish)
 	if not _number(data.get("drone_count",1),1,10):return false
 	if not _number(data.get("gold",0),0,1e12):return false

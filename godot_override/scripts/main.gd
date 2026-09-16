@@ -2,7 +2,7 @@ extends Node3D
 
 const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire"]
 const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300]
-const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander","Rune Guardian","Crystal Golem","Starweaver"]
+const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander","Rune Guardian","Crystal Golem","Starweaver","Attack Pigeon"]
 const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mechanis","Toxicus","Nebularis","Asteroid Belt","Ruins","Orbit Station","Moon Base","Gas Giant","Wormhole"]
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
 const MAP_ACCENT := [Color("42d884"),Color("ff6a36"),Color("9de7ff"),Color("ffc05c"),Color("7688ff"),Color("43d7ff"),Color("9faeba"),Color("83e342"),Color("d268ff"),Color("c2b19c"),Color("ffce81"),Color("5ae8ff"),Color("e5e6ea"),Color("ff9f5c"),Color("a968ff")]
@@ -115,8 +115,8 @@ const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35]
 var colony_time := 0.0
 var training_queue:Array = []
 var production_kind:=6
-const UNIT_FACILITY := [6,6,6,6,6,6,6,6,6,6,12,12,12,12,13,13,6,6,13,13,16,16,16]
-const UNIT_TIER := [1,2,2,3,4,3,4,5,6,7,1,3,2,4,3,2,2,2,1,5,1,2,3]
+const UNIT_FACILITY := [6,6,6,6,6,6,6,6,6,6,12,12,12,12,13,13,6,6,13,13,16,16,16,6]
+const UNIT_TIER := [1,2,2,3,4,3,4,5,6,7,1,3,2,4,3,2,2,2,1,5,1,2,3,1]
 var work_label:Label
 
 
@@ -332,11 +332,13 @@ func _make_units_panel()->PanelContainer:
 		tabs.add_child(button)
 	tabs.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(170,54)))
 	var grid:=_scroll_grid(panel,4)
-	for i in range(UNIT_NAMES.size()):
+	var roster:Array=range(UNIT_NAMES.size())
+	if production_kind==6:roster.erase(23);roster.insert(1,23)
+	for i in roster:
 		if UNIT_FACILITY[i]!=production_kind:continue
-		var cost:int=180+i*35
+		var cost:int=_unit_credit_cost(i)
 		var reason:=_unit_lock_reason(i)
-		var detail:String="LV %d • Ready %d • %ds\n%d C / %d O"%[UNIT_TIER[i],unit_stock[i],5+i*2,cost,int(cost*.4)] if reason.is_empty() else "LOCKED • "+reason
+		var detail:String="LV %d • Ready %d • %ds\n%d C / %d O"%[UNIT_TIER[i],unit_stock[i],_unit_train_seconds(i),cost,_unit_oil_cost(i)] if reason.is_empty() else "LOCKED • "+reason
 		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,168))
 		b.disabled=not reason.is_empty()
 		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
@@ -407,10 +409,10 @@ func _unit_model(type:int,enemy:=false)->Node3D:
 		var local:Vector3=weapon.position-turret.position
 		weapon.owner=null;weapon.reparent(turret,false);weapon.position=local
 	var parts:Dictionary={}
-	for part_name in ["Turret","Weapon","LeftLeg","RightLeg","LeftArm","RightArm","Rotor"]:
+	for part_name in ["Turret","Weapon","LeftLeg","RightLeg","LeftArm","RightArm","Rotor","LeftWing","RightWing"]:
 		var part:Node3D=model.find_child(part_name,true,false)
 		if part:parts[part_name]=part
-	model.set_meta("parts",parts)
+	model.set_meta("parts",parts);model.set_meta("airborne",_is_air_unit(type))
 	if weapon:model.set_meta("weapon_rest",weapon.position)
 	if enemy:
 		for mesh in model.find_children("*","MeshInstance3D",true,false):
@@ -449,17 +451,22 @@ func _upgrade_selected()->void:
 	_refresh_progress();_save_profile();_select_building_at(b.pos)
 	_toast("Upgrade started. The new level unlocks when construction finishes.")
 
+func _unit_credit_cost(kind:int)->int:return 40 if kind==23 else 180+kind*35
+func _unit_oil_cost(kind:int)->int:return 5 if kind==23 else int(_unit_credit_cost(kind)*.4)
+func _unit_train_seconds(kind:int)->int:return 3 if kind==23 else 5+kind*2
+func _is_air_unit(kind:int)->bool:return kind<10 or kind==23
+
 func _train_unit(idx:int)->void:
 	if mode!="base":return
 	if idx<0 or idx>=UNIT_NAMES.size():return
 	var reason:=_unit_lock_reason(idx)
 	if not reason.is_empty():_toast(reason);return
-	var c:=180+idx*35
-	if credits<c or oil<c*.4:_toast("NOT ENOUGH RESOURCES");return
+	var c:=_unit_credit_cost(idx)
+	if credits<c or oil<_unit_oil_cost(idx):_toast("NOT ENOUGH RESOURCES");return
 	if training_queue.size()>=20:_toast("Training queue full (20).");return
-	credits-=c;oil-=c*.4;selected_unit=idx
+	credits-=c;oil-=_unit_oil_cost(idx);selected_unit=idx
 	var start:float=_facility_finish(UNIT_FACILITY[idx])
-	training_queue.append({"type":idx,"finish":start+5+idx*2})
+	training_queue.append({"type":idx,"finish":start+_unit_train_seconds(idx)})
 	training_queue.sort_custom(func(a,b):return float(a.finish)<float(b.finish))
 	_refresh_progress();_setup_life();_save_profile()
 	units_panel.show();onboarding.refresh_guide()
@@ -552,10 +559,10 @@ func _deploy_fleet(pos:Vector3)->void:
 		n.position=positions[i]
 		n.position.y=_unit_height(kind)
 		battle_root.add_child(n)
-		n.look_at(Vector3(0,n.position.y,0),Vector3.UP,kind>=10)
+		n.look_at(Vector3(0,n.position.y,0),Vector3.UP,not _is_air_unit(kind))
 		battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"max_hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
 		if kind>=20:
-			var stats:Array=[[480.0,27.0,3.4],[1050.0,45.0,2.0],[330.0,36.0,3.0]][kind-20]
+			var stats:Array=[[480.0,27.0,3.4],[1050.0,45.0,2.0],[330.0,36.0,3.0],[90.0,5.0,4.2]][kind-20]
 			var unit:Dictionary=battle_units.back();unit.hp=stats[0];unit.max_hp=stats[0];unit.damage=stats[1];unit.speed=stats[2]
 	_refresh_deployment()
 	_toast("Squad placed. Choose another type or location, then ATTACK." if awaiting_deployment else "Reinforcements deployed!")
@@ -584,7 +591,7 @@ func _battle_tick(delta:float)->void:
 		if target.is_empty():continue
 		var moving:bool=best>_attack_range(u.type)
 		if moving:n.position=n.position.move_toward(Vector3(target.pos.x,n.position.y,target.pos.z),u.speed*delta)
-		if best>.01:n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP,u.type>=10)
+		if best>.01:n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP,not _is_air_unit(u.type))
 		_animate_unit(u,delta,moving,target.pos)
 		if not moving:
 			if target.hp<=0:continue
@@ -592,9 +599,9 @@ func _battle_tick(delta:float)->void:
 			if visual_time-float(u.get("last_shot",-1.0))>0.55:
 				var muzzle:Vector3=n.global_position+Vector3.UP
 				var parts:Dictionary=n.get_meta("parts",{})
-				if parts.has("Weapon"):muzzle=parts.Weapon.global_position+parts.Weapon.global_basis.z*1.4
+				if parts.has("Weapon"):muzzle=parts.Weapon.global_position+parts.Weapon.global_basis.z*(-.4 if _is_air_unit(u.type) else 1.4)
 				_fire_animation(n);_muzzle_flash(muzzle)
-				_weapon_effect(muzzle,target.node,target.pos+Vector3(0,1.8,0),u.type in [2,6,7,10,11,12,13],u.type>=20)
+				_weapon_effect(muzzle,target.node,target.pos+Vector3(0,1.8,0),u.type in [2,6,7,10,11,12,13],u.type in [20,21,22])
 				u["last_shot"]=visual_time
 			if target.hp<=0 and is_instance_valid(target.node):_destroy_entity(target,true)
 
@@ -1315,16 +1322,17 @@ func _clear_missiles()->void:
 	missiles.clear()
 
 func _unit_asset(kind:int)->String:
+	if kind==23:return "attack_pigeon"
 	if kind>=20:return ["rune_guardian","crystal_golem","starweaver"][kind-20]
 	return "fighter" if kind<10 else GROUND_ASSETS[kind-10]
 
 func _unit_height(kind:int)->float:
-	if kind<10:return 3.2
+	if _is_air_unit(kind):return 3.2
 	if kind in [16,17]:return 1.4
 	return .03
 
 func _attack_range(kind:int)->float:
-	if kind<10:return 2.5
+	if _is_air_unit(kind):return 2.5
 	if kind in [12,13,15,22]:return 12.0
 	return 7.0 if kind in [10,11,14] else 5.5
 
@@ -1346,6 +1354,9 @@ func _animate_unit(unit:Dictionary,delta:float,moving:bool,target:Vector3)->void
 	if parts.has("LeftArm"):parts.LeftArm.rotation.x=-stride*.35
 	if parts.has("RightArm"):parts.RightArm.rotation.x=stride*.35
 	if parts.has("Rotor"):parts.Rotor.rotation.y+=delta*2
+	if parts.has("LeftWing"):
+		parts.LeftWing.rotation.z=sin(float(unit.walk_phase)*1.8)*.65
+		parts.RightWing.rotation.z=-parts.LeftWing.rotation.z
 	if parts.has("Turret"):
 		var aim:Vector3=target;aim.y=parts.Turret.global_position.y
 		if parts.Turret.global_position.distance_to(aim)>.01:parts.Turret.look_at(aim,Vector3.UP,true)
@@ -1356,7 +1367,7 @@ func _fire_animation(model:Node3D)->void:
 	var old:Tween=model.get_meta("recoil_tween") if model.has_meta("recoil_tween") else null
 	if old and old.is_valid():old.kill()
 	var rest:Vector3=model.get_meta("weapon_rest")
-	parts.Weapon.position=rest-Vector3(0,0,.16)
+	parts.Weapon.position=rest+Vector3(0,0,.16 if model.get_meta("airborne",false) else -.16)
 	var recoil:=model.create_tween();recoil.tween_property(parts.Weapon,"position",rest,.22)
 	model.set_meta("recoil_tween",recoil)
 

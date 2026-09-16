@@ -165,3 +165,12 @@ The Godot faction joins the existing colony after the Core upgrade tutorial: bui
 | Runebolt Spire | 1300 / 200 | 35s | Auto-targeting arcane bolt defense from level 1 |
 
 Sanctum levels 1 / 2 / 3 unlock Rune Guardian (armored lancer), Crystal Golem (slow heavy attacker), and Starweaver (long-range mage). Animated limbs, traveling violet bolts, recoil and existing wreck effects work in real battles. Noctis, Nebularis, Ruins and Wormhole have Godot AI outposts with increasing difficulty. This is an allied buildable faction set, not a replacement for the original starting tutorial or an online faction system. Old 20-unit saves migrate to 23 units without resetting progress.
+
+
+### v0.16 Scrappy Galaxy cartoon art
+
+The Galaxy faction now uses original exaggerated cartoon proportions: broad torsos and short legs for infantry, compact tank hulls with oversized muzzles, and big-nosed aircraft with tiny tails. All fourteen Galaxy buildings have authored corrugated-zinc roof sections with rust, overlapping patches, bolts and ragged edges; exposed mechanisms and Godot-faction architecture remain recognizable. These are standalone GLBs with per-part materials and animation pivots, not painted scene atlases.
+
+Attack Pigeon is a new Star Hangar level-1 unit, available after the existing Core-upgrade mission. Cost: 40 Credits + 5 Oil, training time 3 seconds on the shared Hangar production line. Stats: 90 HP, damage parameter 5, speed 4.2, airborne height 3.2. It flaps articulated wings and fires a tiny energy cannon; it is reusable until destroyed, not a self-destruct unit. Production cards, progress bars and charging use the same cost/time functions. Existing saves with 20 or 23 unit slots extend to 24 while preserving inventory and queues.
+
+CI verifies pigeon costs, duration, halfway progress, save/reload, model portrait, wing animation, forward orientation and movement; screenshots 32–34 show actual Godot models and the home colony. This is the first scrappy-cartoon art pass, with existing combat rules retained.
