@@ -70,7 +70,7 @@ func tick()->void:
 		if entity.get("hp",0)<=0 or not is_instance_valid(entity.node):continue
 		var building:bool=entity.has("rank_label")
 		var key:=str(entity.node.get_instance_id());active[key]=true
-		var height:float=5.4*entity.node.scale.y if building else (1.1 if int(entity.get("type",0))<10 else 2.2)
+		var height:float=5.4*entity.node.scale.y if building else (1.1 if int(entity.get("type",0))<10 else (3.8 if int(entity.get("type",0))==21 else 3.2 if int(entity.get("type",0))==22 else 2.2))
 		var job:String=entity.get("job","")
 		var work:float=progress(entity.started,entity.finish) if job!="" else -1.0
 		world_row(key,entity.node.global_position+Vector3(0,height,0),entity.hp,entity.get("max_hp",entity.hp),work,"%s %d%%"%[job.to_upper(),int(work)],building)

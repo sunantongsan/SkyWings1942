@@ -1377,7 +1377,10 @@ func _destroy_entity(entity:Dictionary,structure:bool)->void:
 		if is_instance_valid(animators[i].node) and model.is_ancestor_of(animators[i].node):animators.remove_at(i)
 	var recoil:Tween=model.get_meta("recoil_tween") if model.has_meta("recoil_tween") else null
 	if recoil and recoil.is_valid():recoil.kill()
-	for mesh in model.find_children("*","MeshInstance3D",true,false):mesh.material_override=art.mat(Color("41444b"))
+	for mesh in model.find_children("*","MeshInstance3D",true,false):
+		# Energy fields and halo quads are effects, never solid wreck geometry.
+		if mesh.material_override is ShaderMaterial:mesh.hide()
+		else:mesh.material_override=art.mat(Color("41444b"))
 	var duration:=1.1 if structure else .55
 	var collapse:=model.create_tween().set_parallel(true)
 	var crushed:Vector3=model.scale*Vector3(1.05,.23 if structure else .6,1.05)

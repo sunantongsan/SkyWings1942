@@ -584,6 +584,9 @@ func check_godot_faction()->void:
 	for bolt in game.missiles:
 		if bolt.get("arcane",false):magic=true
 	assert(magic,"Godot forces and defenses fire visible arcane projectiles")
+	var keep:Dictionary=game.battle_targets[0]
+	game._destroy_entity(keep,true)
+	assert(not keep.node.find_child("ShieldField",true,false).visible,"Destroyed Citadel shields switch off instead of becoming opaque wreck spheres")
 	await shot("31-godot-battle-magic")
 	game._return_home();game.placement_guide.tick()
 	assert(not game.terrain_material.get_shader_parameter("deployment_active"),"Battle overlay clears on returning home")
