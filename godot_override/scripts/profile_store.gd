@@ -61,7 +61,16 @@ func _valid(data:Variant)->bool:
 	if not _number(data.get("miner_count",0),0,1e9):return false
 	if not _number(data.get("miner_finish",0),0,1e12):return false
 	if not _number(data.get("drone_finish",0),0,1e12):return false
-	var busy:=0
+	var clear_jobs=data.get("clearing_jobs",[])
+	if not clear_jobs is Array or clear_jobs.size()>10:return false
+	for job in clear_jobs:
+		if not job is Dictionary:return false
+		if not _number(job.get("id",-1),0,359) or ids.has(int(job.id)):return false
+		ids[int(job.id)]=true
+		if not job.get("pos") is Array or job.pos.size()!=3:return false
+		if not _number(job.pos[0],-1e12,1e12) or not _number(job.pos[1],0,0) or not _number(job.pos[2],-1e12,1e12):return false
+		if not _number(job.get("started",-1),0,1e12) or not _number(job.get("finish",-1),float(job.started),1e12):return false
+	var busy:int=clear_jobs.size()
 	var kinds:Dictionary={}
 	for b in data.buildings:
 		if not b is Dictionary:return false

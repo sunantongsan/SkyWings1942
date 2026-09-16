@@ -383,8 +383,36 @@ func run()->void:
 	assert(game.godot_coins==balance-10 and game.metal==previous_metal+1000)
 	game.coin_system.obstacle_id=game.art.obstacles.keys()[0]
 	var removed:int=game.coin_system.obstacle_id
+	var before_clear_metal:float=game.metal
+	var before_clear_oil:float=game.oil
+	var saved_drone_count:int=game.drone_count
+	game.drone_count=1
 	game.coin_system.clear_selected()
+	assert(game.clearing_jobs.size()==1 and game._builder_busy(),"Clearing reserves a construction drone")
+	assert(game.metal==before_clear_metal-100 and game.oil==before_clear_oil-50)
+	assert(removed not in game.cleared_obstacles and game.art.obstacles.has(removed),"Obstacle remains until drone finishes")
+	assert(not game._build_lock_reason(1).is_empty(),"Occupied clearing drone cannot also build")
+	game.coin_system.obstacle_id=removed;game.coin_system.clear_selected()
+	assert(game.clearing_jobs.size()==1 and game.metal==before_clear_metal-100,"Repeated taps do not charge twice")
+	game.drone_count=saved_drone_count
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.clearing_jobs.size()==1 and int(game.clearing_jobs[0].id)==removed,"Active drone clearing persists on reload")
+	var clear_job:Dictionary=game.clearing_jobs[0]
+	game.camera_focus=Vector3(clear_job.pos[0],0,clear_job.pos[2]);game._position_camera();game.camera.size=24
+	game.onboarding.guide.hide();game.info_panel.hide()
+	game._industry_tick(3.0);game._update_work_display()
+	await shot("20-drone-clearing-and-coin-header")
+	assert(game.resource_labels.size()==7 and game.resource_labels[6].text==game._fmt(game.godot_coins),"Coin has its own live resource card")
+	var coin_card:Control=game.header.get_child(7)
+	await touch_at(coin_card.get_global_rect().get_center())
+	assert(is_instance_valid(game.coin_system.panel) and game.coin_system.panel.visible,"Coin resource card opens its menu")
+	game.coin_system.panel.hide()
+	game._advance_colony(float(clear_job.finish)+1)
+	assert(game.clearing_jobs.is_empty() and not game._builder_busy())
 	assert(removed in game.cleared_obstacles and not game.art.obstacles.has(removed))
+	var coin_after_clear:int=game.godot_coins
+	game.coin_system.complete_clear(clear_job);assert(game.godot_coins==coin_after_clear,"Job completion pays only once")
+	print("DRONE_CLEARING_COST_BUSY_SAVE_RELOAD_COMPLETION_AND_COIN_HEADER_PASSED")
 	balance=game.godot_coins;previous_metal=game.metal
 	game.coin_system.obstacle_id=removed;game.coin_system.clear_selected()
 	assert(game.godot_coins==balance and game.metal==previous_metal,"Cleared obstacles cannot pay twice")

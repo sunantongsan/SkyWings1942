@@ -25,6 +25,7 @@ var coin_system:RefCounted
 var godot_coins:=0
 var last_coin_day:=-1
 var cleared_obstacles:Array=[]
+var clearing_jobs:Array=[]
 var raid_stock:=PackedInt32Array()
 var reserve_panel:PanelContainer
 var reserve_buttons:Dictionary={}
@@ -218,12 +219,20 @@ func _setup_ui()->void:
 	status_label.gui_input.connect(func(event:InputEvent):
 		if event is InputEventScreenTouch and event.pressed:coin_system.show_panel()
 		elif event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:coin_system.show_panel())
-	var colors:=[Color("ecc779"),Color("b4c8d6"),Color("edaa76"),Color("c995f2"),Color("82dec3"),Color("ffd065")]
-	for i in 6:
+	var colors:=[Color("ecc779"),Color("b4c8d6"),Color("edaa76"),Color("c995f2"),Color("82dec3"),Color("ffd065"),Color("63e6ef")]
+	for i in 7:
 		var card:=PanelContainer.new();card.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		card.add_theme_stylebox_override("panel",_style(Color("112a36"),12,Color("36505e"),1));header.add_child(card)
 		var column:=VBoxContainer.new();column.add_theme_constant_override("separation",0);card.add_child(column)
-		var caption:=Label.new();caption.text=["CREDITS","METAL","OIL","CRYSTAL","POWER","GOLD"][i];caption.add_theme_font_size_override("font_size",13);caption.modulate=colors[i];column.add_child(caption)
+		var caption_row:=HBoxContainer.new();caption_row.add_theme_constant_override("separation",4);column.add_child(caption_row)
+		if i==6:
+			var icon:=TextureRect.new();icon.texture=load("res://assets/icons/godot_coin.svg");icon.custom_minimum_size=Vector2(20,20);icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;caption_row.add_child(icon)
+			card.mouse_filter=Control.MOUSE_FILTER_STOP
+			card.gui_input.connect(func(event:InputEvent):
+				if event is InputEventScreenTouch and event.pressed:coin_system.show_panel()
+				elif event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:coin_system.show_panel())
+		var caption:=Label.new();caption.text=["CREDITS","METAL","OIL","CRYSTAL","POWER","GOLD","GODOT COIN"][i];caption.add_theme_font_size_override("font_size",13);caption.modulate=colors[i];caption_row.add_child(caption)
+		column.mouse_filter=Control.MOUSE_FILTER_IGNORE;caption_row.mouse_filter=Control.MOUSE_FILTER_IGNORE;caption.mouse_filter=Control.MOUSE_FILTER_IGNORE
 		var value:=Label.new();value.text="0";value.add_theme_font_size_override("font_size",25);column.add_child(value);resource_labels.append(value)
 	dock=HBoxContainer.new();dock.add_theme_constant_override("separation",10);ui_root.add_child(dock)
 	dock.add_child(_button("BUILD",_toggle_build,Vector2(180,64)))
@@ -579,11 +588,10 @@ func _economy_tick(delta:float)->void:
 			4:crystal=minf(1e12,crystal+delta*.9*b.level)
 
 func _update_top_bar()->void:
-	if resource_labels.size()!=6:return
-	var values:=[credits,metal,oil,crystal,power,gold]
-	for i in 6:resource_labels[i].text=_fmt(values[i])
+	if resource_labels.size()!=7:return
+	var values:=[credits,metal,oil,crystal,power,gold,float(godot_coins)]
+	for i in 7:resource_labels[i].text=_fmt(values[i])
 	status_label.text=(MAP_NAMES[maxi(home_planet,0)].to_upper()) if mode in ["base","welcome"] else "%s  /  %d%%"%[MAP_NAMES[battle_map].to_upper(),int(battle_damage)]
-	status_label.text+=" • COIN %d"%godot_coins
 
 func _fmt(v:float)->String:
 	if v>=1000000:return "%.2fM"%(v/1000000.0)
@@ -899,13 +907,13 @@ func _save_profile()->void:
 	if not has_colony or not profile_ready:return
 	var records:Array=[]
 	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
-	var data:Dictionary={"schema":1,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	var data:Dictionary={"schema":1,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
 	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.")
 
 func _load_profile()->void:
 	var data:Dictionary=profile_store.read_profile(profile_path)
 	if data.is_empty():return
-	godot_coins=int(data.get("godot_coins",0));last_coin_day=int(data.get("last_coin_day",-1));cleared_obstacles=data.get("cleared_obstacles",[])
+	godot_coins=int(data.get("godot_coins",0));last_coin_day=int(data.get("last_coin_day",-1));cleared_obstacles=data.get("cleared_obstacles",[]);clearing_jobs=data.get("clearing_jobs",[])
 	drone_finish=float(data.get("drone_finish",0))
 	gold=float(data.get("gold",0));drone_count=int(data.get("drone_count",1));miner_count=int(data.get("miner_count",0));miner_finish=float(data.get("miner_finish",0))
 	has_colony=true;home_planet=int(data.home_planet);tutorial_step=int(data.tutorial_step);tutorial_dismissed=bool(data.get("tutorial_dismissed",false))
@@ -928,7 +936,7 @@ func _exit_tree()->void:
 	_save_profile()
 
 func _builder_busy()->bool:
-	var busy:=0
+	var busy:=clearing_jobs.size()
 	for b in buildings:
 		if b.get("job","")!="":busy+=1
 	return busy>=drone_count
@@ -946,6 +954,7 @@ func _advance_colony(now:float)->void:
 	var economy_start:float=maxf(colony_time,now-8*3600)
 	while colony_time<now:
 		var next:float=now
+		for job in clearing_jobs:next=minf(next,maxf(colony_time,float(job.finish)))
 		if drone_finish>0:next=minf(next,maxf(colony_time,drone_finish))
 		if miner_finish>0:next=minf(next,maxf(colony_time,miner_finish))
 		for b in buildings:
@@ -953,6 +962,10 @@ func _advance_colony(now:float)->void:
 		if not training_queue.is_empty():next=minf(next,maxf(colony_time,float(training_queue[0].finish)))
 		_economy_tick(maxf(0,next-maxf(colony_time,economy_start)))
 		colony_time=next
+		for i in range(clearing_jobs.size()-1,-1,-1):
+			if float(clearing_jobs[i].finish)<=colony_time:
+				var job:Dictionary=clearing_jobs.pop_at(i)
+				coin_system.complete_clear(job);changed=true
 		if drone_finish>0 and drone_finish<=colony_time:drone_count+=1;drone_finish=0;changed=true
 		if miner_finish>0 and miner_finish<=colony_time:miner_count+=1;miner_finish=0;changed=true
 		for b in buildings:
@@ -977,6 +990,7 @@ func _update_work_display()->void:
 		work_label.size=Vector2(get_viewport().get_visible_rect().size.x-48,32)
 		return
 	var lines:Array[String]=[]
+	for job in clearing_jobs:lines.append("DRONE: CLEARING • %ds"%maxi(0,ceili(float(job.finish)-colony_time)))
 	for b in buildings:
 		if b.get("job","")=="":continue
 		var left:int=maxi(0,int(ceil(float(b.finish)-colony_time)))
@@ -1052,6 +1066,7 @@ func _sync_industry_visuals()->void:
 
 func _industry_tick(_delta:float)->void:
 	var jobs:Array[Vector3]=[]
+	for job in clearing_jobs:jobs.append(Vector3(job.pos[0],0,job.pos[2]))
 	for b in buildings:
 		b.node.visible=b.pos.distance_to(camera_focus)<85
 		_update_rank_label(b)
@@ -1059,8 +1074,9 @@ func _industry_tick(_delta:float)->void:
 	for i in drone_visuals.size():
 		var base:Vector3=jobs[i] if i<jobs.size() else Vector3((i%5)*1.5-3,0,-5-floori(i/5.0)*2)
 		var a:float=visual_time+i
-		drone_visuals[i].position=base+Vector3(cos(a)*2,4.5+sin(a)*.3,sin(a)*2)
+		drone_visuals[i].position=drone_visuals[i].position.move_toward(base+Vector3(cos(a)*2,4.5+sin(a)*.3,sin(a)*2),maxf(0,_delta)*25)
 		drone_visuals[i].rotation.y=-a
+	coin_system.tick()
 	for i in industry_visuals.size():
 		var origin:Vector3=industry_visuals[i].get_meta("origin")
 		var phase:float=fmod(colony_time+i*6.0,20.0)/20.0
