@@ -785,5 +785,6 @@ func check_yards_and_rewards()->void:
 	ads.request_build(factory_index);token=fake.requested;fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
 	assert(ads.result_panel.visible)
 	await shot("41-confirmed-ad-reward-receipt")
+	assert(ads.result_panel.get_global_rect().end.y <= root.size.y-80,"Reward receipt fits above the bottom HUD")
 	ads.bridge=native;game._save_profile()
 	print("BUILDABLE_THREE_CAMP_LIMITS_INDEPENDENT_PRODUCERS_MENU_CLOSE_AND_DURABLE_REWARDED_RECEIPTS_PASSED")

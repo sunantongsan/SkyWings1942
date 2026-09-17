@@ -77,8 +77,8 @@ func show_result(used:int)->void:
 	if is_instance_valid(result_panel):result_panel.queue_free()
 	result_panel=host._panel("AD REWARD RECEIVED • 50 SECONDS")
 	host.ui_root.add_child(result_panel)
-	var label:=Label.new();label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;label.add_theme_font_size_override("font_size",23)
-	label.text="Construction reduced by %d seconds.\nSaved speed-up: %d seconds.\nUnused seconds stay saved if the job finished during the ad."%[used,boost_seconds]
+	var label:=Label.new();label.add_theme_font_size_override("font_size",20)
+	label.text="Construction reduced by %d seconds.\nSaved speed-up: %d seconds.\nUnused time is saved for your next construction."%[used,boost_seconds]
 	result_panel.get_child(0).add_child(label)
 	result_panel.get_child(0).add_child(host._button("CONTINUE",func():result_panel.hide(),Vector2(0,54)))
 	var screen:Vector2=host.get_viewport().get_visible_rect().size
