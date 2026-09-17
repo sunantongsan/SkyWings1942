@@ -743,7 +743,7 @@ func check_yards_and_rewards()->void:
 	var second:int=game.buildings.size()-1;assert(game.buildings[second].type==12)
 	game.unit_stock.fill(0);game.training_queue.clear();factory.level=3
 	game._show_production(12,second);assert(not game._unit_lock_reason(11,second).is_empty(),"Low-star producer cannot borrow another factory's unlocks")
-	game._train_unit(10,second);assert(not game.units_panel.visible,"Selecting a production order closes its menu")
+	game._train_unit(10,second);assert(game.units_panel.visible,"Production stays open for repeated orders")
 	game._train_unit(10,factory_index)
 	assert(game.training_queue.size()==2 and game.training_queue[0].finish==game.training_queue[1].finish,"Two factories produce concurrently")
 	var untouched:float=0
@@ -759,32 +759,51 @@ func check_yards_and_rewards()->void:
 	game._dismiss_menus();game.onboarding.guide.hide();game.camera_focus=Vector3(-70,0,32);game.camera.size=62;game._position_camera();game.toast.hide()
 	await shot("39-buildable-air-ground-and-infantry-camps")
 	game._show_production(12,second);await shot("40-independent-factory-queue");game._dismiss_menus()
+	game.unit_stock.fill(0);game.training_queue.clear()
+	game._show_production(12,second)
+	for i in 3:game._train_unit(10,second)
+	assert(game.units_panel.visible and game.training_queue.size()==3,"Three orders without reopening the production menu")
+	game.units_panel.get_child(0).get_child(0).get_child(1).pressed.emit()
+	assert(not game.units_panel.visible,"Player can close production manually")
 	var ads:RefCounted=game.rewarded_ads;var native:Object=ads.bridge;var fake:=FakeAdBridge.new();ads.bridge=fake
 	game.selected_building=factory_index;game._upgrade_selected();factory=game.buildings[factory_index]
+	factory.finish=game.colony_time+12000
 	var initial:float=factory.finish
+	ads.offer_build(factory_index);assert(ads.result_panel.visible and fake.requested.is_empty(),"Disclosure is shown before requesting an ad")
+	ads.result_panel.get_child(0).get_child(3).pressed.emit()
+	assert(fake.requested.is_empty(),"Cancel does not start an ad")
 	ads.request_build(factory_index);var token:String=fake.requested
 	ads._earned("wrong-token");ads.poll_wait=0;ads.tick();assert(factory.finish==initial)
 	ads._closed(token);ads.poll_wait=0;ads.tick();assert(factory.finish==initial,"Closing an unearned ad must not grant a reward")
 	fake.ready=false;ads.request_build(factory_index);assert(fake.loads==1 and ads.pending.is_empty())
 	fake.ready=true;ads.request_build(factory_index);token=fake.requested
-	fake.showing=true;fake.receipts.append(token);ads._earned(token);ads.poll_wait=0;ads.tick()
-	assert(factory.finish==initial,"Reward is presented after the fullscreen ad closes")
-	fake.showing=false;ads._closed(token);game.selected_building=0;ads.poll_wait=0;ads.tick()
-	assert(is_equal_approx(factory.finish,initial-50) and token in fake.acks,"Late earned receipt applies 50 seconds to the original job and is acknowledged")
-	ads._earned(token);ads.poll_wait=0;ads.tick();assert(is_equal_approx(factory.finish,initial-50),"Duplicate callbacks cannot reward twice")
+	fake.showing=true;game.app_paused=true;fake.receipts.append(token);ads._earned(token);ads.poll_wait=0;ads.tick()
+	assert(absf(factory.finish-(initial-3000))<.01 and token in fake.acks,"Earned receipt reduces 50 minutes even when lifecycle flags remain stale")
+	fake.showing=false;game.app_paused=false;ads._closed(token);game.selected_building=0
+	ads._earned(token);ads.poll_wait=0;ads.tick();assert(absf(factory.finish-(initial-3000))<.01,"Duplicate callbacks cannot reward twice")
 	ads.request_build(factory_index);token=fake.requested;fake.receipts.append(token)
-	# Lose the live GDScript callback and pending object through a complete game reload.
 	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
 	ads=game.rewarded_ads;ads.bridge=fake;ads.poll_wait=0;ads.tick();factory=game.buildings[factory_index]
-	assert(is_equal_approx(factory.finish,initial-100) and token in fake.acks,"Native receipt recovers a missed callback after restart")
+	assert(absf(factory.finish-(initial-6000))<.01 and token in fake.acks,"Missed callback recovers after restart")
 	ads.request_build(factory_index);token=fake.requested
-	game._advance_colony(factory.finish+1);fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
-	assert(ads.boost_seconds==50,"An already finished job keeps all 50 rewarded seconds")
-	game._dismiss_menus();game.selected_building=factory_index;game._upgrade_selected();initial=factory.finish
-	ads.use_saved(factory_index);assert(factory.finish==initial-50 and ads.boost_seconds==0)
+	game._advance_colony(factory.finish+1);var coins_before:int=game.godot_coins
+	fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
+	assert(game.godot_coins==coins_before and not ads.save_state().has("boost_seconds"),"Finished jobs do not bank time or grant extra coins")
+	game._dismiss_menus();game.selected_building=factory_index;game._upgrade_selected();factory=game.buildings[factory_index]
+	factory.finish=game.colony_time+120
 	ads.request_build(factory_index);token=fake.requested;fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
+	assert(factory.job=="","Short construction finishes immediately")
 	assert(ads.result_panel.visible)
 	await shot("41-confirmed-ad-reward-receipt")
 	assert(ads.result_panel.get_global_rect().end.y <= root.size.y-80,"Reward receipt fits above the bottom HUD")
+	ads.request_coins();token=fake.requested;fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
+	assert(game.godot_coins==coins_before+5,"Coin ad grants exactly five Coins")
+	ads._earned(token);ads.poll_wait=0;ads.tick();assert(game.godot_coins==coins_before+5)
+	assert(game._save_profile(),"Coin receipt can be saved")
+	game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	ads=game.rewarded_ads;ads.bridge=fake;assert(game.godot_coins==coins_before+5,"Coin reward survives restart")
+	assert(game.coin_system.price(game.colony_time+3000)==5,"Five Coins equal fifty minutes")
+	ads.offer_coins();await shot("42-optional-five-coin-reward");game._dismiss_menus()
 	ads.bridge=native;game._save_profile()
+	print("REPEAT_TRAINING_DIRECT_50_MINUTE_REWARDS_COIN_ADS_AND_RESTART_PASSED")
 	print("BUILDABLE_THREE_CAMP_LIMITS_INDEPENDENT_PRODUCERS_MENU_CLOSE_AND_DURABLE_REWARDED_RECEIPTS_PASSED")

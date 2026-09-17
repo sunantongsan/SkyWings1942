@@ -23,7 +23,6 @@ var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
 var rewarded_ads:RefCounted
 var ad_button:Button
-var saved_boost_button:Button
 var app_paused:=false
 var garrison:RefCounted
 var battle_feedback:RefCounted
@@ -280,8 +279,7 @@ func _setup_ui()->void:
 		if selected_building>=0 and buildings[selected_building].type in [6,12,13,16]:_show_production(buildings[selected_building].type,selected_building)
 		else:_toast("Select a production building or Summoning Sanctum."),Vector2(0,54)))
 	iv.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(0,48)))
-	ad_button=_button("WATCH AD • −50s",func():rewarded_ads.request_build(selected_building),Vector2(0,44));iv.add_child(ad_button)
-	saved_boost_button=_button("USE SAVED BOOST",func():rewarded_ads.use_saved(selected_building),Vector2(0,44));iv.add_child(saved_boost_button);saved_boost_button.hide()
+	ad_button=_button("WATCH AD • −50 MIN",func():rewarded_ads.offer_build(selected_building),Vector2(0,44));iv.add_child(ad_button)
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
@@ -535,7 +533,7 @@ func _train_unit(idx:int,producer:int=-1)->void:
 	training_queue.append({"type":idx,"producer":producer,"finish":start+_unit_train_seconds(idx)})
 	training_queue.sort_custom(func(a,b):return float(a.finish)<float(b.finish))
 	_refresh_progress();_setup_life();_save_profile()
-	_dismiss_menus();onboarding.refresh_guide()
+	onboarding.refresh_guide()
 	_toast("%s queued at %s #%d."%[UNIT_NAMES[idx],BUILDING_NAMES[UNIT_FACILITY[idx]],producer+1])
 
 func _toggle_build()->void:
@@ -1013,11 +1011,17 @@ func _refresh_progress()->void:
 	if tutorial_step==11 and unit_stock[0]>=8:tutorial_step=12
 	var build_open:=build_panel.visible
 	var units_open:=units_panel.visible
+	var unit_scroll:=0
+	for child in units_panel.get_child(0).get_children():
+		if child is ScrollContainer:unit_scroll=child.scroll_vertical
 	var galaxy_open:=galaxy_panel.visible
 	for p in [build_panel,units_panel,galaxy_panel]:p.hide();p.queue_free()
 	build_panel=_make_build_panel();ui_root.add_child(build_panel);build_panel.visible=build_open
 	units_panel=_make_units_panel();ui_root.add_child(units_panel);units_panel.visible=units_open
 	galaxy_panel=_make_galaxy_panel();ui_root.add_child(galaxy_panel);galaxy_panel.visible=galaxy_open
+	if units_open:
+		for child in units_panel.get_child(0).get_children():
+			if child is ScrollContainer:child.set_deferred("scroll_vertical",unit_scroll)
 	dock.get_child(0).disabled=mode!="base"
 	dock.get_child(1).disabled=mode!="base" or tutorial_step<11
 	dock.get_child(2).disabled=mode!="base" or tutorial_step<12
@@ -1052,9 +1056,9 @@ func _save_profile()->bool:
 func _load_profile()->void:
 	var data:Dictionary=profile_store.read_profile(profile_path)
 	if data.is_empty():return
-	rewarded_ads.load_state(data.get("ad_rewards",{}))
 	drone_producer=int(data.get("drone_producer",-1));miner_producer=int(data.get("miner_producer",-1))
 	godot_coins=int(data.get("godot_coins",0));last_coin_day=int(data.get("last_coin_day",-1));cleared_obstacles=data.get("cleared_obstacles",[]);clearing_jobs=data.get("clearing_jobs",[])
+	rewarded_ads.load_state(data.get("ad_rewards",{}))
 	drone_finish=float(data.get("drone_finish",0))
 	gold=float(data.get("gold",0));drone_count=int(data.get("drone_count",1));miner_count=int(data.get("miner_count",0));miner_finish=float(data.get("miner_finish",0))
 	has_colony=true;home_planet=int(data.home_planet);tutorial_step=int(data.tutorial_step);tutorial_dismissed=bool(data.get("tutorial_dismissed",false))
@@ -1184,7 +1188,7 @@ func _buy_drone()->void:
 	if gold<cost:_toast("Mine %d Gold to unlock the next drone."%cost);return
 	gold-=cost;drone_producer=_producer_for(6);drone_finish=_facility_finish(6,drone_producer)+15
 	_sync_industry_visuals();_refresh_progress();_save_profile()
-	_dismiss_menus();_toast("Construction drone queued in Star Hangar #%d (15s)."%(drone_producer+1))
+	_toast("Construction drone queued in Star Hangar #%d (15s)."%(drone_producer+1))
 
 func _build_miner()->void:
 	if mode!="base" or building_levels[10]==0:_toast("Complete a Gold Refinery first.");return
@@ -1196,7 +1200,7 @@ func _build_miner()->void:
 	if miner_count>=capacity:_toast("Build another refinery for more mining vehicles.");return
 	if metal<600 or oil<150:_toast("Mining vehicle costs 600 Metal and 150 Oil.");return
 	metal-=600;oil-=150;miner_producer=_producer_for(12);miner_finish=_facility_finish(12,miner_producer)+15
-	_save_profile();_dismiss_menus();_toast("Mining vehicle queued in factory #%d (15s)."%(miner_producer+1))
+	_save_profile();_refresh_progress();_toast("Mining vehicle queued in factory #%d (15s)."%(miner_producer+1))
 
 func _sync_industry_visuals()->void:
 	for n in industry_visuals:

@@ -10,7 +10,7 @@ var obstacle_bar:ProgressBar
 var remove_button:Button
 func _init(game:Node3D)->void:host=game
 func day()->int:return floori(maxf(host.colony_time,Time.get_unix_time_from_system())/86400.0)
-func price(finish:float)->int:return maxi(1,ceili((finish-host.colony_time)/60.0))
+func price(finish:float)->int:return maxi(1,ceili((finish-host.colony_time)/600.0))
 func layout()->void:
 	if not is_instance_valid(panel):return
 	var size:Vector2=host.get_viewport().get_visible_rect().size
@@ -20,10 +20,11 @@ func show_panel()->void:
 	obstacle_panel=false
 	if host.mode!="base" or not host.has_colony:return
 	if is_instance_valid(panel):panel.queue_free()
-	panel=host._panel("GODOT COIN • %d / SAVED AD BOOST • %ds"%[host.godot_coins,host.rewarded_ads.boost_seconds])
+	panel=host._panel("GODOT COIN • %d • 1 COIN = 10 MIN"%host.godot_coins)
 	host.ui_root.add_child(panel);host.build_panel.hide();host.units_panel.hide();host.info_panel.hide()
 	var grid:GridContainer=host._scroll_grid(panel,3)
 	var daily:Button=host._button("DAILY LOGIN\n+20 GODOT COIN",claim_daily,Vector2(320,86));daily.disabled=day()<=host.last_coin_day;grid.add_child(daily)
+	grid.add_child(host._button("WATCH AD → +5 GODOT COIN",func():host.rewarded_ads.offer_coins(),Vector2(320,86)))
 	grid.add_child(host._button("AD PRIVACY OPTIONS",func():host.rewarded_ads.privacy(),Vector2(320,86)))
 	for resource in ["Metal","Oil","Credits","Crystal"]:
 		grid.add_child(host._button("10 COIN → 1,000 "+resource,func(r=resource):exchange(r),Vector2(320,86)))
@@ -32,8 +33,7 @@ func show_panel()->void:
 		var b:Dictionary=host.buildings[i]
 		if b.get("job","")=="":continue
 		grid.add_child(host._button("FINISH %s\n%s • %d COIN"%[b.job.to_upper(),host.BUILDING_NAMES[b.type],price(b.finish)],func(index=i):speed_build(index),Vector2(320,86)))
-		if host.rewarded_ads.boost_seconds>0:grid.add_child(host._button("USE SAVED BOOST\n"+host.BUILDING_NAMES[b.type],func(index=i):host.rewarded_ads.use_saved(index),Vector2(320,86)))
-		grid.add_child(host._button("WATCH AD • −50s\n"+host.BUILDING_NAMES[b.type],func(index=i):host.rewarded_ads.request_build(index),Vector2(320,86)))
+		grid.add_child(host._button("WATCH AD • −50 MIN\n"+host.BUILDING_NAMES[b.type],func(index=i):host.rewarded_ads.offer_build(index),Vector2(320,86)))
 	for index in host.buildings.size():
 		var kind:int=host.buildings[index].type
 		if kind not in [6,12,13,16]:continue
@@ -109,7 +109,7 @@ func show_obstacle()->void:
 	host.info_panel.hide();host.build_panel.hide();host.units_panel.hide();host.selected_building=-1
 	host.selection_ring.position=host.art.obstacles[obstacle_id]+Vector3(0,.1,0);host.selection_ring.show()
 	panel.get_child(0).get_child(0).get_child(1).pressed.connect(func():host.selection_ring.hide())
-	var label:=Label.new();label.text="Remove with 1 construction drone\n100 Metal + 50 Oil • 20 seconds";label.add_theme_font_size_override("font_size",17);panel.get_child(0).add_child(label)
+	var label:=Label.new();label.text="Remove with 1 construction drone\n100 Metal + 50 Oil • 20 seconds\n25% chance: 1–5 GODOT COIN";label.add_theme_font_size_override("font_size",17);panel.get_child(0).add_child(label)
 	obstacle_bar=host.status_bars.make_bar(320,20,Color("62dcf1"));obstacle_bar.show_percentage=true;obstacle_bar.add_theme_font_size_override("font_size",14);panel.get_child(0).add_child(obstacle_bar)
 	remove_button=host._button("REMOVE • 100 M / 50 O",clear_selected,Vector2(320,54));panel.get_child(0).add_child(remove_button)
 	layout();update_obstacle_panel()
@@ -136,7 +136,7 @@ func clear_selected()->void:
 	host._refresh_progress();host._sync_industry_visuals();host._save_profile()
 	if is_instance_valid(panel):panel.hide()
 	host.camera_focus=pos;host._position_camera()
-	host._toast("Drone assigned • 100 Metal + 50 Oil • 20 seconds")
+	host._toast("Drone assigned • 100 Metal + 50 Oil • 20 seconds\n25% chance: 1–5 GODOT COIN")
 
 func complete_clear(job:Dictionary)->void:
 	var id:int=int(job.id)

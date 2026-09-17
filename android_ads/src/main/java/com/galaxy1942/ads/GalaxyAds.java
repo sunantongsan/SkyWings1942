@@ -65,7 +65,7 @@ public final class GalaxyAds extends GodotPlugin {
         RewardedAd.load(activity, UNIT, new AdRequest.Builder().build(), new RewardedAdLoadCallback() {
             @Override public void onAdLoaded(@NonNull RewardedAd value) {
                 ad = value; loadedAt = android.os.SystemClock.elapsedRealtime(); ready = true; preparing = false;
-                status("Test ad ready. Tap WATCH AD to reduce this job by 50 seconds.");
+                status("Test ad ready. Choose your reward and tap WATCH AD.");
             }
             @Override public void onAdFailedToLoad(@NonNull LoadAdError error) {
                 ad = null; ready = false; preparing = false;
@@ -101,7 +101,7 @@ public final class GalaxyAds extends GodotPlugin {
     }
     @UsedByGodot public boolean is_showing() { return showing; }
     @UsedByGodot public String get_reward_receipts() {
-        if (getActivity() == null || showing) return "[]";
+        if (getActivity() == null) return "[]";
         return new JSONArray(receipts().getAll().keySet()).toString();
     }
     @UsedByGodot public void ack_reward(String token) {

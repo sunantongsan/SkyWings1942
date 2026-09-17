@@ -84,6 +84,7 @@ jobs:
           set -o pipefail
           timeout 180s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/capture.gd 2>&1 | tee visual-checks.log
           grep -q GALAXY_VISUAL_AND_GAMEPLAY_CHECKS_PASSED visual-checks.log
+          grep -q REPEAT_TRAINING_DIRECT_50_MINUTE_REWARDS_COIN_ADS_AND_RESTART_PASSED visual-checks.log
           if grep -q 'SCRIPT ERROR' visual-checks.log; then exit 1; fi
 
       - name: Upload scene review

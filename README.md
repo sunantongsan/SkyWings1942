@@ -3,6 +3,29 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
+## Current update — v0.20
+
+- Production menus remain open for repeated orders; CLOSE is manual. Each factory
+  retains its own queue, unlocks and capacity checks. Scrolling is preserved.
+- Construction ad: confirm **50 minutes off this job**, applied immediately once
+  the earned event is received. Short jobs finish; excess time is not banked.
+- Separate optional Coin ad: **+5 GODOT Coin**. One Coin now buys ten minutes of
+  instant-completion value (round up the remaining time / 600 seconds).
+- Coin rewards are non-transferable in-game currency, with no cash/crypto redemption.
+  Rocks/trees retain a 25% chance of 1–5 Coins; the removal panel states the odds.
+- Removed Android pause/fullscreen flag gates from receipt delivery: a delayed
+  lifecycle event must not block an already-earned reward. Native receipts and the
+  saved ledger still prevent duplicates and recover callbacks lost across restarts.
+- Existing v0.19 saved boosts migrate once to Coins, rounded up at the new rate.
+- Google test inventory remains enabled. Automated tests cover stale activity flags,
+  3,000-second reduction, short/completed jobs, cancellation, repeated training,
+  duplicate rewards, and saved Coin rewards after restart. Real phone playback is
+  still required to confirm behavior on the affected Android device.
+
+Policy references: [Google rewarded policies](https://support.google.com/admob/answer/7313578?hl=en)
+and [Android rewarded integration](https://developers.google.com/admob/android/rewarded).
+Older version notes below describe historical behavior and are superseded here.
+
 ## New commander flow (v0.4)
 
 Welcome → choose one of 15 homeworlds → confirm an empty colony → follow 13 missions.
