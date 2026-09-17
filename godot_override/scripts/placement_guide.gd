@@ -29,6 +29,9 @@ func update_cursor()->void:
 	if host.mode!="battle":pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
 	var error:=reason(pos)
 	footprint.position=pos+Vector3(0,.16,0);footprint.scale=Vector3.ONE*(.4 if host.mode=="battle" else 1.0)
+	if host.mode=="base":
+		var kind:int=host.buildings[host.moving_building].type if host.moving_building>=0 else host.build_type
+		if kind in [18,19,20]:footprint.scale=Vector3(13.0/6.0,1,10.0/6.0)
 	footprint.material_override.albedo_color=Color(.1,1,.3,.5) if error.is_empty() else Color(1,.1,.1,.55)
 	caption.position=pos+Vector3(0,2,0);caption.text="CAN PLACE" if error.is_empty() else error.to_upper()
 func tick()->void:

@@ -42,7 +42,7 @@ func _valid(data:Variant)->bool:
 	if not data.buildings is Array :return false
 	if not _number(data.get("colony_time",0),0,1e12):return false
 	var queue=data.get("training_queue",[])
-	if not queue is Array or queue.size()>20:return false
+	if not queue is Array or queue.size()>maxi(20,data.buildings.size()*20):return false
 	if not _number(data.get("godot_coins",0),0,1e12):return false
 	if not _number(data.get("last_coin_day",-1),-1,1e9):return false
 	var cleared=data.get("cleared_obstacles",[])
@@ -55,6 +55,7 @@ func _valid(data:Variant)->bool:
 	for job in queue:
 		if not job is Dictionary:return false
 		if not _number(job.get("type",-1),0,23) or not _number(job.get("finish",-1),previous,1e12):return false
+		if job.has("producer") and not _number(job.producer,-1,data.buildings.size()-1):return false
 		previous=float(job.finish)
 	if not _number(data.get("drone_count",1),1,10):return false
 	if not _number(data.get("gold",0),0,1e12):return false
@@ -70,11 +71,21 @@ func _valid(data:Variant)->bool:
 		if not job.get("pos") is Array or job.pos.size()!=3:return false
 		if not _number(job.pos[0],-1e12,1e12) or not _number(job.pos[1],0,0) or not _number(job.pos[2],-1e12,1e12):return false
 		if not _number(job.get("started",-1),0,1e12) or not _number(job.get("finish",-1),float(job.started),1e12):return false
+	var ad=data.get("ad_rewards",{})
+	if not ad is Dictionary:return false
+	if not _number(ad.get("boost_seconds",0),0,1e12):return false
+	if not ad.get("requests",{}) is Dictionary or not ad.get("pending",{}) is Dictionary or not ad.get("processed",[]) is Array:return false
+	for token in ad.get("processed",[]):
+		if not token is String:return false
+	for request in ad.get("requests",{}).values():
+		if not request is Dictionary:return false
+		if not _number(request.get("index",-1),0,data.buildings.size()-1):return false
+		if request.get("job","") not in ["build","upgrade"] or not _number(request.get("started",-1),0,1e12) or not _number(request.get("level",0),1,100):return false
 	var busy:int=clear_jobs.size()
 	var kinds:Dictionary={}
 	for b in data.buildings:
 		if not b is Dictionary:return false
-		if not _number(b.get("type",-1),0,17) or not _number(b.get("level",0),1,100):return false
+		if not _number(b.get("type",-1),0,20) or not _number(b.get("level",0),1,100):return false
 		if not b.get("pos") is Array or b.pos.size()!=3:return false
 		if not _number(b.pos[0],-1e12,1e12) or not _number(b.pos[1],0,0) or not _number(b.pos[2],-1e12,1e12):return false
 		if b.get("job","") not in ["","build","upgrade"]:return false

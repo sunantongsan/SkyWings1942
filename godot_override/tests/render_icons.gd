@@ -1,5 +1,5 @@
 extends SceneTree
-var names := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire"]
+var names := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp"]
 func _initialize() -> void:
 	call_deferred("run")
 func run() -> void:
@@ -24,7 +24,7 @@ func run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://assets/icons/units"))
 	for name in names+units:
 		var folder:="units" if name in units else "buildings"
-		camera.size=5.4 if folder=="units" else 8.5
+		camera.size=5.4 if folder=="units" else (17.0 if name.ends_with("_camp") else 8.5)
 		camera.look_at(Vector3(0,1.0 if folder=="units" else 1.7,0))
 		var model:Node3D=load("res://assets/models/"+name+".glb").instantiate()
 		viewport.add_child(model)

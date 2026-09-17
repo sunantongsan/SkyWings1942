@@ -57,7 +57,7 @@ func jobs()->Array:
 	for b in host.buildings:
 		if b.get("job","")!="":result.append({"name":str(b.job).to_upper()+" • "+host.BUILDING_NAMES[b.type],"start":float(b.started),"finish":float(b.finish)})
 	for job in host.clearing_jobs:result.append({"name":"CLEAR "+("ROCK" if int(job.id)%4==0 else "TREE"),"start":float(job.started),"finish":float(job.finish)})
-	for job in host.training_queue:result.append({"name":host.UNIT_NAMES[int(job.type)],"start":float(job.finish)-host._unit_train_seconds(int(job.type)),"finish":float(job.finish)})
+	for job in host.training_queue:result.append({"name":host.UNIT_NAMES[int(job.type)]+" • BASE #"+str(int(job.get("producer",-1))+1),"start":float(job.finish)-host._unit_train_seconds(int(job.type)),"finish":float(job.finish)})
 	if host.drone_finish>0:result.append({"name":"CONSTRUCTION DRONE","start":host.drone_finish-15,"finish":host.drone_finish})
 	if host.miner_finish>0:result.append({"name":"MINING VEHICLE","start":host.miner_finish-15,"finish":host.miner_finish})
 	return result

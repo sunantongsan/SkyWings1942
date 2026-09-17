@@ -1,7 +1,7 @@
 extends Node3D
 
-const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire"]
-const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300]
+const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire","Vehicle Camp","Air Camp","Infantry Camp"]
+const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300,900,900,700]
 const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander","Rune Guardian","Crystal Golem","Starweaver","Attack Pigeon"]
 const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mechanis","Toxicus","Nebularis","Asteroid Belt","Ruins","Orbit Station","Moon Base","Gas Giant","Wormhole"]
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
@@ -23,6 +23,8 @@ var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
 var rewarded_ads:RefCounted
 var ad_button:Button
+var saved_boost_button:Button
+var app_paused:=false
 var garrison:RefCounted
 var battle_feedback:RefCounted
 var status_bars:RefCounted
@@ -102,7 +104,7 @@ var unit_icon_cache:Dictionary={}
 const GROUND_ASSETS := ["battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander"]
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
-const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25,20,0,40,30]
+const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25,20,0,40,30,10,10,10]
 var home_planet := -1
 var has_colony := false
 var tutorial_step := 0
@@ -115,10 +117,13 @@ var profile_ready := false
 var roads_root:Node3D
 var landing_marker:MeshInstance3D
 var landing_label:Label3D
-const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35]
+const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35,30,30,25]
 var colony_time := 0.0
 var training_queue:Array = []
 var production_kind:=6
+var production_building:=-1
+var drone_producer:=-1
+var miner_producer:=-1
 const UNIT_FACILITY := [6,6,6,6,6,6,6,6,6,6,12,12,12,12,13,13,6,6,13,13,16,16,16,6]
 const UNIT_TIER := [1,2,2,3,4,3,4,5,6,7,1,3,2,4,3,2,2,2,1,5,1,2,3,1]
 var work_label:Label
@@ -126,6 +131,7 @@ var work_label:Label
 
 func _ready()->void:
 	unit_stock.resize(UNIT_NAMES.size())
+	building_levels.resize(BUILDING_NAMES.size())
 	_setup_environment()
 	_setup_world()
 	_setup_camera()
@@ -271,10 +277,11 @@ func _setup_ui()->void:
 	selected_label=Label.new();selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
 	selected_detail=Label.new();selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
 	iv.add_child(_button("PRODUCE",func():
-		if selected_building>=0 and buildings[selected_building].type in [6,12,13,16]:_show_production(buildings[selected_building].type)
+		if selected_building>=0 and buildings[selected_building].type in [6,12,13,16]:_show_production(buildings[selected_building].type,selected_building)
 		else:_toast("Select a production building or Summoning Sanctum."),Vector2(0,54)))
 	iv.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(0,48)))
 	ad_button=_button("WATCH AD • −50s",func():rewarded_ads.request_build(selected_building),Vector2(0,44));iv.add_child(ad_button)
+	saved_boost_button=_button("USE SAVED BOOST",func():rewarded_ads.use_saved(selected_building),Vector2(0,44));iv.add_child(saved_boost_button);saved_boost_button.hide()
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
@@ -302,7 +309,7 @@ func _make_build_panel()->PanelContainer:
 	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(310,52)))
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
-	for i in BUILD_ORDER+[10,11,12,13,14,15,16,17]:
+	for i in BUILD_ORDER+[18,19,20,10,11,12,13,14,15,16,17]:
 		var b:=_asset_button(BUILDING_NAMES[i],"%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
 		var reason:=_build_lock_reason(i)
 		b.disabled=not reason.is_empty()
@@ -313,12 +320,25 @@ func _make_build_panel()->PanelContainer:
 		b.pressed.connect(func(idx=i):_begin_build(idx));grid.add_child(b)
 	return panel
 
-func _facility_finish(kind:int)->float:
-	var finish:float=colony_time
-	if kind==6:finish=maxf(finish,drone_finish)
-	if kind==12:finish=maxf(finish,miner_finish)
+func _producer_for(kind:int)->int:
+	if production_building>=0 and production_building<buildings.size() and buildings[production_building].type==kind:return production_building
+	for i in buildings.size():
+		if buildings[i].type==kind and buildings[i].get("job","")=="":return i
+	return -1
+func _producer_queue_count(index:int)->int:
+	var count:=0
 	for job in training_queue:
-		if UNIT_FACILITY[int(job.type)]==kind:finish=maxf(finish,float(job.finish))
+		if int(job.get("producer",-1))==index:count+=1
+	return count
+func _producer_queue_limit(index:int)->int:
+	return mini(20,8+2*(int(buildings[index].level)-1)) if index>=0 else 0
+func _facility_finish(kind:int,index:int=-1)->float:
+	if index<0:index=_producer_for(kind)
+	var finish:float=colony_time
+	if kind==6 and drone_producer==index:finish=maxf(finish,drone_finish)
+	if kind==12 and miner_producer==index:finish=maxf(finish,miner_finish)
+	for job in training_queue:
+		if int(job.get("producer",-1))==index:finish=maxf(finish,float(job.finish))
 	return finish
 
 func _production_level(kind:int)->int:
@@ -327,20 +347,37 @@ func _production_level(kind:int)->int:
 		if building.type==kind and building.get("job","")=="":level=maxi(level,building.level)
 	return level
 
-func _unit_lock_reason(idx:int)->String:
+func _unit_lock_reason(idx:int,index:int=-1)->String:
 	if tutorial_step<11:return "Complete the Core upgrade mission"
-	if _production_level(UNIT_FACILITY[idx])<UNIT_TIER[idx]:return "%s level %d required"%[BUILDING_NAMES[UNIT_FACILITY[idx]],UNIT_TIER[idx]]
-	if garrison and garrison.stock(UNIT_FACILITY[idx])+garrison.queued(UNIT_FACILITY[idx])>=garrison.capacity(UNIT_FACILITY[idx]):return "Yard full. Upgrade or build another producer."
+	if index<0:index=_producer_for(UNIT_FACILITY[idx])
+	if index<0:return "Build "+BUILDING_NAMES[UNIT_FACILITY[idx]]
+	var producer:Dictionary=buildings[index]
+	if producer.type!=UNIT_FACILITY[idx]:return "Wrong producer for this unit."
+	if producer.get("job","")!="":return "This producer is under construction."
+	if producer.level<UNIT_TIER[idx]:return "This producer needs level %d"%UNIT_TIER[idx]
+	var group:int=garrison.category(idx) if garrison else 0
+	if garrison and garrison.stock(group)+garrison.queued(group)>=garrison.capacity(group):return "Build or upgrade "+["Air Camp","Vehicle Camp","Infantry Camp"][group]
+	if _producer_queue_count(index)>=_producer_queue_limit(index):return "This producer's queue is full."
 	return ""
 
-func _show_production(kind:int)->void:
+func _show_production(kind:int,index:int=-1)->void:
 	production_kind=kind
-	_refresh_progress()
-	units_panel.show();build_panel.hide();info_panel.hide()
+	production_building=index if index>=0 else _producer_for(kind)
+	_dismiss_menus();_refresh_progress();units_panel.show()
 
 func _make_units_panel()->PanelContainer:
-	var level:=_production_level(production_kind)
-	var panel:=_panel("%s / LV %d / %d + %d QUEUED / %d CAPACITY"%[BUILDING_NAMES[production_kind].to_upper(),level,garrison.stock(production_kind) if garrison else 0,garrison.queued(production_kind) if garrison else 0,garrison.capacity(production_kind) if garrison else 0])
+	var producer:int=_producer_for(production_kind)
+	var level:int=buildings[producer].level if producer>=0 else 0
+	var panel:=_panel("%s #%d / LV %d / QUEUE %d OF %d"%[BUILDING_NAMES[production_kind].to_upper(),producer+1,level,_producer_queue_count(producer),_producer_queue_limit(producer)])
+	var picker:=OptionButton.new();picker.custom_minimum_size=Vector2(350,48)
+	var choice:=0
+	for i in buildings.size():
+		if buildings[i].type!=production_kind:continue
+		picker.add_item("%s #%d • LV %d • %d queued"%[BUILDING_NAMES[production_kind],i+1,buildings[i].level,_producer_queue_count(i)],i)
+		if i==producer:picker.select(choice)
+		choice+=1
+	picker.item_selected.connect(func(item:int):_show_production(production_kind,picker.get_item_id(item)))
+	panel.get_child(0).add_child(picker)
 	var tabs:=HBoxContainer.new();panel.get_child(0).add_child(tabs)
 	for kind in [6,12,13,16]:
 		var button:=_button("GODOT SANCTUM" if kind==16 else BUILDING_NAMES[kind].to_upper(),func(k=kind):_show_production(k),Vector2(225,54))
@@ -354,12 +391,12 @@ func _make_units_panel()->PanelContainer:
 	for i in roster:
 		if UNIT_FACILITY[i]!=production_kind:continue
 		var cost:int=_unit_credit_cost(i)
-		var reason:=_unit_lock_reason(i)
+		var reason:=_unit_lock_reason(i,producer)
 		var detail:String="LV %d • Ready %d • %ds\n%d C / %d O"%[UNIT_TIER[i],unit_stock[i],_unit_train_seconds(i),cost,_unit_oil_cost(i)] if reason.is_empty() else "LOCKED • "+reason
 		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,168))
 		b.disabled=not reason.is_empty()
 		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
-		b.pressed.connect(func(idx=i):_train_unit(idx));grid.add_child(b)
+		b.pressed.connect(func(idx=i,owner=producer):_train_unit(idx,owner));grid.add_child(b)
 	if production_kind==12:
 		var miner:=_asset_button("Mining Vehicle","LV 1 • 15s • 600 M / 150 O\nRequires Gold Refinery","units/mining_vehicle",Vector2(230,168))
 		miner.disabled=level<1 or building_levels[10]<1 or miner_finish>0
@@ -382,7 +419,7 @@ func _make_galaxy_panel()->PanelContainer:
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
 
-func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire"][i]
+func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp"][i]
 
 func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->Dictionary:
 	var root:Node3D=art.building(type,enemy)
@@ -446,6 +483,7 @@ func _begin_build(idx:int)->void:
 	var reason:=_build_lock_reason(idx)
 	if not reason.is_empty():_toast(reason);return
 	moving_building=-1
+	_dismiss_menus()
 	coin_system.clearing=false
 	build_type=idx;build_panel.hide();units_panel.hide();galaxy_panel.hide();info_panel.hide();selection_ring.hide()
 	_toast("Tap clear terrain to place "+BUILDING_NAMES[idx]+". The glowing site is a suggestion.")
@@ -466,7 +504,7 @@ func _upgrade_selected()->void:
 	metal-=cost
 	b["job"]="upgrade";b["started"]=colony_time;b["finish"]=colony_time+_upgrade_seconds(b.level+1)
 	_add_work_marker(b)
-	_refresh_progress();_save_profile();_select_building_at(b.pos)
+	_refresh_progress();_save_profile();_dismiss_menus()
 	_toast("Upgrade started. The new level unlocks when construction finishes.")
 
 func _upgrade_seconds(target_level:int)->int:
@@ -484,21 +522,21 @@ func _unit_oil_cost(kind:int)->int:return 5 if kind==23 else int(_unit_credit_co
 func _unit_train_seconds(kind:int)->int:return 3 if kind==23 else 5+kind*2
 func _is_air_unit(kind:int)->bool:return kind<10 or kind==23
 
-func _train_unit(idx:int)->void:
+func _train_unit(idx:int,producer:int=-1)->void:
 	if mode!="base":return
 	if idx<0 or idx>=UNIT_NAMES.size():return
-	var reason:=_unit_lock_reason(idx)
+	if producer<0:producer=_producer_for(UNIT_FACILITY[idx])
+	var reason:=_unit_lock_reason(idx,producer)
 	if not reason.is_empty():_toast(reason);return
 	var c:=_unit_credit_cost(idx)
 	if credits<c or oil<_unit_oil_cost(idx):_toast("NOT ENOUGH RESOURCES");return
-	if training_queue.size()>=20:_toast("Training queue full (20).");return
 	credits-=c;oil-=_unit_oil_cost(idx);selected_unit=idx
-	var start:float=_facility_finish(UNIT_FACILITY[idx])
-	training_queue.append({"type":idx,"finish":start+_unit_train_seconds(idx)})
+	var start:float=_facility_finish(UNIT_FACILITY[idx],producer)
+	training_queue.append({"type":idx,"producer":producer,"finish":start+_unit_train_seconds(idx)})
 	training_queue.sort_custom(func(a,b):return float(a.finish)<float(b.finish))
 	_refresh_progress();_setup_life();_save_profile()
-	units_panel.show();onboarding.refresh_guide()
-	_toast("%s added to training queue (%d)."%[UNIT_NAMES[idx],training_queue.size()])
+	_dismiss_menus();onboarding.refresh_guide()
+	_toast("%s queued at %s #%d."%[UNIT_NAMES[idx],BUILDING_NAMES[UNIT_FACILITY[idx]],producer+1])
 
 func _toggle_build()->void:
 	if mode!="base" or not has_colony:return
@@ -565,6 +603,15 @@ func _placement_reason(pos:Vector3)->String:
 		if not reason.is_empty():return reason
 		if metal<BUILDING_COST[build_type] or oil<_building_oil_cost(build_type):return "Not enough Metal or Oil."
 	else:return "Select a building first."
+	var placing_kind:int=buildings[moving_building].type if moving_building>=0 else build_type
+	if placing_kind in [18,19,20]:
+		for i in buildings.size():
+			if i==moving_building:continue
+			var other:Dictionary=buildings[i]
+			var margin:Vector2=Vector2(14,11) if other.type in [18,19,20] else Vector2(9,8)
+			if absf(pos.x-other.pos.x)<margin.x and absf(pos.z-other.pos.z)<margin.y:return "The whole camp needs clear ground."
+		for obstacle in art.obstacles.values():
+			if absf(pos.x-obstacle.x)<9 and absf(pos.z-obstacle.z)<8:return "Clear the rocks or trees before building this camp."
 	if garrison and garrison.blocked(pos,moving_building):return "Keep the garrison yards clear."
 	for i in buildings.size():
 		if i!=moving_building and buildings[i].pos.distance_to(pos)<6.1:return "Too close to another building."
@@ -694,8 +741,9 @@ func _select_building_at(pos:Vector3)->void:
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
 	selected_detail.text="HP %d/%d\nUpgrade: %d Metal • %s\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,_duration(_upgrade_seconds(b.level+1)),weapon]
+	if b.type in [18,19,20]:selected_detail.text+="\nCapacity: %d → %d next star\nMaximum 3 camps of this type"%[garrison.capacity_for_level(b.level),garrison.capacity_for_level(b.level+1)]
 	if b.type in [6,12,13,16]:
-		selected_detail.text+="\nYard: %d slots → %d next star"%[garrison.capacity_for_level(b.level),garrison.capacity_for_level(b.level+1)]
+		selected_detail.text+="\nOwn queue: %d / %d"%[_producer_queue_count(best),_producer_queue_limit(best)]
 		var next_units:Array[String]=[]
 		for kind in range(UNIT_NAMES.size()):
 			if UNIT_FACILITY[kind]==b.type and UNIT_TIER[kind]==b.level+1:next_units.append(UNIT_NAMES[kind])
@@ -722,6 +770,7 @@ func _unhandled_input(event:InputEvent)->void:
 	# Keep touch-to-mouse emulation for Control buttons; world gestures use raw touches.
 	if event is InputEventMouse and event.device==-1:return
 	if onboarding and onboarding.screen.visible:return
+	if rewarded_ads and is_instance_valid(rewarded_ads.result_panel) and rewarded_ads.result_panel.visible:return
 	if galaxy_panel.visible or build_panel.visible or units_panel.visible or victory_panel.visible:return
 	if event is InputEventMouseMotion or event is InputEventMouseButton or event is InputEventScreenTouch or event is InputEventScreenDrag:placement_guide.point_at(event.position)
 	if event is InputEventMouseButton:
@@ -926,10 +975,15 @@ func _found_colony(planet:int)->void:
 func _build_lock_reason(kind:int)->String:
 	if kind<0 or kind>=BUILDING_NAMES.size():return "Unknown structure."
 	if _builder_busy():return "Construction drone busy."
-	if kind>=14:
+	if kind>=14 and kind<=17:
 		if tutorial_step<11:return "Complete the Core upgrade mission"
 		if kind>14 and building_levels[14]==0:return "Build a Godot Citadel first"
 		if kind>15 and building_levels[15]==0:return "Build an Astral Well first"
+	if kind in [18,19,20]:
+		var count:=0
+		for b in buildings:
+			if b.type==kind:count+=1
+		if count>=3:return "Maximum 3 camps of this type."
 	if kind==0 and building_levels[0]>0:return "Your colony already has a Galactic Core."
 	if kind<10 and tutorial_step<10 and kind!=BUILD_ORDER[tutorial_step]:return "Next: "+BUILDING_NAMES[BUILD_ORDER[tutorial_step]]
 	if kind>=10 and building_levels[3]==0:return "Complete an Oil Processor first."
@@ -987,16 +1041,19 @@ func _ensure_roads()->void:
 	if roads_root or buildings.is_empty():return
 	roads_root=Node3D.new();home_root.add_child(roads_root);art.roads(roads_root)
 
-func _save_profile()->void:
-	if not has_colony or not profile_ready:return
+func _save_profile()->bool:
+	if not has_colony or not profile_ready:return false
 	var records:Array=[]
 	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
-	var data:Dictionary={"schema":1,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
-	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.")
+	var data:Dictionary={"schema":1,"ad_rewards":rewarded_ads.save_state() if rewarded_ads else {},"drone_producer":drone_producer,"miner_producer":miner_producer,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.");return false
+	return true
 
 func _load_profile()->void:
 	var data:Dictionary=profile_store.read_profile(profile_path)
 	if data.is_empty():return
+	rewarded_ads.load_state(data.get("ad_rewards",{}))
+	drone_producer=int(data.get("drone_producer",-1));miner_producer=int(data.get("miner_producer",-1))
 	godot_coins=int(data.get("godot_coins",0));last_coin_day=int(data.get("last_coin_day",-1));cleared_obstacles=data.get("cleared_obstacles",[]);clearing_jobs=data.get("clearing_jobs",[])
 	drone_finish=float(data.get("drone_finish",0))
 	gold=float(data.get("gold",0));drone_count=int(data.get("drone_count",1));miner_count=int(data.get("miner_count",0));miner_finish=float(data.get("miner_finish",0))
@@ -1009,10 +1066,16 @@ func _load_profile()->void:
 		if b.get("job","")!="":
 			for key in ["job","started","finish"]:placed[key]=b[key]
 			_add_work_marker(placed)
+	for job in training_queue:
+		if not job.has("producer"):job["producer"]=_producer_for(UNIT_FACILITY[int(job.type)])
+	if drone_finish>0 and drone_producer<0:drone_producer=_producer_for(6)
+	if miner_finish>0 and miner_producer<0:miner_producer=_producer_for(12)
 	_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()))
 	_recalculate_colony();_ensure_roads()
 
 func _notification(what:int)->void:
+	if what==NOTIFICATION_APPLICATION_PAUSED:app_paused=true
+	if what==NOTIFICATION_APPLICATION_RESUMED:app_paused=false
 	if what==NOTIFICATION_APPLICATION_PAUSED or what==NOTIFICATION_WM_CLOSE_REQUEST:_save_profile()
 	if what==NOTIFICATION_APPLICATION_RESUMED and has_colony:_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()));_save_profile()
 
@@ -1097,7 +1160,7 @@ func _update_work_display()->void:
 func _begin_move()->void:
 	if mode!="base" or selected_building<0:return
 	if buildings[selected_building].get("job","")!="":_toast("Wait until this construction finishes.");return
-	moving_building=selected_building;build_type=-1;info_panel.hide()
+	moving_building=selected_building;build_type=-1;_dismiss_menus()
 	_toast("Tap clear terrain to relocate this structure for free.")
 
 func _move_building(pos:Vector3)->void:
@@ -1106,33 +1169,34 @@ func _move_building(pos:Vector3)->void:
 	var reason:=_placement_reason(pos)
 	if not reason.is_empty():_toast(reason);return
 	var b:Dictionary=buildings[moving_building];b.pos=pos;b.node.position=pos;moving_building=-1
-	garrison.signature="";garrison.sync();_sync_industry_visuals();_save_profile();_select_building_at(pos);_toast("Structure and attached yard relocated.")
+	garrison.signature="";garrison.sync();_sync_industry_visuals();_save_profile();_dismiss_menus();_toast("Structure relocated.")
 
 func _building_oil_cost(kind:int)->int:
+	if kind>=18:return 100
 	return [300,150,250,200][kind-14] if kind>=14 else (350 if kind==10 else (200 if kind==11 else 0))
 
 func _buy_drone()->void:
 	if not has_colony or mode!="base":return
-	if _production_level(6)<1:_toast("Complete a Star Hangar first.");return
+	if _producer_for(6)<0 or buildings[_producer_for(6)].get("job","")!="":_toast("Complete a Star Hangar first.");return
 	if drone_finish>0:_toast("Construction drone is in production.");return
 	if drone_count>=10:_toast("Maximum 10 construction drones.");return
 	var cost:int=DRONE_PRICES[drone_count-1]
 	if gold<cost:_toast("Mine %d Gold to unlock the next drone."%cost);return
-	gold-=cost;drone_finish=_facility_finish(6)+15
+	gold-=cost;drone_producer=_producer_for(6);drone_finish=_facility_finish(6,drone_producer)+15
 	_sync_industry_visuals();_refresh_progress();_save_profile()
-	_toast("Construction drone queued in Star Hangar (15s).")
+	_dismiss_menus();_toast("Construction drone queued in Star Hangar #%d (15s)."%(drone_producer+1))
 
 func _build_miner()->void:
 	if mode!="base" or building_levels[10]==0:_toast("Complete a Gold Refinery first.");return
-	if _production_level(12)<1:_toast("Complete a Vehicle Factory first.");return
+	if _producer_for(12)<0 or buildings[_producer_for(12)].get("job","")!="":_toast("Complete a Vehicle Factory first.");return
 	if miner_finish>0:_toast("A mining vehicle is already in production.");return
 	var capacity:=0
 	for b in buildings:
 		if b.type==10 and b.get("job","")!="build":capacity+=3
 	if miner_count>=capacity:_toast("Build another refinery for more mining vehicles.");return
 	if metal<600 or oil<150:_toast("Mining vehicle costs 600 Metal and 150 Oil.");return
-	metal-=600;oil-=150;miner_finish=_facility_finish(12)+15
-	_save_profile();_toast("Mining vehicle production started (15 seconds).")
+	metal-=600;oil-=150;miner_producer=_producer_for(12);miner_finish=_facility_finish(12,miner_producer)+15
+	_save_profile();_dismiss_menus();_toast("Mining vehicle queued in factory #%d (15s)."%(miner_producer+1))
 
 func _sync_industry_visuals()->void:
 	for n in industry_visuals:
@@ -1451,3 +1515,10 @@ func _fling_debris(piece:Node3D,offset:Vector3)->void:
 
 func _clear_wrecks()->void:
 	for child in wreck_root.get_children():wreck_root.remove_child(child);child.queue_free()
+
+func _dismiss_menus()->void:
+	for panel in [build_panel,units_panel,info_panel,galaxy_panel]:
+		if is_instance_valid(panel):panel.hide()
+	if coin_system and is_instance_valid(coin_system.panel):coin_system.panel.hide()
+	if rewarded_ads and is_instance_valid(rewarded_ads.result_panel):rewarded_ads.result_panel.hide()
+	if is_instance_valid(selection_ring):selection_ring.hide()

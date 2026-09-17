@@ -106,7 +106,7 @@ func show_help()->void:
 	help_return=page
 	page="help";_clear()
 	column.add_child(_label("COMMANDER'S FIELD GUIDE",30))
-	var text:=_label("1   CHOOSE A WORLD — settle a permanent home for this colony.\n\n2   BUILD — follow the mission card and choose a green tile; red tiles are blocked (the glowing site is a suggestion).\n\n3   GATHER — production begins when the matching facility is built.\n\n4   UPGRADE — tap a building, then use UPGRADE to improve it.\n\n5   TRAIN — Star Hangar builds aircraft and drones; Vehicle Factory builds vehicles; Barracks trains troops. Upgrade each facility to unlock higher-tier units. Training uses Credits and Oil. Mining vehicles require a Vehicle Factory and Gold Refinery.\n\n6   RAID — open the Galaxy Map, choose a rival outpost and return with rewards.\n\nDRAG to move the camera. PINCH or use + / − to zoom. Progress saves on this device. Construction and training continue while away. Offline resource production is capped at 8 hours. Raids are against AI. Select portraits on the right and tap the green outer area to send reinforcements during combat. Choose ALL RESERVES to deploy every remaining unit of that type. Deployed troops are consumed; unused reserves stay home.\n\nGODOT COIN — tap the GODOT COIN card in the top resource bar for daily rewards, resource exchange and speed-ups. Tap a rock or tree, then REMOVE to assign a free construction drone to an obstacle: 100 Metal + 50 Oil, 20 seconds. Clearing may reward coins and continues while away. Health bars appear above units and buildings; cyan bars and ACTIVE JOBS show timed work.",18,Color("bed3da"));text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	var text:=_label("1   CHOOSE A WORLD — settle a permanent home for this colony.\n\n2   BUILD — follow the mission card and choose a green tile; red tiles are blocked (the glowing site is a suggestion).\n\n3   GATHER — production begins when the matching facility is built.\n\n4   UPGRADE — tap a building, then use UPGRADE to improve it.\n\n5   TRAIN — Star Hangar builds aircraft and drones; Vehicle Factory builds vehicles; Barracks trains troops. Upgrade each facility to unlock higher-tier units. Each selected producer has its own queue and level unlocks. Build separate Air, Vehicle and Infantry Camps for army space (maximum three of each); each star adds five slots. Training uses Credits and Oil. Mining vehicles require a Vehicle Factory and Gold Refinery.\n\n6   RAID — open the Galaxy Map, choose a rival outpost and return with rewards.\n\nDRAG to move the camera. PINCH or use + / − to zoom. Progress saves on this device. Construction and training continue while away. Offline resource production is capped at 8 hours. Raids are against AI. Select portraits on the right and tap the green outer area to send reinforcements during combat. Choose ALL RESERVES to deploy every remaining unit of that type. Deployed troops are consumed; unused reserves stay home.\n\nGODOT COIN — tap the GODOT COIN card in the top resource bar for daily rewards, resource exchange and speed-ups. Tap a rock or tree, then REMOVE to assign a free construction drone to an obstacle: 100 Metal + 50 Oil, 20 seconds. Clearing may reward coins and continues while away. Health bars appear above units and buildings; cyan bars and ACTIVE JOBS show timed work.",18,Color("bed3da"));text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	var scroll:=preload("res://scripts/touch_scroll.gd").new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.custom_minimum_size.y=345;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.add_child(text);text.size_flags_horizontal=Control.SIZE_EXPAND_FILL;column.add_child(scroll)
 	column.add_child(host._button("BACK TO EXPEDITION",func():
 		if help_return=="welcome":welcome()
@@ -141,6 +141,10 @@ func refresh_guide()->void:
 		guide_title.text="COLONY ESTABLISHED"
 		guide_text.text="Training complete, Commander. Expand your base, upgrade facilities and explore the galaxy."
 		guide_action.text="CONTINUE BUILDING"
+	if step==11 and host.garrison.capacity(0)<8:
+		guide_title.text="12 / 13 · BUILD AN AIR CAMP"
+		guide_text.text="Build a separate Air Camp on clear ground. It holds 10 aircraft; then train eight Fighters."
+		guide_action.text="BUILD AIR CAMP"
 	if host._builder_busy() and step<=10:guide_action.text="CONSTRUCTION IN PROGRESS"
 	layout()
 
@@ -150,7 +154,9 @@ func _guide_pressed()->void:
 	elif step==10:
 		for b in host.buildings:
 			if b.type==0:host._select_building_at(b.pos);break
-	elif step==11:host._toggle_units()
+	elif step==11:
+		if host.garrison.capacity(0)<8:host._begin_build(19)
+		else:host._toggle_units()
 	elif step==12:host._toggle_galaxy()
 	else:host.tutorial_dismissed=true;host._save_profile();refresh_guide()
 

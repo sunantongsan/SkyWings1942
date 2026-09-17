@@ -1,6 +1,8 @@
 package com.galaxy1942.ads;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
+import org.json.JSONArray;
 import androidx.annotation.NonNull;
 import com.google.android.gms.ads.*;
 import com.google.android.gms.ads.rewarded.*;
@@ -16,7 +18,8 @@ public final class GalaxyAds extends GodotPlugin {
     private static final String UNIT = "ca-app-pub-3940256099942544/5224354917";
     private RewardedAd ad;
     private volatile boolean ready = false;
-    private boolean preparing = false, initialized = false, consentChecked = false, showing = false;
+    private boolean preparing = false, initialized = false, consentChecked = false;
+    private volatile boolean showing = false;
     private long loadedAt = 0;
     private ConsentInformation consent;
     public GalaxyAds(Godot godot) { super(godot); }
@@ -85,9 +88,24 @@ public final class GalaxyAds extends GodotPlugin {
                 }
             });
             current.show(activity, reward -> {
-                if (!rewarded[0]) { rewarded[0] = true; emitSignal("reward_earned", token); }
+                if (!rewarded[0]) {
+                    rewarded[0] = true;
+                    activity.getSharedPreferences("galaxy_google_earned_receipts", 0).edit().putBoolean(token, true).commit();
+                    emitSignal("reward_earned", token);
+                }
             });
         });
+    }
+    private SharedPreferences receipts() {
+        return getActivity().getSharedPreferences("galaxy_google_earned_receipts", 0);
+    }
+    @UsedByGodot public boolean is_showing() { return showing; }
+    @UsedByGodot public String get_reward_receipts() {
+        if (getActivity() == null || showing) return "[]";
+        return new JSONArray(receipts().getAll().keySet()).toString();
+    }
+    @UsedByGodot public void ack_reward(String token) {
+        if (getActivity() != null) receipts().edit().remove(token).commit();
     }
     @UsedByGodot public void privacy_options() {
         Activity activity = getActivity(); if (activity == null) return;

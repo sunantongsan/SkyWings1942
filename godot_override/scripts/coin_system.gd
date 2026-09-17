@@ -20,7 +20,7 @@ func show_panel()->void:
 	obstacle_panel=false
 	if host.mode!="base" or not host.has_colony:return
 	if is_instance_valid(panel):panel.queue_free()
-	panel=host._panel("GODOT COIN • %d / DAILY REWARDS & SPEED UPS"%host.godot_coins)
+	panel=host._panel("GODOT COIN • %d / SAVED AD BOOST • %ds"%[host.godot_coins,host.rewarded_ads.boost_seconds])
 	host.ui_root.add_child(panel);host.build_panel.hide();host.units_panel.hide();host.info_panel.hide()
 	var grid:GridContainer=host._scroll_grid(panel,3)
 	var daily:Button=host._button("DAILY LOGIN\n+20 GODOT COIN",claim_daily,Vector2(320,86));daily.disabled=day()<=host.last_coin_day;grid.add_child(daily)
@@ -32,17 +32,20 @@ func show_panel()->void:
 		var b:Dictionary=host.buildings[i]
 		if b.get("job","")=="":continue
 		grid.add_child(host._button("FINISH %s\n%s • %d COIN"%[b.job.to_upper(),host.BUILDING_NAMES[b.type],price(b.finish)],func(index=i):speed_build(index),Vector2(320,86)))
+		if host.rewarded_ads.boost_seconds>0:grid.add_child(host._button("USE SAVED BOOST\n"+host.BUILDING_NAMES[b.type],func(index=i):host.rewarded_ads.use_saved(index),Vector2(320,86)))
 		grid.add_child(host._button("WATCH AD • −50s\n"+host.BUILDING_NAMES[b.type],func(index=i):host.rewarded_ads.request_build(index),Vector2(320,86)))
-	for kind in [6,12,13,16]:
-		var finish:=first_finish(kind)
+	for index in host.buildings.size():
+		var kind:int=host.buildings[index].type
+		if kind not in [6,12,13,16]:continue
+		var finish:=first_finish(kind,index)
 		if finish<=host.colony_time:continue
-		grid.add_child(host._button("FINISH NEXT UNIT\n%s • %d COIN"%[host.BUILDING_NAMES[kind],price(finish)],func(k=kind):speed_line(k),Vector2(320,86)))
+		grid.add_child(host._button("FINISH NEXT UNIT\n%s #%d • %d COIN"%[host.BUILDING_NAMES[kind],index+1,price(finish)],func(k=kind,owner=index):speed_line(k,owner),Vector2(320,86)))
 	if obstacle_id>=0 and host.art.obstacles.has(obstacle_id):
 		grid.add_child(host._button("ASSIGN DRONE TO CLEAR\n100 Metal + 50 Oil • 20s",clear_selected,Vector2(320,86)))
 	layout()
 func claim_daily()->void:
 	if host.mode!="base" or not host.has_colony or day()<=host.last_coin_day:return
-	host.last_coin_day=day();host.godot_coins+=20;host._save_profile();show_panel();host._toast("Daily reward: +20 GODOT COIN")
+	host.last_coin_day=day();host.godot_coins+=20;host._save_profile();host._dismiss_menus();host._toast("Daily reward: +20 GODOT COIN")
 func exchange(resource:String)->void:
 	if host.mode!="base" or resource not in ["Metal","Oil","Credits","Crystal"]:return
 	if host.godot_coins<10:host._toast("Requires 10 GODOT COIN");return
@@ -52,7 +55,7 @@ func exchange(resource:String)->void:
 		"Oil":host.oil=minf(1e12,host.oil+1000)
 		"Credits":host.credits=minf(1e12,host.credits+1000)
 		"Crystal":host.crystal=minf(1e12,host.crystal+1000)
-	host._save_profile();show_panel();host._update_top_bar()
+	host._save_profile();host._dismiss_menus();host._update_top_bar()
 func speed_build(index:int)->void:
 	if host.mode!="base" or index<0 or index>=host.buildings.size():return
 	var b:Dictionary=host.buildings[index]
@@ -60,28 +63,30 @@ func speed_build(index:int)->void:
 	var cost:=price(b.finish)
 	if host.godot_coins<cost:host._toast("Not enough GODOT COIN");return
 	host.godot_coins-=cost;b.finish=host.colony_time+.001
-	host._advance_colony(host.colony_time+.002);host._save_profile();show_panel()
-func first_finish(kind:int)->float:
+	host._advance_colony(host.colony_time+.002);host._save_profile();host._dismiss_menus()
+func first_finish(kind:int,index:int=-1)->float:
+	if index<0:index=host._producer_for(kind)
 	var finish:=INF
-	if kind==6 and host.drone_finish>0:finish=minf(finish,host.drone_finish)
-	if kind==12 and host.miner_finish>0:finish=minf(finish,host.miner_finish)
+	if kind==6 and host.drone_finish>0 and host.drone_producer==index:finish=minf(finish,host.drone_finish)
+	if kind==12 and host.miner_finish>0 and host.miner_producer==index:finish=minf(finish,host.miner_finish)
 	for job in host.training_queue:
-		if host.UNIT_FACILITY[int(job.type)]==kind:finish=minf(finish,job.finish)
+		if int(job.get("producer",-1))==index:finish=minf(finish,job.finish)
 	return 0.0 if finish==INF else finish
-func speed_line(kind:int)->void:
+func speed_line(kind:int,index:int=-1)->void:
 	if host.mode!="base":return
-	var finish:=first_finish(kind)
+	if index<0:index=host._producer_for(kind)
+	var finish:=first_finish(kind,index)
 	if finish<=host.colony_time:return
 	var cost:=price(finish)
 	if host.godot_coins<cost:host._toast("Not enough GODOT COIN");return
 	host.godot_coins-=cost
 	var shift:float=finish-host.colony_time-.001
 	for job in host.training_queue:
-		if host.UNIT_FACILITY[int(job.type)]==kind:job.finish-=shift
-	if kind==6 and host.drone_finish>0:host.drone_finish-=shift
-	if kind==12 and host.miner_finish>0:host.miner_finish-=shift
+		if int(job.get("producer",-1))==index:job.finish-=shift
+	if kind==6 and host.drone_finish>0 and host.drone_producer==index:host.drone_finish-=shift
+	if kind==12 and host.miner_finish>0 and host.miner_producer==index:host.miner_finish-=shift
 	host.training_queue.sort_custom(func(a,b):return float(a.finish)<float(b.finish))
-	host._advance_colony(host.colony_time+.002);host._save_profile();show_panel()
+	host._advance_colony(host.colony_time+.002);host._save_profile();host._dismiss_menus()
 func begin_clear()->void:
 	if host.mode!="base":return
 	clearing=true;obstacle_id=-1;host.build_type=-1;host.moving_building=-1

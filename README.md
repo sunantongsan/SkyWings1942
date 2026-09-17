@@ -235,3 +235,54 @@ bridge. Do not test live inventory by clicking your own ads. Google references:
 - https://developers.google.com/admob/android/rewarded
 - https://developers.google.com/admob/android/privacy
 - https://docs.godotengine.org/en/4.4/tutorials/platform/android/android_plugin.html
+
+## v0.19 — separate buildable camps, independent producers, durable ad rewards
+
+This supersedes v0.18's automatic attached yards and producer-based army capacity.
+Build **Vehicle Camp**, **Air Camp**, and **Infantry Camp** from BUILD. Each category
+allows at most **three** camps including those under construction. Each completed
+camp holds 10 units at one star, +5 per additional star. Camps cost Metal + 100 Oil,
+require Power, reserve their entire 13 x 10 m footprint, and can be moved/upgraded
+like other structures. No automatic camps or free obstacle removal are added to old
+saves. Old troops and queued orders are preserved; build camps before ordering more.
+The new-player guide requests an Air Camp before its first eight Fighters.
+
+Camp capacity is pooled by **unit movement/category**, not producer: aircraft and
+flying drones use Air Camps; tanks, artillery, mechs and golems use Vehicle Camps;
+infantry and other humanoids use Infantry Camps. Mining vehicles and construction
+workers retain their existing separate workforce limits. Camp stock includes queue
+reservations. Representative models remain bounded, while labels report actual stock.
+
+Each training order records its owning building's stable list index (`producer`).
+The selected producer's own star level controls unlocks. Each producer has an
+independent serial queue (8 entries at one star, +2 per star, capped at 20), so two
+factories finish units concurrently. Coin queue speed-up shifts only that producer's
+orders; queued worker/drone work keeps its own producer reference too. Old queues
+without owner fields migrate to the first matching completed producer, retaining
+saved finish timestamps. Buildings are not deleted/reordered by the game.
+
+Accepted build/move/train/upgrade/exchange/speed-up actions close action menus. Tabs
+and the producer selector stay open while browsing. BUILD now includes real GLB
+camp assets with separately rendered icons, not an atlas or composite UI image.
+
+### Reward delivery fix
+
+v0.18 relied on live callbacks and dropped unused time when a job completed while
+an ad played. v0.19 persists each real Google `OnUserEarnedReward` token in Android
+SharedPreferences **before** notifying Godot. Godot polls receipts after fullscreen
+ads close, matches the persisted original job, and atomically saves the reward
+ledger with the shortened deadline before acknowledging the native receipt.
+Missed callbacks/activity restarts are recoverable; duplicates cannot grant twice.
+Closing an ad without Google's earned event still grants nothing.
+
+Each earned ad provides **50 seconds**: use up to 50 on the original job, retaining
+unused seconds in a saved boost balance if that job finished or has less time left.
+Use the remainder from USE SAVED BOOST on a later construction/upgrade. A visible
+AD REWARD RECEIVED panel confirms time used and the saved balance after the ad
+closes. The native receipt is retried if saving fails. No retroactive reward is
+invented for v0.18 ads whose earned callbacks were never recorded.
+
+Google **demo** App ID / rewarded unit ID remain enabled; no monetized inventory.
+Desktop tests simulate native receipts, close-before-reward, duplicate callbacks,
+restart recovery and completed-job carryover. GitHub builds the native bridge and
+APK; real Google network playback still requires testing on the user's Android phone.

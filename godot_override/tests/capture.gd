@@ -113,8 +113,12 @@ func run()->void:
 	game.info_panel.hide();game.selection_ring.hide()
 	game._toggle_build();await shot("03-build-menu");game.build_panel.hide()
 
+	game._begin_build(19);game._place_building(Vector3(-70,0,0));game._advance_colony(game.colony_time+31)
+	assert(game.garrison.capacity(0)==10,"Tutorial builds a real Air Camp before training")
 	game._toggle_units();await process_frame;await process_frame
-	var sc:ScrollContainer=game.units_panel.find_children("*","ScrollContainer",true,false)[0]
+	var sc:ScrollContainer
+	for candidate in game.units_panel.find_children("*","ScrollContainer",true,false):
+		if candidate.get_child_count()>0 and candidate.get_child(0) is GridContainer:sc=candidate;break
 	var funds_before:float=game.credits
 	var swipe_start:Vector2=sc.get_global_rect().get_center()
 	var swipe_press:=InputEventScreenTouch.new();swipe_press.index=0;swipe_press.position=swipe_start;swipe_press.pressed=true;Input.parse_input_event(swipe_press);await process_frame
@@ -182,7 +186,7 @@ func run()->void:
 	assert(game.map_index==2,"Returning from battle must restore the chosen world")
 	game._save_profile()
 	var saved:Dictionary=game.profile_store.read_profile(QA_SAVE)
-	assert(saved.tutorial_step==13 and saved.home_planet==2 and saved.buildings.size()==10)
+	assert(saved.tutorial_step==13 and saved.home_planet==2 and saved.buildings.size()==11)
 	game.queue_free();await process_frame
 	await open_game();game.onboarding.enter_colony()
 	assert(game.tutorial_step==13 and game.home_planet==2 and game.unit_stock[0]==0)
@@ -211,14 +215,16 @@ func run()->void:
 	game._advance_colony(game.colony_time+41)
 	assert(game.building_levels[10]==1 and game.gold==no_gold,"Refinery requires a mining vehicle")
 	game._build_miner();assert(game.miner_finish==0,"Mining vehicle requires a factory")
+	game._begin_build(1);game._place_building(Vector3(80,0,0))
+	game._advance_colony(game.colony_time+16)
 	game._begin_build(12);game._place_building(Vector3(43,0,0))
 	game._advance_colony(game.colony_time+46)
 	assert(game.building_levels[12]==1)
-	game._begin_build(1);game._place_building(Vector3(80,0,0))
-	game._advance_colony(game.colony_time+16)
 	game._begin_build(13);game._place_building(Vector3(70,0,0))
 	game._advance_colony(game.colony_time+31)
 	assert(game.building_levels[13]==1)
+	for pair in [[18,16],[20,32]]:
+		game._begin_build(pair[0]);game._place_building(Vector3(-70,0,pair[1]));game._advance_colony(game.colony_time+31)
 	assert(game._unit_lock_reason(10).is_empty() and game._unit_lock_reason(18).is_empty())
 	assert(not game._unit_lock_reason(11).is_empty() and not game._unit_lock_reason(19).is_empty())
 	var old_queue:int=game.training_queue.size()
@@ -447,7 +453,7 @@ func run()->void:
 		if clear_of_buildings:removed=int(id);break
 	assert(removed>=0)
 	var obstacle_pos:Vector3=game.art.obstacles[removed]
-	game.coin_system.panel.hide();game.coin_system.clearing=false
+	game._dismiss_menus();game.coin_system.clearing=false
 	game.camera_focus=obstacle_pos;game._position_camera();game.camera.size=24
 	var selection_cost:float=game.metal
 	await touch_at(game.camera.unproject_position(obstacle_pos))
@@ -477,14 +483,14 @@ func run()->void:
 	var coin_card:Control=game.header.get_child(7)
 	await touch_at(coin_card.get_global_rect().get_center())
 	assert(is_instance_valid(game.coin_system.panel) and game.coin_system.panel.visible,"Coin resource card opens its menu")
-	game.coin_system.panel.hide()
+	game._dismiss_menus()
 	game._advance_colony(float(clear_job.started)+10)
 	await touch_at(game.camera.unproject_position(Vector3(clear_job.pos[0],0,clear_job.pos[2])))
 	game.coin_system.tick();game.status_bars.tick()
 	assert(game.coin_system.obstacle_bar.visible and is_equal_approx(game.coin_system.obstacle_bar.value,50),"Reselected obstacle shows halfway progress")
 	assert(game.coin_system.remove_button.disabled,"Active removal cannot be purchased again")
 	await shot("26-obstacle-removal-progress")
-	game.coin_system.panel.hide()
+	game._dismiss_menus()
 	game._advance_colony(float(clear_job.finish)+1)
 	game.status_bars.tick();assert(not game.status_bars.world_rows.has("clear_"+str(removed)),"Completed job removes its progress bar")
 	assert(game.clearing_jobs.is_empty() and not game._builder_busy())
@@ -501,7 +507,7 @@ func run()->void:
 	var upgrade_job:Dictionary=game.buildings[0]
 	game._advance_colony((float(upgrade_job.started)+float(upgrade_job.finish))*.5)
 	game._train_unit(10);game._train_unit(18)
-	game.units_panel.hide();game.coin_system.panel.hide();game.info_panel.hide()
+	game.units_panel.hide();game._dismiss_menus();game.info_panel.hide()
 	game.camera_focus=upgrade_job.pos;game.camera.size=36;game._position_camera();game.status_bars.tick()
 	assert(is_equal_approx(game.status_bars.world_rows[str(upgrade_job.node.get_instance_id())].task.value,50),"Upgrade bar reflects elapsed time")
 	assert(game.status_bars.jobs().size()>=3,"Independent production and building timers each have progress bars")
@@ -509,7 +515,7 @@ func run()->void:
 	game.coin_system.speed_build(0)
 	assert(game.buildings[0].level==previous_level+1 and game.buildings[0].get("job","")=="","Coin speed-up completes the selected building upgrade")
 	game.coin_system.show_panel();await shot("19-godot-coin-rewards")
-	game.coin_system.panel.hide()
+	game._dismiss_menus()
 	print("DIRECT_OBSTACLE_SELECTION_HEALTH_AND_TIMED_PROGRESS_BARS_PASSED")
 	print("COIN_DAILY_EXCHANGE_SPEEDUP_OBSTACLES_AND_REINFORCEMENTS_PASSED")
 	await check_godot_faction()
@@ -598,7 +604,7 @@ func check_godot_faction()->void:
 func check_cartoon_roster()->void:
 	game._return_home();game._advance_colony(game.colony_time+300)
 	game.onboarding.guide.hide();game.units_panel.hide();game.info_panel.hide()
-	if is_instance_valid(game.coin_system.panel):game.coin_system.panel.hide()
+	if is_instance_valid(game.coin_system.panel):game._dismiss_menus()
 	var credits_before:float=game.credits;var oil_before:float=game.oil
 	game._train_unit(23)
 	assert(game.training_queue.size()==1 and game.training_queue[0].finish-game.colony_time==3,"Pigeon takes three seconds in an idle Hangar")
@@ -691,63 +697,93 @@ class FakeAdBridge extends RefCounted:
 	var ready:=true
 	var requested:=""
 	var loads:=0
+	var showing:=false
+	var receipts:Array=[]
+	var acks:Array=[]
 	func is_ready()->bool:return ready
 	func prepare()->void:loads+=1
 	func show_rewarded(token:String)->void:requested=token
+	func is_showing()->bool:return showing
+	func get_reward_receipts()->String:return JSON.stringify(receipts)
+	func ack_reward(token:String)->void:receipts.erase(token);acks.append(token)
 
 func check_yards_and_rewards()->void:
-	game._return_home();game.unit_stock.fill(0);game.training_queue.clear()
+	game._return_home();game._dismiss_menus();game.unit_stock.fill(0);game.training_queue.clear()
 	game.credits=100000;game.oil=100000;game.metal=100000
-	var factory:Dictionary
-	var factory_index:=-1
+	var factory_index:=-1;var camp_index:=-1
 	for i in game.buildings.size():
-		if game.buildings[i].type==12:factory=game.buildings[i];factory_index=i;break
-	assert(factory_index>=0)
-	factory.level=1;factory.pos=Vector3(140,0,30);factory.node.position=factory.pos
+		if game.buildings[i].type==12:factory_index=i
+		if game.buildings[i].type==18:camp_index=i
+	assert(factory_index>=0 and camp_index>=0)
+	var factory:Dictionary=game.buildings[factory_index];var camp:Dictionary=game.buildings[camp_index]
+	factory.level=1;camp.level=1
 	game.garrison.sync()
-	var pad_index:int=game.garrison.owners.find(factory_index)
-	assert(pad_index>=0 and game.garrison.pads[pad_index].distance_to(factory.pos)==9,"Yard is physically attached to its producer")
-	game.unit_stock[10]=9;game._train_unit(10)
-	assert(game.garrison.stock(12)+game.garrison.queued(12)==10)
-	var credits:float=game.credits;game._train_unit(10)
-	assert(game.credits==credits and game.garrison.queued(12)==1,"Queued units reserve capacity; full yards cannot charge")
+	assert(game.garrison.owners.find(factory_index)<0,"Producers must not spawn automatic aprons")
+	game.unit_stock[10]=9;game._train_unit(10,factory_index)
+	assert(game.garrison.stock(1)+game.garrison.queued(1)==10)
+	var credits:float=game.credits;game._train_unit(10,factory_index)
+	assert(game.credits==credits and game.garrison.queued(1)==1,"Queued units reserve camp capacity")
 	game._advance_colony(float(game.training_queue[0].finish)+1)
-	assert(game.unit_stock[10]==10)
-	factory.level=2;game._refresh_progress();assert(game.garrison.capacity(12)==15)
-	assert(game._unit_lock_reason(10).is_empty(),"Completed stars unlock more capacity")
-	game.unit_stock[10]=20;game.garrison.sync();assert(game.garrison.stock(12)==20 and not game._unit_lock_reason(10).is_empty(),"Legacy excess units are kept without allowing further overfill")
-	game.selected_building=factory_index;game._begin_move();game._move_building(Vector3(160,0,30))
-	pad_index=game.garrison.owners.find(factory_index)
-	assert(game.garrison.pads[pad_index].distance_to(factory.pos)==9,"Moving the producer moves its apron")
-	game.unit_stock[10]=8;game.garrison.sync()
-	game.camera_focus=factory.pos+Vector3(0,0,4);game.camera.size=25;game._position_camera();game.info_panel.hide();game.units_panel.hide();game.build_panel.hide();game.toast.hide()
-	await shot("37-attached-factory-yard-and-star-capacity")
-	assert(game._upgrade_seconds(2)==30 and game._upgrade_seconds(5)==900 and game._upgrade_seconds(10)==28800)
-	for level in range(3,101):assert(game._upgrade_seconds(level)>=game._upgrade_seconds(level-1))
-	var ads:RefCounted=game.rewarded_ads
-	var native:Object=ads.bridge
-	var fake:=FakeAdBridge.new();ads.bridge=fake
-	game.selected_building=factory_index;game._upgrade_selected()
+	factory.level=5;assert(game.garrison.capacity(1)==10,"Upgrading the factory never increases camp capacity")
+	game.selected_building=camp_index;game._upgrade_selected();assert(not game.info_panel.visible)
+	assert(game.garrison.capacity(1)==10,"Camp capacity increases only when its upgrade completes")
+	game._advance_colony(camp.finish+1);assert(game.garrison.capacity(1)==15)
+	game.unit_stock[10]=20;game.garrison.sync();assert(game.unit_stock[10]==20 and not game._unit_lock_reason(10,factory_index).is_empty(),"Legacy excess armies are retained")
+	game.unit_stock[10]=8
+	game.selected_building=camp_index;game._begin_move();game._move_building(Vector3(-70,0,52))
+	assert(camp.pos==Vector3(-70,0,52) and not game.info_panel.visible)
+	for offset in [72,92]:
+		game._begin_build(18);game._place_building(Vector3(-70,0,offset));game._advance_colony(game.colony_time+31)
+	assert(game._build_lock_reason(18).contains("Maximum 3"))
+	var buildings_before:int=game.buildings.size();credits=game.metal
+	game._begin_build(18);game._place_building(Vector3(-70,0,112))
+	assert(game.buildings.size()==buildings_before and game.metal==credits,"A fourth camp is rejected without spending")
+	assert(game._build_lock_reason(19).is_empty() and game._build_lock_reason(20).is_empty(),"Camp limits are separate by category")
+	game._begin_build(12);game._place_building(Vector3(140,0,30));game._advance_colony(game.colony_time+46)
+	var second:int=game.buildings.size()-1;assert(game.buildings[second].type==12)
+	game.unit_stock.fill(0);game.training_queue.clear();factory.level=3
+	game._show_production(12,second);assert(not game._unit_lock_reason(11,second).is_empty(),"Low-star producer cannot borrow another factory's unlocks")
+	game._train_unit(10,second);assert(not game.units_panel.visible,"Selecting a production order closes its menu")
+	game._train_unit(10,factory_index)
+	assert(game.training_queue.size()==2 and game.training_queue[0].finish==game.training_queue[1].finish,"Two factories produce concurrently")
+	var untouched:float=0
+	for job in game.training_queue:
+		if job.producer==second:untouched=job.finish
+	game.godot_coins=100;game.coin_system.speed_line(12,factory_index)
+	assert(game.unit_stock[10]==1 and game.training_queue.size()==1 and game.training_queue[0].producer==second and game.training_queue[0].finish==untouched,"Speed-up affects only its own producer")
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	assert(game.training_queue.size()==1 and game.training_queue[0].producer==second,"Producer assignment survives a restart")
+	game._advance_colony(game.training_queue[0].finish+1)
+	assert(game.unit_stock[10]==2)
+	game.unit_stock[10]=8;game.unit_stock[0]=7;game.unit_stock[18]=8;game.garrison.sync()
+	game._dismiss_menus();game.onboarding.guide.hide();game.camera_focus=Vector3(-70,0,32);game.camera.size=62;game._position_camera();game.toast.hide()
+	await shot("39-buildable-air-ground-and-infantry-camps")
+	game._show_production(12,second);await shot("40-independent-factory-queue");game._dismiss_menus()
+	var ads:RefCounted=game.rewarded_ads;var native:Object=ads.bridge;var fake:=FakeAdBridge.new();ads.bridge=fake
+	game.selected_building=factory_index;game._upgrade_selected();factory=game.buildings[factory_index]
 	var initial:float=factory.finish
 	ads.request_build(factory_index);var token:String=fake.requested
-	ads._earned("wrong-token");assert(factory.finish==initial)
-	ads._closed(token);assert(factory.finish==initial,"Closing early grants no reward")
-	fake.ready=false;ads.request_build(factory_index);assert(fake.loads==1 and ads.pending.is_empty(),"Offline/loading never fakes a reward")
+	ads._earned("wrong-token");ads.poll_wait=0;ads.tick();assert(factory.finish==initial)
+	ads._closed(token);ads.poll_wait=0;ads.tick();assert(factory.finish==initial,"Closing an unearned ad must not grant a reward")
+	fake.ready=false;ads.request_build(factory_index);assert(fake.loads==1 and ads.pending.is_empty())
 	fake.ready=true;ads.request_build(factory_index);token=fake.requested
-	game.selected_building=0
-	ads._earned(token);assert(is_equal_approx(factory.finish,initial-50),"Exactly 50s is applied to the original selected job")
-	ads._earned(token);ads._closed(token);assert(is_equal_approx(factory.finish,initial-50),"Duplicate callbacks cannot reward twice")
+	fake.showing=true;fake.receipts.append(token);ads._earned(token);ads.poll_wait=0;ads.tick()
+	assert(factory.finish==initial,"Reward is presented after the fullscreen ad closes")
+	fake.showing=false;ads._closed(token);game.selected_building=0;ads.poll_wait=0;ads.tick()
+	assert(is_equal_approx(factory.finish,initial-50) and token in fake.acks,"Late earned receipt applies 50 seconds to the original job and is acknowledged")
+	ads._earned(token);ads.poll_wait=0;ads.tick();assert(is_equal_approx(factory.finish,initial-50),"Duplicate callbacks cannot reward twice")
+	ads.request_build(factory_index);token=fake.requested;fake.receipts.append(token)
+	# Lose the live GDScript callback and pending object through a complete game reload.
+	game._save_profile();game.queue_free();await process_frame;await open_game();game.onboarding.enter_colony()
+	ads=game.rewarded_ads;ads.bridge=fake;ads.poll_wait=0;ads.tick();factory=game.buildings[factory_index]
+	assert(is_equal_approx(factory.finish,initial-100) and token in fake.acks,"Native receipt recovers a missed callback after restart")
 	ads.request_build(factory_index);token=fake.requested
-	game._advance_colony(factory.finish+1)
-	var completed_level:int=factory.level;ads._earned(token)
-	assert(factory.level==completed_level and factory.get("job","")=="","A finished job cannot transfer its reward to another job")
-	game.selected_building=factory_index;game._upgrade_selected()
-	game._advance_colony(factory.finish-20)
-	ads.request_build(factory_index);ads._earned(fake.requested)
-	assert(factory.get("job","")=="","Short remaining work clamps to completion")
-	game.selected_building=factory_index;game._upgrade_selected();game._select_building_at(factory.pos);ads.tick()
-	assert(game.ad_button.visible and game.ad_button.text.contains("50"))
-	game.units_panel.hide();game.build_panel.hide();game.toast.hide()
-	await shot("38-optional-watch-ad-upgrade")
+	game._advance_colony(factory.finish+1);fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
+	assert(ads.boost_seconds==50,"An already finished job keeps all 50 rewarded seconds")
+	game._dismiss_menus();game.selected_building=factory_index;game._upgrade_selected();initial=factory.finish
+	ads.use_saved(factory_index);assert(factory.finish==initial-50 and ads.boost_seconds==0)
+	ads.request_build(factory_index);token=fake.requested;fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
+	assert(ads.result_panel.visible)
+	await shot("41-confirmed-ad-reward-receipt")
 	ads.bridge=native;game._save_profile()
-	print("ATTACHED_YARDS_CAPACITY_LEGACY_STOCK_AND_REWARDED_50_SECOND_SAFETY_PASSED")
+	print("BUILDABLE_THREE_CAMP_LIMITS_INDEPENDENT_PRODUCERS_MENU_CLOSE_AND_DURABLE_REWARDED_RECEIPTS_PASSED")
