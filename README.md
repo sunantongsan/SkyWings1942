@@ -3,7 +3,19 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
-## Current update — v0.25
+## Current update — v0.26
+
+- Pick and drag the visible 3D wall body, including its upper portion and rotated
+  segments. Preserve the finger offset so it does not jump when dragging starts.
+- Restore construction-drone upgrade timers for every non-wall building.
+  Progress bars, offline completion, Coin boosts and rewarded-ad boosts apply again.
+  New construction retains its existing timer; only wall upgrades are instant.
+- Keep doubled upgrade costs and existing star colors. Loading an unfinished
+  non-wall upgrade preserves its remaining time instead of finishing it instantly.
+- Restore the timed-upgrade regression suite and update the real-engine lesson;
+  accelerated demonstration time is clearly labeled in the clip.
+
+## Previous update — v0.25
 
 - Wall selection only shows UPGRADE, DELETE and an SVG rotation icon. Repeated
   rotation and wall upgrades keep the menu open. Tap empty terrain to dismiss.

@@ -569,11 +569,15 @@ func _upgrade_selected()->void:
 	if b.level>=(5 if b.type==24 else 100):_toast("Maximum level reached.");return
 	var cost:float=_upgrade_cost(b)
 	if metal<cost:_toast("NOT ENOUGH METAL");return
+	if b.type!=24 and _builder_busy():_toast("Construction drone busy. Wait for the current job.");return
 	metal-=cost
-	_complete_upgrade(b)
+	if b.type==24:_complete_upgrade(b)
+	else:
+		b["job"]="upgrade";b["started"]=colony_time;b["finish"]=colony_time+_upgrade_seconds(int(b.level)+1)
+		_add_work_marker(b)
 	_refresh_progress();_save_profile();_dismiss_menus()
 	if b.type==24:_select_building_at(b.pos)
-	_toast("Upgrade complete! The next level costs twice as much Metal.")
+	_toast("Wall upgraded immediately." if b.type==24 else "Upgrade started • "+_duration(_upgrade_seconds(int(b.level)+1)))
 
 func _upgrade_cost(b:Dictionary)->float:
 	return (860.0+int(b.type)*120.0)*pow(2.0,int(b.level)-1)
@@ -859,11 +863,11 @@ func _select_building_at(pos:Vector3)->void:
 	ad_button.visible=not wall and b.get("job","")!=""
 	info_panel.get_child(0).scroll_vertical=0
 	defense_test_button.visible=not wall and b.type>=21 and b.get("job","")==""
-	selected_detail.text="HP %d/%d\nUpgrade: %s Metal • INSTANT\n%s"%[int(b.hp),int(b.max_hp),_fmt(_upgrade_cost(b)),weapon]
+	selected_detail.text="HP %d/%d\nUpgrade: %s Metal • %s\n%s"%[int(b.hp),int(b.max_hp),_fmt(_upgrade_cost(b)),_duration(_upgrade_seconds(int(b.level)+1)),weapon]
 	if b.type>=21:selected_detail.text+="\n"+defenses.description(b.type,b.level)
 	if b.type==24 and b.level>=5:selected_detail.text="FIRE WALL • MAX LEVEL\nHP %d / %d\nBlocks ground units\nClose-range machine gun\nRange %.1f m"%[b.hp,b.max_hp,_weapon_range(b)]
 	if wall:
-		selected_detail.text="%s\n%s"%[defenses.WALL_NAMES[int(b.level)-1],"MAX LEVEL" if b.level>=5 else "%s Metal • INSTANT"%_fmt(_upgrade_cost(b))]
+		selected_detail.text="%s\n%s\nDrag the wall to move"%[defenses.WALL_NAMES[int(b.level)-1],"MAX LEVEL" if b.level>=5 else "%s Metal • INSTANT"%_fmt(_upgrade_cost(b))]
 		for control in selected_label.get_parent().get_children():
 			if control is Button and control.text=="UPGRADE":control.disabled=b.level>=5 or b.get("job","")!=""
 	else:
@@ -1006,7 +1010,8 @@ func _tap_world(pos:Vector2)->void:
 		elif moving_building>=0:_move_building(h)
 		elif build_type>=0:_place_building(h)
 		else:
-			_select_building_at(h)
+			var wall_index:int=layout.pick_wall(pos)
+			_select_building_at(buildings[wall_index].pos if wall_index>=0 else h)
 			if selected_building<0:coin_system.select_obstacle(h,false)
 			elif is_instance_valid(coin_system.panel):coin_system.panel.hide()
 
@@ -1208,7 +1213,7 @@ func _load_profile()->void:
 	for b in data.buildings:
 		var placed:Dictionary=_spawn_building(home_root,int(b.type),Vector3(b.pos[0],0,b.pos[2]),int(b.level),false)
 		placed["yaw"]=float(b.get("yaw",0));placed.node.rotation.y=placed.yaw
-		if b.get("job","")=="upgrade":
+		if b.get("job","")=="upgrade" and int(b.type)==24:
 			_complete_upgrade(placed)
 		elif b.get("job","")!="":
 			for key in ["job","started","finish"]:placed[key]=b[key]

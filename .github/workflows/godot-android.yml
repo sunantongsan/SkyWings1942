@@ -110,6 +110,7 @@ jobs:
           timeout 180s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/defenses.gd 2>&1 | tee defense-checks.log
           grep -q V23_DIFFICULTY_150_PERCENT_TYPED_WEAPONS_IMPACT_WALLS_SAVE_PASSED defense-checks.log
           grep -q V25_COMPACT_WALL_DELETE_QUEUE_REMAP_RANK_PAINT_AND_SPARKLES_PASSED defense-checks.log
+          grep -q V26_VISIBLE_WALL_BODY_DRAG_AND_NONWALL_UPGRADE_TIMERS_PASSED defense-checks.log
           if grep -q 'SCRIPT ERROR' defense-checks.log; then exit 1; fi
 
       - name: Upload scene review

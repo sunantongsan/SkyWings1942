@@ -115,7 +115,7 @@ func run()->void:
 	await shot("02-building-selected")
 	var old_metal:float=game.metal
 	game._upgrade_selected()
-	assert(game.buildings[0].level==2 and not game._builder_busy())
+	assert(game.buildings[0].level==1 and game._builder_busy())
 	game._advance_colony(game.colony_time+31)
 	assert(game.buildings[0].level==2 and game.metal<old_metal and game.tutorial_step==11)
 	game.info_panel.hide();game.selection_ring.hide()
@@ -243,7 +243,7 @@ func run()->void:
 	game._advance_colony(game.colony_time+42)
 	assert(game.unit_stock[10]>0 and game.unit_stock[18]>0,"Independent facility queues finish concurrently")
 	game._select_building_at(Vector3(43,0,0));game._upgrade_selected()
-	assert(game._unit_lock_reason(10).is_empty(),"Instant upgrade keeps production available")
+	assert(not game._unit_lock_reason(10).is_empty(),"Upgrading facility cannot accept new orders")
 	game._advance_colony(game.colony_time+31)
 	assert(game._unit_lock_reason(12).is_empty() and not game._unit_lock_reason(11).is_empty(),"Factory level two unlocks artillery only")
 	game._show_production(12)
@@ -377,8 +377,8 @@ func run()->void:
 	var core:Dictionary=game.buildings[0]
 	core.level=4;game._refresh_progress()
 	game._select_building_at(core.pos);game._upgrade_selected()
-	assert(core.level==5 and game._can_fire(core),"Instant upgrade unlocks defense immediately")
-	game._advance_colony(game.colony_time+1)
+	assert(core.level==4 and not game._can_fire(core),"Do not unlock defense when the upgrade merely starts")
+	game._advance_colony(float(core.finish)+1)
 	assert(core.level==5 and game._can_fire(core))
 	game._update_rank_label(core);assert(core.rank_label.text=="★★★★★")
 	var invader:Node3D=game._unit_model(0,true);game.home_root.add_child(invader);invader.position=core.pos+Vector3(0,3,8)
@@ -511,14 +511,17 @@ func run()->void:
 	assert(game.godot_coins==balance and game.metal==previous_metal,"Cleared obstacles cannot pay twice")
 	game._select_building_at(game.buildings[0].pos)
 	var previous_level:int=game.buildings[0].level
-	game._upgrade_selected();assert(game.buildings[0].level==previous_level+1 and game.buildings[0].get("job","")=="")
+	game._upgrade_selected();assert(game.buildings[0].get("job","")=="upgrade")
+	var upgrade_job:Dictionary=game.buildings[0]
+	game._advance_colony((float(upgrade_job.started)+float(upgrade_job.finish))*.5)
 	game._train_unit(10);game._train_unit(18)
 	game.units_panel.hide();game._dismiss_menus();game.info_panel.hide()
-	game.status_bars.tick()
-	await shot("27-instant-upgrade-and-production-progress")
-	var coins_unchanged:int=game.godot_coins
+	game.camera_focus=upgrade_job.pos;game.camera.size=36;game._position_camera();game.status_bars.tick()
+	assert(is_equal_approx(game.status_bars.world_rows[str(upgrade_job.node.get_instance_id())].task.value,50),"Upgrade bar reflects elapsed time")
+	assert(game.status_bars.jobs().size()>=3,"Independent production and building timers each have progress bars")
+	await shot("27-construction-and-production-progress")
 	game.coin_system.speed_build(0)
-	assert(game.godot_coins==coins_unchanged,"Instant upgrades never consume speed-up Coins")
+	assert(game.buildings[0].level==previous_level+1 and game.buildings[0].get("job","")=="","Coin speed-up completes the selected building upgrade")
 	game.coin_system.show_panel();await shot("19-godot-coin-rewards")
 	game._dismiss_menus()
 	print("DIRECT_OBSTACLE_SELECTION_HEALTH_AND_TIMED_PROGRESS_BARS_PASSED")
@@ -732,8 +735,8 @@ func check_yards_and_rewards()->void:
 	game._advance_colony(float(game.training_queue[0].finish)+1)
 	factory.level=5;assert(game.garrison.capacity(1)==10,"Upgrading the factory never increases camp capacity")
 	game.selected_building=camp_index;game._upgrade_selected();assert(not game.info_panel.visible)
-	assert(game.garrison.capacity(1)==15,"Instant upgrade increases camp capacity immediately")
-	game._advance_colony(game.colony_time+1);assert(game.garrison.capacity(1)==15)
+	assert(game.garrison.capacity(1)==10,"Camp capacity increases only when its upgrade completes")
+	game._advance_colony(camp.finish+1);assert(game.garrison.capacity(1)==15)
 	game.unit_stock[10]=20;game.garrison.sync();assert(game.unit_stock[10]==20 and not game._unit_lock_reason(10,factory_index).is_empty(),"Legacy excess armies are retained")
 	game.unit_stock[10]=8
 	game.selected_building=camp_index;game._begin_move();game._move_building(Vector3(-70,0,52))
@@ -773,7 +776,7 @@ func check_yards_and_rewards()->void:
 	assert(not game.units_panel.visible,"Player can close production manually")
 	var ads:RefCounted=game.rewarded_ads;var native:Object=ads.bridge;var fake:=FakeAdBridge.new();ads.bridge=fake
 	game.selected_building=factory_index;game._upgrade_selected();factory=game.buildings[factory_index]
-	factory["job"]="build";factory["started"]=game.colony_time;factory.finish=game.colony_time+12000
+	factory.finish=game.colony_time+12000
 	var initial:float=factory.finish
 	ads.offer_build(factory_index);assert(ads.result_panel.visible and fake.requested.is_empty(),"Disclosure is shown before requesting an ad")
 	ads.result_panel.get_child(0).get_child(3).pressed.emit()
@@ -796,7 +799,7 @@ func check_yards_and_rewards()->void:
 	fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
 	assert(game.godot_coins==coins_before and not ads.save_state().has("boost_seconds"),"Finished jobs do not bank time or grant extra coins")
 	game._dismiss_menus();game.selected_building=factory_index;game._upgrade_selected();factory=game.buildings[factory_index]
-	factory["job"]="build";factory["started"]=game.colony_time;factory.finish=game.colony_time+120
+	factory.finish=game.colony_time+120
 	ads.request_build(factory_index);token=fake.requested;fake.receipts.append(token);ads._closed(token);ads.poll_wait=0;ads.tick()
 	assert(factory.job=="","Short construction finishes immediately")
 	assert(ads.result_panel.visible)

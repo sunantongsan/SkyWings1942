@@ -79,9 +79,9 @@ func run()->void:
 	assert(game.defenses.blocking_wall(wall.pos+Vector3(-5,0,4),wall.pos+Vector3(5,0,4),[wall]).is_empty())
 	var old_position:Vector3=wall.pos
 	game.camera_focus=wall.pos;game._position_camera();game._dismiss_menus()
-	var press:=InputEventScreenTouch.new();press.index=0;press.pressed=true;press.position=game.camera.unproject_position(wall.pos)
+	var press:=InputEventScreenTouch.new();press.index=0;press.pressed=true;press.position=game.camera.unproject_position(wall.pos+Vector3(0,2.5,0))
 	game._unhandled_input(press)
-	var drag:=InputEventScreenDrag.new();drag.index=0;drag.position=game.camera.unproject_position(wall.pos+Vector3(0,0,10));drag.relative=drag.position-press.position
+	var drag:=InputEventScreenDrag.new();drag.index=0;drag.position=game.camera.unproject_position(wall.pos+Vector3(0,2.5,10));drag.relative=drag.position-press.position
 	game._unhandled_input(drag);assert(game.layout.active)
 	var release:=InputEventScreenTouch.new();release.index=0;release.pressed=false;release.position=drag.position
 	game._unhandled_input(release);assert(wall.pos==old_position+Vector3(0,0,10) and not game.layout.active)
@@ -90,9 +90,12 @@ func run()->void:
 	game.moving_building=-1
 	var tower:Dictionary=built[0];game.selected_building=game.buildings.find(tower)
 	var cost:float=game._upgrade_cost(tower);var balance:float=game.metal
-	game._upgrade_selected();assert(tower.level==2 and is_equal_approx(game.metal,balance-cost))
+	game._upgrade_selected();assert(tower.level==1 and tower.job=="upgrade")
+	assert(is_equal_approx(game.metal,balance-cost))
+	game._advance_colony(float(tower.finish)+1);assert(tower.level==2)
 	assert(game._upgrade_cost(tower)==cost*2 and tower.get("job","")=="")
-	game._upgrade_selected();assert(tower.level==3 and is_equal_approx(game.metal,balance-cost*3))
+	balance=game.metal;game._upgrade_selected();assert(is_equal_approx(game.metal,balance-cost*2))
+	game._advance_colony(float(tower.finish)+1);assert(tower.level==3)
 	var attacker:Dictionary=enemy(10,wall.pos+Vector3(0,0,6))
 	game._defense_tick([wall],[attacker],.3,1);assert(attacker.hp<1000)
 	attacker.node.position=wall.pos+Vector3(0,0,12);var hp:float=attacker.hp
@@ -113,6 +116,7 @@ func run()->void:
 	assert(walls==6 and game.building_levels[21]==3 and game.building_levels[22]==1 and game.building_levels[23]==1)
 	game.camera_focus=Vector3(64,0,10);game.camera.size=22;game._position_camera();game._select_building_at(Vector3(64,0,10))
 	await shot("65-fire-wall-upgrade-details")
+	print("V26_VISIBLE_WALL_BODY_DRAG_AND_NONWALL_UPGRADE_TIMERS_PASSED")
 	assert(is_equal_approx(game.buildings[14].node.rotation.y,PI/2))
 	game._toggle_build();await shot("66-defense-construction-menu")
 	await rank_colors_and_wall_menu()

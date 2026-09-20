@@ -4,6 +4,7 @@ var candidate:=-1
 var active:=false
 var start:=Vector2.ZERO
 var touch_id:=-2
+var drag_offset:=Vector3.ZERO
 func _init(game:Node3D)->void:host=game
 func half_size(kind:int)->Vector2:return Vector2(3,.7) if kind==24 else (Vector2(6.5,5) if kind in [18,19,20] else Vector2(3.1,3.1))
 func overlaps(pos:Vector3,kind:int,yaw:float,other:Dictionary)->bool:
@@ -58,6 +59,9 @@ func input(event:InputEvent)->bool:
 			var size:=half_size(b.type)
 			if absf(local.x)<=size.x and absf(local.z)<=size.y and hit.distance_to(b.pos)<nearest:
 				candidate=i;nearest=hit.distance_to(b.pos)
+		var wall_index:=pick_wall(pos)
+		if wall_index>=0:candidate=wall_index
+		drag_offset=host.buildings[candidate].pos-hit if candidate>=0 else Vector3.ZERO
 		start=pos;touch_id=event.index if event is InputEventScreenTouch else -1
 		return false
 	if candidate<0:return false
@@ -67,13 +71,14 @@ func input(event:InputEvent)->bool:
 		var hit=host._ground_hit(pos)
 		if hit!=null:
 			var b:Dictionary=host.buildings[candidate]
-			b.node.position=Vector3(snappedf(hit.x,1),0,snappedf(hit.z,1));host._update_rank_label(b)
-			host.placement_guide.point_at(pos)
+			var target:Vector3=hit+drag_offset
+			b.node.position=Vector3(snappedf(target.x,1),0,snappedf(target.z,1));host._update_rank_label(b)
+			host.placement_guide.pointer=b.node.position;host.placement_guide.has_pointer=true;host.placement_guide.update_cursor()
 		return true
 	if up:
 		if not active:candidate=-1;return false
 		var hit=host._ground_hit(pos)
-		if hit!=null:host._move_building(hit)
+		if hit!=null:host._move_building(hit+drag_offset)
 		if host.moving_building>=0:cancel()
 		candidate=-1;active=false;touch_id=-2;host.drag_camera=false;host.touch_points.clear();host.pointer_moved=true
 		return true
@@ -101,3 +106,19 @@ func delete_selected()->void:
 	host.selected_building=-1;host.moving_building=-1;host.build_type=-1
 	host._dismiss_menus();host.garrison.signature="";host._refresh_progress();host.garrison.sync();host._sync_industry_visuals()
 	host._save_profile();host._toast("Wall removed.")
+
+func pick_wall(screen:Vector2)->int:
+	# Select the visible 3D wall, not the terrain several metres behind its top.
+	var origin:Vector3=host.camera.project_ray_origin(screen)
+	var direction:Vector3=host.camera.project_ray_normal(screen)
+	var nearest:=INF;var found:=-1
+	for i in host.buildings.size():
+		var b:Dictionary=host.buildings[i]
+		if b.type!=24 or not is_instance_valid(b.node):continue
+		var inverse:Transform3D=b.node.global_transform.affine_inverse()
+		var box:=AABB(Vector3(-3.1,-.1,-.9),Vector3(6.2,3.8,1.8))
+		var hit=box.intersects_ray(inverse*origin,inverse.basis*direction)
+		if hit==null:continue
+		var distance:float=origin.distance_to(b.node.global_transform*hit)
+		if distance<nearest:nearest=distance;found=i
+	return found
