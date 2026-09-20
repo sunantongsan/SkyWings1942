@@ -30,8 +30,9 @@ func run()->void:
 	var built:Array[Dictionary]=[]
 	for kind in [21,22,23,24]:
 		game._begin_build(kind);game._place_building(Vector3(40+(kind-21)*8,0,0))
-		assert(game.buildings.back().type==kind and game.buildings.back().get("job","")=="build")
-		game._advance_colony(float(game.buildings.back().finish)+1);built.append(game.buildings.back())
+		assert(game.buildings.back().type==kind and game.buildings.back().get("job","")==("" if kind==24 else "build"))
+		if kind!=24:game._advance_colony(float(game.buildings.back().finish)+1)
+		built.append(game.buildings.back());game.build_type=-1
 		assert(game.profile_store._valid(game.profile_store.read_profile(SAVE)))
 	game.camera_focus=Vector3(52,0,0);game.camera.size=38;game._position_camera();game._dismiss_menus()
 	await shot("60-new-defense-buildings")
@@ -104,7 +105,7 @@ func run()->void:
 	wall.hp=0;assert(game.defenses.blocking_wall(wall.pos+Vector3(0,0,5),wall.pos-Vector3(0,0,5),[wall]).is_empty());wall.hp=wall.max_hp
 	attacker.node.queue_free()
 	game.build_type=24;assert(game._placement_reason(wall.pos+Vector3(6,0,0)).is_empty(),"Wall sections connect end to end")
-	assert(not game._placement_reason(wall.pos+Vector3(2,0,0)).is_empty(),"Wall footprints cannot overlap")
+	assert(game.layout.overlaps(wall.pos,24,float(wall.get("yaw",0)),wall),"Exact occupied footprints overlap; near placements may snap to a free join")
 	game.build_type=-1
 	for rank in range(1,6):game._spawn_building(game.home_root,24,Vector3(35+rank*8,0,-22),rank,false)
 	game.camera_focus=Vector3(59,0,-22);game.camera.size=42;game._position_camera();await shot("64-five-wall-materials")

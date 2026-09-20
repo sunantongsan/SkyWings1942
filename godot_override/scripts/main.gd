@@ -288,12 +288,12 @@ func _setup_ui()->void:
 	var yard_button:=_button("GARRISON",func():garrison.focus(),Vector2(130,64));yard_button.add_theme_font_size_override("font_size",17);dock.add_child(yard_button)
 	var sound_button:=_button("SFX ON",func():battle_feedback.set_enabled(not battle_feedback.enabled),Vector2(80,64));sound_button.add_theme_font_size_override("font_size",15);dock.add_child(sound_button)
 	info_panel=PanelContainer.new();info_panel.custom_minimum_size=Vector2(286,0);info_panel.visible=false
-	info_panel.add_theme_stylebox_override("panel",_style(Color("112a36"),14,Color("75cabb"),1));ui_root.add_child(info_panel)
+	info_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new());ui_root.add_child(info_panel)
 	var info_scroll:=ScrollContainer.new();info_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;info_panel.add_child(info_scroll)
 	var iv:=VBoxContainer.new();iv.size_flags_horizontal=Control.SIZE_EXPAND_FILL;iv.add_theme_constant_override("separation",8);info_scroll.add_child(iv)
 	info_scroll.set_script(preload("res://scripts/touch_scroll.gd"))
-	selected_label=Label.new();selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
-	selected_detail=Label.new();selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
+	selected_label=Label.new();selected_label.add_theme_color_override("font_outline_color",Color("102832"));selected_label.add_theme_constant_override("outline_size",6);selected_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_label.add_theme_font_size_override("font_size",23);iv.add_child(selected_label)
+	selected_detail=Label.new();selected_detail.add_theme_color_override("font_outline_color",Color("102832"));selected_detail.add_theme_constant_override("outline_size",6);selected_detail.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;selected_detail.add_theme_font_size_override("font_size",17);selected_detail.modulate=Color("a8c4cd");iv.add_child(selected_detail)
 	iv.add_child(_button("PRODUCE",func():
 		if selected_building>=0 and buildings[selected_building].type in [6,12,13,16]:_show_production(buildings[selected_building].type,selected_building)
 		else:_toast("Select a production building or Summoning Sanctum."),Vector2(0,54)))
@@ -332,7 +332,7 @@ func _make_build_panel()->PanelContainer:
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
 	for i in BUILD_ORDER.slice(0,7)+[24,25,8,21,22,23,7,9,18,19,20,10,11,12,13,14,15,16,17]:
-		var b:=_asset_button(BUILDING_NAMES[i],"%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
+		var b:=_asset_button(BUILDING_NAMES[i],"%s M • INSTANT"%_fmt(BUILDING_COST[i]) if i==24 else "%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
 		if i>=21:
 			b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text+= "\n"+defenses.description(i)
 			b.custom_minimum_size.y=212
@@ -634,6 +634,7 @@ func _train_unit(idx:int,producer:int=-1)->void:
 	_toast("%s queued at %s #%d."%[UNIT_NAMES[idx],BUILDING_NAMES[UNIT_FACILITY[idx]],producer+1])
 
 func _toggle_build()->void:
+	build_type=-1
 	if mode!="base" or not has_colony:return
 	build_panel.visible=not build_panel.visible;units_panel.hide();galaxy_panel.hide();info_panel.hide()
 	onboarding.refresh_guide()
@@ -708,6 +709,8 @@ func _placement_reason(pos:Vector3)->String:
 		if metal<BUILDING_COST[build_type] or oil<_building_oil_cost(build_type):return "Not enough Metal or Oil."
 	else:return "Select a building first."
 	var placing_kind:int=buildings[moving_building].type if moving_building>=0 else build_type
+	var wall_connection:Dictionary=layout.wall_snap(pos,moving_building) if placing_kind==24 else {}
+	if placing_kind==24:pos=wall_connection.pos
 	if placing_kind in [18,19,20]:
 		for i in buildings.size():
 			if i==moving_building:continue
@@ -721,7 +724,7 @@ func _placement_reason(pos:Vector3)->String:
 		if i==moving_building:continue
 		var other:Dictionary=buildings[i]
 		if placing_kind in [24,25] or other.type in [24,25]:
-			var yaw:float=float(buildings[moving_building].get("yaw",0)) if moving_building>=0 else 0.0
+			var yaw:float=float(wall_connection.yaw) if placing_kind==24 else (float(buildings[moving_building].get("yaw",0)) if moving_building>=0 else 0.0)
 			if layout.overlaps(pos,placing_kind,yaw,other):return "Wall footprint overlaps another structure."
 		elif other.pos.distance_to(pos)<6.1:return "Too close to another building."
 	return ""
@@ -891,19 +894,35 @@ func _select_building_at(pos:Vector3)->void:
 			if UNIT_FACILITY[kind]==b.type and UNIT_TIER[kind]==b.level+1:next_units.append(UNIT_NAMES[kind])
 		selected_detail.text+="\nNext level: "+(", ".join(next_units) if not next_units.is_empty() else "More HP and stronger defense")
 
+	selected_detail.text="%s Metal • %s"%[_fmt(_upgrade_cost(b)),"INSTANT" if wall else _duration(_upgrade_seconds(int(b.level)+1))]
+	for control in selected_label.get_parent().get_children():
+		if control is Button:
+			if control.text=="PRODUCE":control.visible=b.type in [6,12,13,16]
+			if control.text=="SPEED UP":control.visible=not wall and b.get("job","")!=""
+			if control.text=="MOVE":control.hide()
+	layout.floating_menu()
+
 func _place_building(pos:Vector3)->void:
 	if mode!="base" or not has_colony or build_type<0:return
 	pos=Vector3(snappedf(pos.x,1.0),0,snappedf(pos.z,1.0))
+	var connection:Dictionary=layout.wall_snap(pos) if build_type==24 else {"pos":pos,"yaw":0.0}
+	pos=connection.pos
 	var reason:=_placement_reason(pos)
 	if not reason.is_empty():_toast(reason);return
 	var cost:int=BUILDING_COST[build_type]
 	var kind:=build_type
 	metal-=cost;oil-=_building_oil_cost(kind)
 	var structure:Dictionary=_spawn_building(home_root,kind,pos,1,false)
-	structure["job"]="build";structure["started"]=colony_time;structure["finish"]=colony_time+BUILD_SECONDS[kind]
-	_add_work_marker(structure);build_type=-1
+	if kind==24:
+		structure["yaw"]=connection.yaw;structure.node.rotation.y=connection.yaw
+	else:
+		structure["job"]="build";structure["started"]=colony_time;structure["finish"]=colony_time+BUILD_SECONDS[kind]
+		_add_work_marker(structure)
+	build_type=-1
 	_ensure_roads();_refresh_progress();_save_profile()
-	_toast(BUILDING_NAMES[kind]+" construction started.")
+	if kind==24:
+		build_type=24;_toast("Wall placed • tap to extend • DONE to finish")
+	else:_toast(BUILDING_NAMES[kind]+" construction started.")
 
 func _ground_hit(screen_pos:Vector2)->Variant:
 	var origin:=camera.project_ray_origin(screen_pos);var dir:=camera.project_ray_normal(screen_pos);return Plane(Vector3.UP,0).intersects_ray(origin,dir)
@@ -1027,10 +1046,10 @@ func _tap_world(pos:Vector2)->void:
 
 func _panel(title:String)->PanelContainer:
 	var p:=PanelContainer.new()
-	p.add_theme_stylebox_override("panel",_style(Color("102832"),16,Color("517582"),1))
+	p.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
 	var column:=VBoxContainer.new();column.add_theme_constant_override("separation",14);p.add_child(column)
 	var row:=HBoxContainer.new();column.add_child(row)
-	var label:=Label.new();label.text=title;label.add_theme_font_size_override("font_size",20);label.size_flags_horizontal=Control.SIZE_EXPAND_FILL;row.add_child(label)
+	var label:=Label.new();label.text=title;label.add_theme_color_override("font_outline_color",Color("102832"));label.add_theme_constant_override("outline_size",6);label.add_theme_font_size_override("font_size",20);label.size_flags_horizontal=Control.SIZE_EXPAND_FILL;row.add_child(label)
 	row.add_child(_button("CLOSE",func():
 		if p==victory_panel:_return_home()
 		else:p.hide()
@@ -1082,6 +1101,7 @@ func _visual_tick(delta:float)->void:
 	if onboarding:onboarding.tick()
 	visual_time+=delta
 	_industry_tick(delta)
+	if layout:layout.floating_menu()
 	for i in range(animators.size()-1,-1,-1):
 		var item:Dictionary=animators[i]
 		if not is_instance_valid(item.node):animators.remove_at(i);continue
@@ -1122,7 +1142,7 @@ func _found_colony(planet:int)->void:
 
 func _build_lock_reason(kind:int)->String:
 	if kind<0 or kind>=BUILDING_NAMES.size():return "Unknown structure."
-	if _builder_busy():return "Construction drone busy."
+	if kind!=24 and _builder_busy():return "Construction drone busy."
 	if kind>=14 and kind<=17:
 		if tutorial_step<11:return "Complete the Core upgrade mission"
 		if kind>14 and building_levels[14]==0:return "Build a Godot Citadel first"
@@ -1223,7 +1243,9 @@ func _load_profile()->void:
 	for b in data.buildings:
 		var placed:Dictionary=_spawn_building(home_root,int(b.type),Vector3(b.pos[0],0,b.pos[2]),int(b.level),false)
 		placed["yaw"]=float(b.get("yaw",0));placed.node.rotation.y=placed.yaw
-		if b.get("job","")=="upgrade" and int(b.type) in [24,25]:
+		if b.get("job","")=="build" and int(b.type)==24:
+			pass # Previously queued walls complete immediately without a second charge.
+		elif b.get("job","")=="upgrade" and int(b.type) in [24,25]:
 			_complete_upgrade(placed)
 		elif b.get("job","")!="":
 			for key in ["job","started","finish"]:placed[key]=b[key]
@@ -1333,9 +1355,12 @@ func _begin_move()->void:
 func _move_building(pos:Vector3)->void:
 	if mode!="base" or moving_building<0:return
 	pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
+	var connection:Dictionary=layout.wall_snap(pos,moving_building) if buildings[moving_building].type==24 else {}
+	if not connection.is_empty():pos=connection.pos
 	var reason:=_placement_reason(pos)
 	if not reason.is_empty():_toast(reason);return
 	var b:Dictionary=buildings[moving_building];b.pos=pos;b.node.position=pos;_update_rank_label(b)
+	if not connection.is_empty():b.yaw=connection.yaw;b.node.rotation.y=b.yaw
 	if is_instance_valid(b.get("work_marker")):b.work_marker.global_position=pos+Vector3(0,6,0)
 	moving_building=-1
 	garrison.signature="";garrison.sync();_sync_industry_visuals();_save_profile();_dismiss_menus();_toast("Structure relocated.")

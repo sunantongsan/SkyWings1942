@@ -28,10 +28,12 @@ func update_cursor()->void:
 	var pos:Vector3=pointer if has_pointer else host.camera_focus
 	if host.mode!="battle":pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
 	footprint.rotation.y=float(host.buildings[host.moving_building].get("yaw",0)) if host.moving_building>=0 else 0.0
+	var kind:int=host.buildings[host.moving_building].type if host.moving_building>=0 else host.build_type
+	if host.mode=="base" and kind==24:
+		var connection:Dictionary=host.layout.wall_snap(pos,host.moving_building);pos=connection.pos;footprint.rotation.y=connection.yaw
 	var error:=reason(pos)
 	footprint.position=pos+Vector3(0,.16,0);footprint.scale=Vector3.ONE*(.4 if host.mode=="battle" else 1.0)
 	if host.mode=="base":
-		var kind:int=host.buildings[host.moving_building].type if host.moving_building>=0 else host.build_type
 		if kind in [24,25]:footprint.scale=Vector3(1,1,1.4/6.0)
 		if kind in [18,19,20]:footprint.scale=Vector3(13.0/6.0,1,10.0/6.0)
 	footprint.material_override.albedo_color=Color(.1,1,.3,.5) if error.is_empty() else Color(1,.1,.1,.55)

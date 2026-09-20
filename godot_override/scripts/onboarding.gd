@@ -30,11 +30,11 @@ func _init(game:Node3D)->void:
 	var shade:=ColorRect.new();shade.color=Color(0.015,0.04,0.075,0.84);shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);screen.add_child(shade)
 	panel=PanelContainer.new();panel.add_theme_stylebox_override("panel",host._style(Color("102832"),20,Color("4f99a4"),1));screen.add_child(panel)
 	column=VBoxContainer.new();column.add_theme_constant_override("separation",12);panel.add_child(column)
-	guide=PanelContainer.new();guide.add_theme_stylebox_override("panel",host._style(Color("102832"),14,Color("7cd8ba"),1));host.ui_root.add_child(guide)
+	guide=PanelContainer.new();guide.add_theme_stylebox_override("panel",StyleBoxEmpty.new());host.ui_root.add_child(guide)
 	var content:=VBoxContainer.new();content.add_theme_constant_override("separation",10);guide.add_child(content)
 	guide_title=_label("",20,Color("95edcc"));guide_title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;content.add_child(guide_title)
 	guide_progress=ProgressBar.new();guide_progress.max_value=13;guide_progress.show_percentage=false;guide_progress.custom_minimum_size.y=5;content.add_child(guide_progress)
-	guide_text=_label("",17,Color("c2d7dc"));guide_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;content.add_child(guide_text)
+	guide_text=_label("",17,Color("c2d7dc"));guide_text.hide();guide_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;content.add_child(guide_text)
 	guide_action=host._button("",_guide_pressed,Vector2(0,52));guide_action.add_theme_font_size_override("font_size",17);content.add_child(guide_action)
 	guide_video=host._button("▶ WATCH DEMO",func():show_lesson(current_lesson()),Vector2(0,46));content.add_child(guide_video)
 	guide.hide()
@@ -205,7 +205,7 @@ func layout()->void:
 	screen.position=Vector2.ZERO;screen.size=size
 	var width:float=minf(size.x-80,1120 if page in ["planets","video"] else 960)
 	panel.position=Vector2((size.x-width)/2,32);panel.size=Vector2(width,size.y-64)
-	guide.position=Vector2(maxf(24.0,host.header.position.x),110);guide.size=Vector2(302,0)
+	guide.position=Vector2(maxf(24.0,host.header.position.x),110);guide.size=Vector2(240,0)
 	settle_frames=3
 
 func tick()->void:
@@ -215,4 +215,4 @@ func tick()->void:
 	settle_frames-=1
 	var size:Vector2=host.get_viewport().get_visible_rect().size
 	panel.size=Vector2(minf(size.x-80,1120 if page in ["planets","video"] else 960),size.y-64)
-	guide.size=Vector2(302,guide.get_combined_minimum_size().y)
+	guide.size=Vector2(240,guide.get_combined_minimum_size().y)

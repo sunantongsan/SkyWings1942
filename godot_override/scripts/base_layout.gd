@@ -5,7 +5,12 @@ var active:=false
 var start:=Vector2.ZERO
 var touch_id:=-2
 var drag_offset:=Vector3.ZERO
-func _init(game:Node3D)->void:host=game
+var rotating:=false
+var done:Button
+func _init(game:Node3D)->void:
+	host=game
+	done=host._button("DONE",func():host.build_type=-1;host.placement_guide.has_pointer=false;done.hide(),Vector2(140,52))
+	host.ui_root.add_child(done);done.hide()
 func half_size(kind:int)->Vector2:return Vector2(3,.7) if kind in [24,25] else (Vector2(6.5,5) if kind in [18,19,20] else Vector2(3.1,3.1))
 func overlaps(pos:Vector3,kind:int,yaw:float,other:Dictionary)->bool:
 	var a:=half_size(kind);var b:=half_size(int(other.type))
@@ -24,7 +29,8 @@ func rotate_selected()->void:
 	var previous:float=float(b.get("yaw",0))
 	b["yaw"]=fposmod(previous+PI/2,TAU)
 	var moving:int=host.moving_building;host.moving_building=host.selected_building
-	var reason:String=host._placement_reason(b.pos);host.moving_building=moving
+	rotating=true
+	var reason:String=host._placement_reason(b.pos);host.moving_building=moving;rotating=false
 	if not reason.is_empty():b.yaw=previous;host._toast(reason);return
 	b.node.rotation.y=b.yaw;host._save_profile();host.placement_guide.cache_key=""
 	host._toast("Wall rotated 90°. Drag it to reposition.")
@@ -125,3 +131,43 @@ func pick_wall(screen:Vector2)->int:
 		var distance:float=origin.distance_to(b.node.global_transform*hit)
 		if distance<nearest:nearest=distance;found=i
 	return found
+
+func wall_snap(pos:Vector3,exclude:int=-1)->Dictionary:
+	var result:Dictionary={"pos":pos,"yaw":float(host.buildings[exclude].get("yaw",0)) if exclude>=0 else 0.0}
+	if rotating:return result
+	var nearest:=3.6
+	for i in host.buildings.size():
+		if i==exclude:continue
+		var b:Dictionary=host.buildings[i]
+		if b.type not in [24,25] or b.pos.distance_squared_to(pos)>121:continue
+		var yaw:float=float(b.get("yaw",0));var axis:=Vector3.RIGHT.rotated(Vector3.UP,yaw)
+		var across:=Vector3.RIGHT.rotated(Vector3.UP,yaw+PI/2)
+		var candidates:Array=[{"pos":b.pos+axis*6,"yaw":yaw},{"pos":b.pos-axis*6,"yaw":yaw}]
+		for side in [-1,1]:
+			for turn in [-1,1]:candidates.append({"pos":b.pos+axis*side*3+across*turn*3.7,"yaw":fposmod(yaw+PI/2,TAU)})
+		for candidate in candidates:
+			var distance:float=pos.distance_to(candidate.pos)
+			if distance>=nearest:continue
+			var blocked:=false
+			for j in host.buildings.size():
+				if j!=exclude and overlaps(candidate.pos,24,candidate.yaw,host.buildings[j]):blocked=true;break
+			if blocked or host.garrison.blocked(candidate.pos,exclude):continue
+			nearest=distance;result=candidate
+	return result
+
+func floating_menu()->void:
+	done.visible=host.mode=="base" and host.build_type==24 and not host.build_panel.visible
+	done.position=Vector2(host.get_viewport().get_visible_rect().size.x/2-70,host.get_viewport().get_visible_rect().size.y-146)
+	if not host.info_panel.visible or host.selected_building<0:return
+	var b:Dictionary=host.buildings[host.selected_building]
+	var wall:bool=b.type in [24,25]
+	host.selected_label.visible=not wall;host.selected_detail.visible=true
+	var width:=180.0 if wall else 230.0
+	host.info_panel.custom_minimum_size=Vector2(width,0)
+	var height:=230.0 if wall else 330.0
+	host.info_panel.size=Vector2(width,height)
+	var screen:Vector2=host.camera.unproject_position(b.pos+Vector3(0,2,0))
+	var view:Vector2=host.get_viewport().get_visible_rect().size
+	host.info_panel.position=Vector2(clampf(screen.x+65,16,view.x-width-16),clampf(screen.y-height*.5,104,view.y-height-90))
+	for control in host.selected_label.get_parent().get_children():
+		if control is Button and control.text=="UPGRADE":control.tooltip_text="%s Metal"%host._fmt(host._upgrade_cost(b))
