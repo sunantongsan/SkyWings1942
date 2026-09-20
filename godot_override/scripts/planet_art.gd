@@ -1,7 +1,7 @@
 extends RefCounted
 ## Authored GLB instances, restrained environment dressing and mobile effects.
 const ROOT := "res://assets/models/"
-const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp","flak_battery","siege_mortar","sky_sentinel","wall_bamboo"]
+const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp","flak_battery","siege_mortar","sky_sentinel","wall_bamboo","base_gate"]
 var obstacles:Dictionary={}
 var scene_cache: Dictionary = {}
 var materials: Dictionary = {}
@@ -71,7 +71,7 @@ func mat(color: Color, emission := false) -> StandardMaterial3D:
 
 func terrain() -> MeshInstance3D:
 	var mesh := MeshInstance3D.new()
-	var plane:=PlaneMesh.new();plane.size=Vector2(192,192);mesh.mesh=plane
+	var plane:=PlaneMesh.new();plane.size=Vector2(384,384);mesh.mesh=plane
 	var material := ShaderMaterial.new()
 	material.shader = load("res://shaders/terrain.gdshader")
 	mesh.material_override = material
@@ -111,19 +111,18 @@ func decor(parent: Node3D, theme: int, cleared:Array=[]) -> void:
 		parent.remove_child(child)
 		child.queue_free()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 1942+theme*51
+	rng.seed = 1942
 	for i in 90:
-		var a := rng.randf()*TAU
-		var radius := rng.randf_range(28,47)
-		var x := cos(a)*radius
-		var z := sin(a)*radius*0.8
+		var x := rng.randf_range(92,158)
+		var z := rng.randf_range(-48,48)
+		if absf(z)<6 or (absf(x-110)<6 and z>-25 and z<6) or (absf(x-132)<6 and z>-6 and z<25):continue
 		var rock := model("rock_%d" % (i%3))
 		rock.position = Vector3(x,elevation(x,z)-0.03,z)
 		rock.scale = Vector3.ONE*rng.randf_range(0.7,2.4)
 		rock.rotation.y = rng.randf()*TAU
 		rock.set_meta("obstacle_id",i*4)
 		parent.add_child(rock)
-		if theme in [0,5,7] and i%2 == 0:
+		if i%2 == 0:
 			for j in 3:
 				var plant := model("alien_tree")
 				var px := x+rng.randf_range(-2.3,2.3)

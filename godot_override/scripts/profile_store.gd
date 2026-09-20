@@ -68,6 +68,26 @@ func _valid(data:Variant)->bool:
 	if not _number(data.get("miner_count",0),0,1e9):return false
 	if not _number(data.get("miner_finish",0),0,1e12):return false
 	if not _number(data.get("drone_finish",0),0,1e12):return false
+	var logistics=data.get("logistics",{})
+	if not logistics is Dictionary:return false
+	if not _number(logistics.get("coin_count",0),0,3):return false
+	var orders=logistics.get("orders",[])
+	if not orders is Array or orders.size()+int(logistics.get("coin_count",0))>3:return false
+	for job in orders:
+		if not job is Dictionary:return false
+		if not _number(job.get("producer",-1),0,data.buildings.size()-1) or not _number(job.get("finish",-1),0,1e12):return false
+	var workers=logistics.get("workers",[])
+	if not workers is Array or workers.size()>int(data.get("miner_count",0))+int(logistics.get("coin_count",0)):return false
+	var worker_ids:Dictionary={}
+	for worker in workers:
+		if not worker is Dictionary:return false
+		if worker.get("kind","") not in ["gold","coin"] or worker.get("phase","") not in ["outbound","dig","inbound"]:return false
+		if not _number(worker.get("id",-1),0,1e9) or worker_ids.has(worker.id):return false
+		worker_ids[worker.id]=true
+		if not _number(worker.get("cargo",-1),0,120 if worker.kind=="gold" else 3) or not _number(worker.get("dig",-1),0,20) or not _number(worker.get("cycle",-1),0,1e12):return false
+		if not worker.get("pos") is Array or worker.pos.size()!=3:return false
+		for component in worker.pos:
+			if not _number(component,-1e12,1e12):return false
 	var clear_jobs=data.get("clearing_jobs",[])
 	if not clear_jobs is Array or clear_jobs.size()>10:return false
 	for job in clear_jobs:
@@ -93,8 +113,8 @@ func _valid(data:Variant)->bool:
 	var kinds:Dictionary={}
 	for b in data.buildings:
 		if not b is Dictionary:return false
-		if not _number(b.get("type",-1),0,24) or not _number(b.get("level",0),1,100):return false
-		if b.type==24 and b.level>5:return false
+		if not _number(b.get("type",-1),0,25) or not _number(b.get("level",0),1,100):return false
+		if b.type in [24,25] and b.level>5:return false
 		if not b.get("pos") is Array or b.pos.size()!=3:return false
 		if not _number(b.pos[0],-1e12,1e12) or not _number(b.pos[1],0,0) or not _number(b.pos[2],-1e12,1e12):return false
 		if not _number(b.get("yaw",0),-TAU,TAU):return false

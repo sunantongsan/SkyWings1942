@@ -1,7 +1,7 @@
 extends Node3D
 
-const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire","Vehicle Camp","Air Camp","Infantry Camp","Flak Battery","Siege Mortar","Sky Sentinel","Wall"]
-const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300,900,900,700,1400,1800,2000,250]
+const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire","Vehicle Camp","Air Camp","Infantry Camp","Flak Battery","Siege Mortar","Sky Sentinel","Wall","Base Gate"]
+const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300,900,900,700,1400,1800,2000,250,500]
 const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander","Rune Guardian","Crystal Golem","Starweaver","Attack Pigeon"]
 const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mechanis","Toxicus","Nebularis","Asteroid Belt","Ruins","Orbit Station","Moon Base","Gas Giant","Wormhole"]
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
@@ -105,7 +105,8 @@ var toast_tween: Tween
 var battle_cooldown := 0.0
 var awaiting_deployment := false
 var deploy_kind:=0
-var deploy_count:=8
+var deploy_count:=1
+var logistics:RefCounted
 var deployed_stock:=PackedInt32Array()
 var deployment_groups:Array[int]=[]
 var deployment_bar:HBoxContainer
@@ -117,7 +118,7 @@ var unit_icon_cache:Dictionary={}
 const GROUND_ASSETS := ["battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander"]
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
-const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25,20,0,40,30,10,10,10,25,35,40,0]
+const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25,20,0,40,30,10,10,10,25,35,40,0,0]
 var home_planet := -1
 var has_colony := false
 var tutorial_step := 0
@@ -130,7 +131,7 @@ var profile_ready := false
 var roads_root:Node3D
 var landing_marker:MeshInstance3D
 var landing_label:Label3D
-const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35,30,30,25,40,55,60,12]
+const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35,30,30,25,40,55,60,12,20]
 var colony_time := 0.0
 var training_queue:Array = []
 var production_kind:=6
@@ -159,6 +160,7 @@ func _ready()->void:
 	battle_feedback=preload("res://scripts/battle_feedback.gd").new(self)
 	battle_feedback.sound_button=dock.get_child(8);battle_feedback.set_enabled(battle_feedback.enabled,false)
 	rewarded_ads=preload("res://scripts/rewarded_ads.gd").new(self)
+	logistics=preload("res://scripts/forest_logistics.gd").new(self)
 	_load_profile()
 	_apply_map_theme(home_planet if has_colony else 0)
 	_setup_life()
@@ -324,11 +326,12 @@ func _setup_ui()->void:
 func _make_build_panel()->PanelContainer:
 	var panel:=_panel("CONSTRUCTION  /  DEVELOP YOUR HOMEWORLD")
 	var actions:=HBoxContainer.new();panel.get_child(0).add_child(actions)
-	actions.add_child(_button("GODOT COIN / REWARDS",func():coin_system.show_panel(),Vector2(310,52)))
-	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(310,52)))
+	actions.add_child(_button("GODOT COIN / REWARDS",func():coin_system.show_panel(),Vector2(230,52)))
+	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(230,52)))
+	actions.add_child(_button("FOREST / MINERS",func():logistics.show_forest(),Vector2(230,52)))
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
-	for i in BUILD_ORDER.slice(0,7)+[24,8,21,22,23,7,9,18,19,20,10,11,12,13,14,15,16,17]:
+	for i in BUILD_ORDER.slice(0,7)+[24,25,8,21,22,23,7,9,18,19,20,10,11,12,13,14,15,16,17]:
 		var b:=_asset_button(BUILDING_NAMES[i],"%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
 		if i>=21:
 			b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text+= "\n"+defenses.description(i)
@@ -349,6 +352,9 @@ func _producer_for(kind:int)->int:
 	return -1
 func _producer_queue_count(index:int)->int:
 	var count:=0
+	if logistics:
+		for job in logistics.orders:
+			if int(job.producer)==index:count+=1
 	for job in training_queue:
 		if int(job.get("producer",-1))==index:count+=1
 	return count
@@ -359,6 +365,7 @@ func _facility_finish(kind:int,index:int=-1)->float:
 	var finish:float=colony_time
 	if kind==6 and drone_producer==index:finish=maxf(finish,drone_finish)
 	if kind==12 and miner_producer==index:finish=maxf(finish,miner_finish)
+	if kind==12 and logistics:finish=maxf(finish,logistics.queue_finish(index))
 	for job in training_queue:
 		if int(job.get("producer",-1))==index:finish=maxf(finish,float(job.finish))
 	return finish
@@ -423,6 +430,9 @@ func _make_units_panel()->PanelContainer:
 		var miner:=_asset_button("Mining Vehicle","LV 1 • 15s • 600 M / 150 O\nRequires Gold Refinery","units/mining_vehicle",Vector2(230,168))
 		miner.disabled=level<1 or building_levels[10]<1 or miner_finish>0
 		miner.pressed.connect(_build_miner);grid.add_child(miner)
+		var coin_truck:=_asset_button("Coin Prospector","60s • 4000 M / 1200 O\nSearch forest; deliver Coins to Core","units/coin_prospector",Vector2(230,168))
+		coin_truck.disabled=level<2
+		coin_truck.pressed.connect(func():logistics.build_coin_truck());grid.add_child(coin_truck)
 	if production_kind==6:
 		var drone:=_asset_button("Construction Drone","LV 1 • 15s • %d / 10 • %d Gold"%[drone_count,DRONE_PRICES[mini(drone_count-1,8)]],"units/construction_drone",Vector2(230,168))
 		drone.disabled=level<1 or drone_count>=10 or drone_finish>0
@@ -487,18 +497,18 @@ func _make_galaxy_panel()->PanelContainer:
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
 
-func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp","flak_battery","siege_mortar","sky_sentinel","wall_bamboo"][i]
+func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp","flak_battery","siege_mortar","sky_sentinel","wall_bamboo","base_gate"][i]
 
 func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->Dictionary:
 	var root:Node3D=art.building(type,enemy,level)
 	root.position=pos;parent.add_child(root)
-	root.scale=Vector3.ONE if type==24 else Vector3.ONE*(1.0+(level-1)*.025)
+	root.scale=Vector3.ONE if type in [24,25] else Vector3.ONE*(1.0+(level-1)*.025)
 	for part_name in ["Rotor","Radar","Drill","Turret"]:
 		var part:Node3D=root.find_child(part_name,true,false)
 		if part:animators.append({"node":part,"kind":part_name,"home":parent==home_root})
 	if type==3: art.particles(root,Vector3(0,4.4,-.25),Color("9db4b6"),true,false)
 	var d={"node":root,"type":type,"level":level,"pos":pos,"hp":350.0+level*120.0,"max_hp":350.0+level*120.0}
-	if type==24:d.hp=650.0+level*450.0;d.max_hp=d.hp
+	if type in [24,25]:d.hp=650.0+level*450.0;d.max_hp=d.hp
 	var rank:=Label3D.new();rank.font_size=44;rank.pixel_size=.018;rank.outline_size=8
 	rank.billboard=BaseMaterial3D.BILLBOARD_ENABLED;rank.modulate=Color("ffd873")
 	rank.no_depth_test=true;root.add_child(rank);rank.top_level=true;d["rank_label"]=rank
@@ -566,27 +576,27 @@ func _upgrade_selected()->void:
 	var b:Dictionary=buildings[selected_building]
 	if tutorial_step==10 and b.type!=0:_toast("Upgrade the Galactic Core first.");return
 	if b.get("job","")!="":_toast("This building is already under construction.");return
-	if b.level>=(5 if b.type==24 else 100):_toast("Maximum level reached.");return
+	if b.level>=(5 if b.type in [24,25] else 100):_toast("Maximum level reached.");return
 	var cost:float=_upgrade_cost(b)
 	if metal<cost:_toast("NOT ENOUGH METAL");return
-	if b.type!=24 and _builder_busy():_toast("Construction drone busy. Wait for the current job.");return
+	if b.type not in [24,25] and _builder_busy():_toast("Construction drone busy. Wait for the current job.");return
 	metal-=cost
-	if b.type==24:_complete_upgrade(b)
+	if b.type in [24,25]:_complete_upgrade(b)
 	else:
 		b["job"]="upgrade";b["started"]=colony_time;b["finish"]=colony_time+_upgrade_seconds(int(b.level)+1)
 		_add_work_marker(b)
 	_refresh_progress();_save_profile();_dismiss_menus()
-	if b.type==24:_select_building_at(b.pos)
-	_toast("Wall upgraded immediately." if b.type==24 else "Upgrade started • "+_duration(_upgrade_seconds(int(b.level)+1)))
+	if b.type in [24,25]:_select_building_at(b.pos)
+	_toast("Wall upgraded immediately." if b.type in [24,25] else "Upgrade started • "+_duration(_upgrade_seconds(int(b.level)+1)))
 
 func _upgrade_cost(b:Dictionary)->float:
 	return (860.0+int(b.type)*120.0)*pow(2.0,int(b.level)-1)
 
 func _complete_upgrade(b:Dictionary)->void:
-	b.level=mini(int(b.level)+1,5 if b.type==24 else 100)
+	b.level=mini(int(b.level)+1,5 if b.type in [24,25] else 100)
 	b["job"]="";b.node.scale=Vector3.ONE*(1+(b.level-1)*.025)
 	b.max_hp=350.0+b.level*120.0;b.hp=b.max_hp
-	if b.type==24:
+	if b.type in [24,25]:
 		_refresh_wall_model(b);b.node.rotation.y=float(b.get("yaw",0))
 		b.max_hp=650.0+b.level*450.0;b.hp=b.max_hp
 	if is_instance_valid(b.get("work_marker")):b.work_marker.queue_free();b.erase("work_marker")
@@ -665,22 +675,22 @@ func _start_battle(idx:int,campaign_index:int=-1)->void:
 			battle_targets.append(_spawn_building(battle_root,17 if idx in [4,8,10,14] else 11,Vector3(-12+i*8,0,-12),1+idx,true))
 	raid_stock=unit_stock.duplicate()
 	awaiting_deployment=true;deployed_stock.resize(UNIT_NAMES.size());deployed_stock.fill(0);deployment_groups.clear()
-	deploy_count=8
+	deploy_count=1
 	for kind in UNIT_NAMES.size():
 		if unit_stock[kind]>0:deploy_kind=kind;break
 	camera_focus=Vector3.ZERO;_position_camera();camera.size=44
-	_toast("Choose a squad, then tap an outer edge. Place several groups before ATTACK.");_refresh_progress();_show_deployment()
+	_toast("Choose a unit. Each tap on the green edge places ONE. Then ATTACK.");_refresh_progress();_show_deployment()
 
 func _deployment_reason(pos:Vector3)->String:
 	if not pos.is_finite():return "Invalid position."
-	if absf(pos.x)>22 or absf(pos.z)>20 or (absf(pos.x)<16 and absf(pos.z)<13):return "Deploy in the green outer area."
+	if absf(pos.x)>34 or absf(pos.z)>30 or (absf(pos.x)<16 and absf(pos.z)<13):return "Deploy in the green outer area."
 	if raid_stock.size()<=deploy_kind or raid_stock[deploy_kind]-deployed_stock[deploy_kind]<=0:return "No reserves of this type."
 	return ""
 
 func _deployment_positions(anchor:Vector3,amount:int)->Array[Vector3]:
 	var cells:Array[Vector3]=[]
-	for x in range(-22,23,2):
-		for z in range(-20,21,2):
+	for x in range(-34,35,2):
+		for z in range(-30,31,2):
 			if abs(x)>=16 or abs(z)>=14:cells.append(Vector3(x,0,z))
 	cells.sort_custom(func(a,b):return a.distance_squared_to(anchor)<b.distance_squared_to(anchor))
 	var positions:Array[Vector3]=[]
@@ -710,7 +720,7 @@ func _placement_reason(pos:Vector3)->String:
 	for i in buildings.size():
 		if i==moving_building:continue
 		var other:Dictionary=buildings[i]
-		if placing_kind==24 or other.type==24:
+		if placing_kind in [24,25] or other.type in [24,25]:
 			var yaw:float=float(buildings[moving_building].get("yaw",0)) if moving_building>=0 else 0.0
 			if layout.overlaps(pos,placing_kind,yaw,other):return "Wall footprint overlaps another structure."
 		elif other.pos.distance_to(pos)<6.1:return "Too close to another building."
@@ -740,7 +750,7 @@ func _deploy_fleet(pos:Vector3)->void:
 			var stats:Array=[[480.0,27.0,3.4],[1050.0,45.0,2.0],[330.0,36.0,3.0],[90.0,5.0,4.2]][kind-20]
 			var unit:Dictionary=battle_units.back();unit.hp=stats[0];unit.max_hp=stats[0];unit.damage=stats[1];unit.speed=stats[2]
 	_refresh_deployment()
-	_toast("Squad placed. Choose another type or location, then ATTACK." if awaiting_deployment else "Reinforcements deployed!")
+	_toast("Unit placed. Tap another location or press ATTACK." if awaiting_deployment else "Reinforcements deployed!")
 
 func _battle_tick(delta:float)->void:
 	if awaiting_deployment:return
@@ -824,7 +834,7 @@ func _economy_tick(delta:float)->void:
 	var refineries:=0
 	for b in buildings:
 		if b.type==10 and b.get("job","")!="build":refineries+=1
-	gold=minf(1e12,gold+delta*2.0*mini(miner_count,refineries*3))
+	if logistics:logistics.advance(delta)
 	for b in buildings:
 		if b.get("job","")=="build":continue
 		match int(b.type):
@@ -856,7 +866,7 @@ func _select_building_at(pos:Vector3)->void:
 	selected_label.text="%s • %s"%[BUILDING_NAMES[b.type],_rank_text(b.level)]
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
-	var wall:bool=b.type==24
+	var wall:bool=b.type in [24,25]
 	for control in selected_label.get_parent().get_children():
 		if control is Button and control.text in ["PRODUCE","SPEED UP","MOVE","CLOSE"]:control.visible=not wall
 	wall_rotate_button.visible=wall;wall_delete_button.visible=wall
@@ -867,7 +877,7 @@ func _select_building_at(pos:Vector3)->void:
 	if b.type>=21:selected_detail.text+="\n"+defenses.description(b.type,b.level)
 	if b.type==24 and b.level>=5:selected_detail.text="FIRE WALL • MAX LEVEL\nHP %d / %d\nBlocks ground units\nClose-range machine gun\nRange %.1f m"%[b.hp,b.max_hp,_weapon_range(b)]
 	if wall:
-		selected_detail.text="%s\n%s\nDrag the wall to move"%[defenses.WALL_NAMES[int(b.level)-1],"MAX LEVEL" if b.level>=5 else "%s Metal • INSTANT"%_fmt(_upgrade_cost(b))]
+		selected_detail.text="%s\n%s\nDrag to move"%[("Base Gate" if b.type==25 else defenses.WALL_NAMES[int(b.level)-1]),"MAX LEVEL" if b.level>=5 else "%s Metal • INSTANT"%_fmt(_upgrade_cost(b))]
 		for control in selected_label.get_parent().get_children():
 			if control is Button and control.text=="UPGRADE":control.disabled=b.level>=5 or b.get("job","")!=""
 	else:
@@ -937,12 +947,12 @@ func _unhandled_input(event:InputEvent)->void:
 			if pointer_moved:_pan(event.position,event.relative)
 		elif touch_points.size()>=2:
 			var k:=touch_points.keys();var d:float=touch_points[k[0]].distance_to(touch_points[k[1]])
-			if pinch_last>0 and d>1:camera.size=clampf(camera.size*pinch_last/d,24,52)
+			if pinch_last>0 and d>1:camera.size=clampf(camera.size*pinch_last/d,24,84)
 			pinch_last=d
 
 func _clamp_camera()->void:
 	if mode=="battle":
-		camera_focus.x=clampf(camera_focus.x,-24,24);camera_focus.z=clampf(camera_focus.z,-20,20)
+		camera_focus.x=clampf(camera_focus.x,-38,38);camera_focus.z=clampf(camera_focus.z,-34,34)
 	_position_camera()
 
 func _center_camera()->void:
@@ -950,7 +960,7 @@ func _center_camera()->void:
 	camera.size=36
 	_position_camera()
 
-func _zoom(delta:float)->void:camera.size=clampf(camera.size+delta,24,52)
+func _zoom(delta:float)->void:camera.size=clampf(camera.size+delta,24,84)
 
 func _explode(pos:Vector3)->void:
 	art.particles(world_root,pos+Vector3.UP,Color("ffb564"),false,true)
@@ -1001,7 +1011,7 @@ func _pan(pos:Vector2,relative:Vector2)->void:
 func _tap_world(pos:Vector2)->void:
 	if mode=="battle":
 		var point=_ground_hit(pos)
-		if point!=null:_deploy_fleet(point)
+		if point!=null:deploy_count=1;_deploy_fleet(point)
 		return
 	if mode!="base":return
 	var h=_ground_hit(pos)
@@ -1189,7 +1199,7 @@ func _save_profile()->bool:
 	if not has_colony or not profile_ready:return false
 	var records:Array=[]
 	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"yaw":b.get("yaw",0.0),"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
-	var data:Dictionary={"schema":1,"campaign_cleared":campaign_cleared,"campaign_earnings":campaign_earnings,"campaign_wins":campaign_wins,"ad_rewards":rewarded_ads.save_state() if rewarded_ads else {},"drone_producer":drone_producer,"miner_producer":miner_producer,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	var data:Dictionary={"schema":1,"logistics":logistics.save_state() if logistics else {},"campaign_cleared":campaign_cleared,"campaign_earnings":campaign_earnings,"campaign_wins":campaign_wins,"ad_rewards":rewarded_ads.save_state() if rewarded_ads else {},"drone_producer":drone_producer,"miner_producer":miner_producer,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
 	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.");return false
 	return true
 
@@ -1213,11 +1223,12 @@ func _load_profile()->void:
 	for b in data.buildings:
 		var placed:Dictionary=_spawn_building(home_root,int(b.type),Vector3(b.pos[0],0,b.pos[2]),int(b.level),false)
 		placed["yaw"]=float(b.get("yaw",0));placed.node.rotation.y=placed.yaw
-		if b.get("job","")=="upgrade" and int(b.type)==24:
+		if b.get("job","")=="upgrade" and int(b.type) in [24,25]:
 			_complete_upgrade(placed)
 		elif b.get("job","")!="":
 			for key in ["job","started","finish"]:placed[key]=b[key]
 			_add_work_marker(placed)
+	if logistics:logistics.load_state(data.get("logistics",{}))
 	for job in training_queue:
 		if not job.has("producer"):job["producer"]=_producer_for(UNIT_FACILITY[int(job.type)])
 	if drone_finish>0 and drone_producer<0:drone_producer=_producer_for(6)
@@ -1253,6 +1264,7 @@ func _advance_colony(now:float)->void:
 	var economy_start:float=maxf(colony_time,now-8*3600)
 	while colony_time<now:
 		var next:float=now
+		if logistics:next=minf(next,maxf(colony_time,logistics.next_finish()))
 		for job in clearing_jobs:next=minf(next,maxf(colony_time,float(job.finish)))
 		if drone_finish>0:next=minf(next,maxf(colony_time,drone_finish))
 		if miner_finish>0:next=minf(next,maxf(colony_time,miner_finish))
@@ -1261,6 +1273,7 @@ func _advance_colony(now:float)->void:
 		if not training_queue.is_empty():next=minf(next,maxf(colony_time,float(training_queue[0].finish)))
 		_economy_tick(maxf(0,next-maxf(colony_time,economy_start)))
 		colony_time=next
+		if logistics and logistics.complete_orders(colony_time):changed=true
 		for i in range(clearing_jobs.size()-1,-1,-1):
 			if float(clearing_jobs[i].finish)<=colony_time:
 				var job:Dictionary=clearing_jobs.pop_at(i)
@@ -1272,7 +1285,7 @@ func _advance_colony(now:float)->void:
 				if b.job=="upgrade":b.level+=1
 				b["job"]="";b.node.scale=Vector3.ONE*(1+(b.level-1)*.025)
 				b.max_hp=350.0+b.level*120.0;b.hp=b.max_hp
-				if b.type==24:
+				if b.type in [24,25]:
 					_refresh_wall_model(b)
 					b.max_hp=650.0+b.level*450.0;b.hp=b.max_hp
 				if is_instance_valid(b.get("work_marker")):b.work_marker.queue_free();b.erase("work_marker")
@@ -1328,7 +1341,7 @@ func _move_building(pos:Vector3)->void:
 	garrison.signature="";garrison.sync();_sync_industry_visuals();_save_profile();_dismiss_menus();_toast("Structure relocated.")
 
 func _building_oil_cost(kind:int)->int:
-	if kind>=21:return [150,250,300,0][kind-21]
+	if kind>=21:return [150,250,300,0,50][kind-21]
 	if kind>=18:return 100
 	return [300,150,250,200][kind-14] if kind>=14 else (350 if kind==10 else (200 if kind==11 else 0))
 
@@ -1356,15 +1369,9 @@ func _build_miner()->void:
 	_save_profile();_refresh_progress();_toast("Mining vehicle queued in factory #%d (15s)."%(miner_producer+1))
 
 func _sync_industry_visuals()->void:
-	for n in industry_visuals:
-		if is_instance_valid(n):n.queue_free()
-	industry_visuals.clear()
-	var refineries:Array[Vector3]=[]
-	for b in buildings:
-		if b.type==10 and b.get("job","")!="build":refineries.append(b.pos)
-	for i in mini(miner_count,refineries.size()*3):
-		var truck:Node3D=art.model("mining_vehicle");home_root.add_child(truck)
-		truck.set_meta("origin",refineries[floori(i/3.0)]);industry_visuals.append(truck)
+	if logistics:
+		logistics.sync_workers()
+		industry_visuals.assign(logistics.gold_nodes())
 	while drone_visuals.size()<drone_count:
 		var drone:Node3D=art.model("construction_drone");home_root.add_child(drone);drone_visuals.append(drone)
 
@@ -1381,12 +1388,7 @@ func _industry_tick(_delta:float)->void:
 		drone_visuals[i].position=drone_visuals[i].position.move_toward(base+Vector3(cos(a)*2,4.5+sin(a)*.3,sin(a)*2),maxf(0,_delta)*25)
 		drone_visuals[i].rotation.y=-a
 	coin_system.tick()
-	for i in industry_visuals.size():
-		var origin:Vector3=industry_visuals[i].get_meta("origin")
-		var phase:float=fmod(colony_time+i*6.0,20.0)/20.0
-		var distance:float=1.0-absf(phase*2-1)
-		industry_visuals[i].position=origin+Vector3(3+i%3,0,3+distance*8)
-		industry_visuals[i].rotation.y=0 if phase<.5 else PI
+	if logistics:logistics.visual_tick(_delta)
 
 func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->void:
 	for tower in defenders:
@@ -1451,7 +1453,7 @@ func _home_defense_tick(delta:float)->void:
 
 func _refresh_wall_model(b:Dictionary)->void:
 	var old:Node3D=b.node
-	var model:Node3D=art.building(24,false,int(b.level));home_root.add_child(model);model.position=b.pos;model.rotation.y=float(b.get("yaw",0))
+	var model:Node3D=art.building(int(b.type),false,int(b.level));home_root.add_child(model);model.position=b.pos;model.rotation.y=float(b.get("yaw",0))
 	if is_instance_valid(b.get("rank_label")):b.rank_label.reparent(model,true)
 	b.node=model;old.queue_free();_update_rank_label(b)
 
@@ -1465,7 +1467,7 @@ func _update_rank_label(b:Dictionary)->void:
 	b.rank_label.global_position=b.node.global_position+Vector3(0,5.2*(1+(b.level-1)*.025),0)
 
 func _can_fire(b:Dictionary)->bool:
-	return b.hp>0 and b.get("job","")!="build" and (b.type in [8,11,17,21,22,23] or b.level>=5)
+	return b.type!=25 and b.hp>0 and b.get("job","")!="build" and (b.type in [8,11,17,21,22,23] or b.level>=5)
 
 func _weapon_range(b:Dictionary)->float:
 	if b.type>=21:return defenses.weapon_range(b)
@@ -1511,11 +1513,9 @@ func _show_deployment()->void:
 		deploy_picker.add_icon_item(_unit_icon(kind),UNIT_NAMES[kind],kind)
 	deploy_picker.select(deploy_kind)
 	deploy_picker.item_selected.connect(func(index:int):deploy_kind=index;_refresh_deployment())
-	var quantity:=OptionButton.new();quantity.custom_minimum_size=Vector2(170,64);quantity.add_theme_font_size_override("font_size",20)
-	for count in [1,4,8,24,0]:quantity.add_item("ALL RESERVES" if count==0 else "SQUAD %d"%count,count)
-	quantity.select(2);quantity.item_selected.connect(func(index:int):deploy_count=quantity.get_item_id(index))
+	var quantity:=Label.new();quantity.text="1 UNIT / TAP";quantity.custom_minimum_size=Vector2(170,64);quantity.vertical_alignment=VERTICAL_ALIGNMENT_CENTER;quantity.add_theme_font_size_override("font_size",20)
 	deployment_bar.add_child(quantity)
-	deployment_bar.add_child(_button("UNDO SQUAD",_undo_squad,Vector2(180,64)))
+	deployment_bar.add_child(_button("UNDO UNIT",_undo_squad,Vector2(180,64)))
 	deployment_bar.add_child(_button("ATTACK",_launch_assault,Vector2(160,64)))
 	deploy_status=Label.new();deploy_status.add_theme_font_size_override("font_size",20);deployment_bar.add_child(deploy_status)
 	_build_reserve_panel()

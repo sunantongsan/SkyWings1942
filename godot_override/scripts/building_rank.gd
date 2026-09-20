@@ -18,7 +18,7 @@ static func apply(root:Node3D,level:int,kind:int)->void:
 			var name:String=source.resource_name.to_lower()
 			if "recess" in name or "glass" in name or "rust" in name:continue
 			# Keep bamboo/earth/concrete/steel/fire recognizable; color the fittings.
-			if kind==24 and name in ["wall_material","bamboo_joints"]:continue
+			if kind in [24,25] and name in ["wall_material","bamboo_joints"]:continue
 			var key:String=str(source.get_instance_id())+":"+str(mini(level,6))
 			if not paint_cache.has(key):
 				var paint:StandardMaterial3D=source.duplicate()

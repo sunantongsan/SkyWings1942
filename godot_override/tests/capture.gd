@@ -258,7 +258,7 @@ func run()->void:
 	assert(game.metal==mining_metal-600 and game.oil==mining_oil-150)
 	game._advance_colony(game.colony_time+16)
 	assert(game.miner_count==1 and game.industry_visuals.size()==1)
-	game._advance_colony(game.colony_time+101)
+	game._advance_colony(game.colony_time+181)
 	assert(game.gold>=200)
 	game._buy_drone();assert(game.drone_count==1 and game.drone_finish>0)
 	game._advance_colony(game.drone_finish+1);assert(game.drone_count==2)
@@ -329,7 +329,7 @@ func run()->void:
 	assert(game.battle_units.size()==125 and game.unit_stock[0]==0 and game.unit_stock[10]==0 and game.unit_stock[18]==0,"Deploy ALL before and during battle without a 24-unit cap")
 	for unit in game.battle_units:
 		var pos:Vector3=unit.node.position
-		assert(absf(pos.x)<=22 and absf(pos.z)<=20 and (absf(pos.x)>=16 or absf(pos.z)>=13),"Every unit spawns inside deployment bands")
+		assert(absf(pos.x)<=34 and absf(pos.z)<=30 and (absf(pos.x)>=16 or absf(pos.z)>=13),"Every unit spawns inside deployment bands")
 		var forward:Vector3=-unit.node.global_basis.z if unit.type<10 else unit.node.global_basis.z
 		assert(forward.normalized().dot(Vector3(-pos.x,0,-pos.z).normalized())>.99,"Models face the enemy rather than flying backwards")
 	# A destroyed nearby target must not hold up later units in the same simulation tick.

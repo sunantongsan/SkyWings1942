@@ -100,9 +100,11 @@ func record(topic:String)->void:
 				if frame==20:point(label_center(game.galaxy_panel,game.Campaign.stage(0).name),"2. Choose a base and check rewards")
 				if frame==28:game._campaign_select(0)
 				if frame==38:game._campaign_start(0)
-				if frame==42:point(Vector2(1130,170),"3. Select your squad on the right")
-				if frame==61:world_point(Vector3(-20,0,4),"4. Tap the GREEN outer zone")
-				if frame==78:game._deploy_fleet(Vector3(-20,0,4));assert(game.battle_units.size()==8)
+				if frame==42:point(Vector2(1130,170),"3. Select a unit on the right")
+				if frame>=50 and frame<=78 and frame%4==2:
+					var place:=Vector3(-20,0,-10+(frame-50)/2)
+					world_point(place,"4. Each tap places ONE unit");game._deploy_fleet(place)
+				if frame==80:assert(game.battle_units.size()==8)
 				if frame==84:point(button_center(game.deployment_bar,"ATTACK"),"5. Tap ATTACK")
 				if frame==99:game._launch_assault();marker.hide();caption.text="Send more reserves whenever you need!"
 			"camera":

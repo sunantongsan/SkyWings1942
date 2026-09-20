@@ -14,13 +14,13 @@ void fragment(){
  float grain=noise(world_pos.xz*9.0);
  if(deployment_active){
   vec2 p=abs(world_pos.xz);
-  bool inside=p.x<=22.0 && p.y<=20.0;
+  bool inside=p.x<=34.0 && p.y<=30.0;
   bool outer=p.x>=16.0 || p.y>=13.0;
-  if(p.x<=24.0 && p.y<=22.0){
+  if(p.x<=36.0 && p.y<=32.0){
    vec3 tint=(inside && outer && deployment_available)?vec3(0.12,0.95,0.32):vec3(0.95,0.12,0.15);
    vec2 cell=abs(fract(world_pos.xz/2.0)-0.5);
    float grid=step(0.46,max(cell.x,cell.y));
-   float border=1.0-step(0.14,min(min(abs(p.x-22.0),abs(p.y-20.0)),outer?min(abs(p.x-16.0),abs(p.y-13.0)):100.0));
+   float border=1.0-step(0.14,min(min(abs(p.x-34.0),abs(p.y-30.0)),outer?min(abs(p.x-16.0),abs(p.y-13.0)):100.0));
    col=mix(col,tint,0.25+grid*0.18+border*0.30);
    EMISSION=tint*(0.06+grid*0.09+border*0.22);
   }

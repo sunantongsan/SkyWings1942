@@ -68,4 +68,28 @@ def build_defenses(Model, material):
                 m.block((1,.5,.8),(0,3.25,0),1,.09)
                 for x in [-.23,.23]:m.strut((x,3.35,.3),(x,3.35,1.6),.14,3)
         out.append(m.export(name))
+    m=Model('45c9bc')
+    for x in [-2.8,2.8]:
+        m.block((.8,3.8,1.4),(x,1.9,0),0,.12)
+        m.block((.5,.25,.7),(x,3.95,0),4,.05)
+    m.block((6.4,.4,1.2),(0,3.7,0),3,.08)
+    for side,name in [(-1,'GateLeft'),(1,'GateRight')]:
+        m.part=name
+        m.block((2.3,3.1,.65),(side*1.15,1.6,0),0,.1)
+        for y in [.6,1.6,2.6]:m.block((2.1,.18,.75),(side*1.15,y,0),5,.03)
+    out.append(m.export('base_gate'))
+    m=Model('cb80ff')
+    m.materials[0]=material('prospector_violet','704c9e',.35,.6)
+    m.block((2.1,.7,3.1),(0,.85,0),0,.15)
+    for x in [-1.1,1.1]:
+        m.block((.55,.8,3.1),(x,.45,0),2,.15)
+        for z in [-1,0,1]:m.block((.6,.4,.5),(x,.45,z),3,.07)
+    m.block((1.6,1.1,1.0),(0,1.55,.7),0,.13)
+    m.block((1.3,.6,.08),(0,1.65,1.24),6,.04)
+    m.block((1.7,.7,1.2),(0,1.4,-.8),5,.12)
+    for x in [-.45,0,.45]:m.drum(.22,.2,(x,1.85,-.8),5)
+    m.part='Drill';m.pivots['Drill']=(0,.9,2)
+    m.drum(.65,.8,(0,.9,2),3)
+    for x in [-.35,.35]:m.strut((x,.9,1.6),(x,.9,2.6),.2,5)
+    out.append(m.export('coin_prospector'))
     return out

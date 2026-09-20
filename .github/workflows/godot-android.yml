@@ -113,6 +113,13 @@ jobs:
           grep -q V26_VISIBLE_WALL_BODY_DRAG_AND_NONWALL_UPGRADE_TIMERS_PASSED defense-checks.log
           if grep -q 'SCRIPT ERROR' defense-checks.log; then exit 1; fi
 
+      - name: Verify forest logistics and single-unit deployment
+        run: |
+          set -o pipefail
+          timeout 180s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/forest.gd 2>&1 | tee forest-checks.log
+          grep -q V27_SINGLE_DEPLOY_FOREST_GATES_CARGO_SAVE_AND_FACTORY_PASSED forest-checks.log
+          if grep -q 'SCRIPT ERROR' forest-checks.log; then exit 1; fi
+
       - name: Upload scene review
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,6 +131,7 @@ jobs:
             lesson-checks.log
             campaign-checks.log
             defense-checks.log
+            forest-checks.log
             game/assets/tutorial/*.ogv
             game/assets/models/manifest.json
 

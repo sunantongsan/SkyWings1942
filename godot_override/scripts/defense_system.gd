@@ -20,6 +20,7 @@ func description(kind:int,level:int=1)->String:
 		21:return "Rapid machine guns\nTargets: ground + air"
 		22:return "Arcing cannon shells\nGround only • area damage"
 		23:return "3 homing missiles per burst\nAir only • ignores ground"
+		25:return "Automatic friendly gate\nKeeps enemies outside"
 		24:return "%s wall • blocks ground\n%s"%[WALL_NAMES[clampi(level-1,0,4)],"Close-range machine gun" if level>=5 else "Upgrade to change material"]
 	return ""
 func fire(tower:Dictionary,attackers:Array,delta:float)->void:
@@ -107,7 +108,8 @@ func clear()->void:
 func blocking_wall(start:Vector3,end:Vector3,defenders:Array)->Dictionary:
 	var found:Dictionary={};var distance:=INF
 	for b in defenders:
-		if b.type!=24 or b.hp<=0 or not is_instance_valid(b.node) or b.get("job","")=="build":continue
+		if b.type not in [24,25] or b.hp<=0 or not is_instance_valid(b.node) or b.get("job","")=="build":continue
+		if b.type==25 and float(b.get("gate_open",0))>.8:continue
 		var center:Vector3=b.pos
 		var box:=AABB(Vector3(-3.1,-1,-.9),Vector3(6.2,8,1.8))
 		var from:Vector3=(Vector3(start.x,1,start.z)-center).rotated(Vector3.UP,-float(b.get("yaw",0)))

@@ -6,7 +6,7 @@ var start:=Vector2.ZERO
 var touch_id:=-2
 var drag_offset:=Vector3.ZERO
 func _init(game:Node3D)->void:host=game
-func half_size(kind:int)->Vector2:return Vector2(3,.7) if kind==24 else (Vector2(6.5,5) if kind in [18,19,20] else Vector2(3.1,3.1))
+func half_size(kind:int)->Vector2:return Vector2(3,.7) if kind in [24,25] else (Vector2(6.5,5) if kind in [18,19,20] else Vector2(3.1,3.1))
 func overlaps(pos:Vector3,kind:int,yaw:float,other:Dictionary)->bool:
 	var a:=half_size(kind);var b:=half_size(int(other.type))
 	var angle:float=float(other.get("yaw",0))
@@ -20,7 +20,7 @@ func overlaps(pos:Vector3,kind:int,yaw:float,other:Dictionary)->bool:
 func rotate_selected()->void:
 	if host.mode!="base" or host.selected_building<0:return
 	var b:Dictionary=host.buildings[host.selected_building]
-	if b.type!=24:host._toast("Select a wall to rotate it.");return
+	if b.type not in [24,25]:host._toast("Select a wall to rotate it.");return
 	var previous:float=float(b.get("yaw",0))
 	b["yaw"]=fposmod(previous+PI/2,TAU)
 	var moving:int=host.moving_building;host.moving_building=host.selected_building
@@ -87,10 +87,13 @@ func input(event:InputEvent)->bool:
 func delete_selected()->void:
 	if host.mode!="base" or host.selected_building<0:return
 	var index:int=host.selected_building
-	if index>=host.buildings.size() or host.buildings[index].type!=24:return
+	if index>=host.buildings.size() or host.buildings[index].type not in [24,25]:return
 	cancel()
 	var wall:Dictionary=host.buildings.pop_at(index)
 	wall.node.queue_free()
+	if host.logistics:
+		for job in host.logistics.orders:
+			if int(job.producer)>index:job.producer=int(job.producer)-1
 	for job in host.training_queue:
 		if int(job.get("producer",-1))>index:job.producer=int(job.producer)-1
 	for key in ["production_building","drone_producer","miner_producer"]:
@@ -114,7 +117,7 @@ func pick_wall(screen:Vector2)->int:
 	var nearest:=INF;var found:=-1
 	for i in host.buildings.size():
 		var b:Dictionary=host.buildings[i]
-		if b.type!=24 or not is_instance_valid(b.node):continue
+		if b.type not in [24,25] or not is_instance_valid(b.node):continue
 		var inverse:Transform3D=b.node.global_transform.affine_inverse()
 		var box:=AABB(Vector3(-3.1,-.1,-.9),Vector3(6.2,3.8,1.8))
 		var hit=box.intersects_ray(inverse*origin,inverse.basis*direction)

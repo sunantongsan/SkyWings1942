@@ -32,7 +32,7 @@ func update_cursor()->void:
 	footprint.position=pos+Vector3(0,.16,0);footprint.scale=Vector3.ONE*(.4 if host.mode=="battle" else 1.0)
 	if host.mode=="base":
 		var kind:int=host.buildings[host.moving_building].type if host.moving_building>=0 else host.build_type
-		if kind==24:footprint.scale=Vector3(1,1,1.4/6.0)
+		if kind in [24,25]:footprint.scale=Vector3(1,1,1.4/6.0)
 		if kind in [18,19,20]:footprint.scale=Vector3(13.0/6.0,1,10.0/6.0)
 	footprint.material_override.albedo_color=Color(.1,1,.3,.5) if error.is_empty() else Color(1,.1,.1,.55)
 	caption.position=pos+Vector3(0,2,0);caption.text="CAN PLACE" if error.is_empty() else error.to_upper()
@@ -41,7 +41,7 @@ func tick()->void:
 	if host.onboarding and host.onboarding.screen.visible:visible=false
 	if host.coin_system and is_instance_valid(host.coin_system.panel) and host.coin_system.panel.visible:visible=false
 	host.terrain_material.set_shader_parameter("deployment_active",visible and host.mode=="battle")
-	host.terrain_material.set_shader_parameter("deployment_available",host.mode=="battle" and reason(Vector3(20,0,0)).is_empty())
+	host.terrain_material.set_shader_parameter("deployment_available",host.mode=="battle" and reason(Vector3(30,0,0)).is_empty())
 	tiles.visible=visible and host.mode!="battle";footprint.visible=visible and has_pointer;caption.visible=visible and has_pointer
 	if not visible:cache_key="";has_pointer=false;return
 	update_cursor()
