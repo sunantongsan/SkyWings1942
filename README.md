@@ -3,7 +3,24 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
-## Current update — v0.23
+## Current update — v0.24
+
+- Drag colony buildings directly to relocate for free, including ongoing construction.
+  Invalid placements roll back. Empty-ground drags still pan the camera.
+- Select a wall and use ROTATE WALL 90°. Orientation is saved and respected by
+  placement and ground-unit collision, including after upgrades and restart.
+- All upgrades complete immediately without a free drone. Each next level costs
+  twice the Metal: `(860 + type * 120) * 2^(current_level - 1)`.
+  Existing paid upgrade jobs finish on load. New construction still takes time.
+- Campaign bases gain tiered walls and increasingly strong Flak, Mortar and SAM
+  defenses. Later sectors include rotated flanking walls.
+- Every campaign victory, including replays, pays the displayed base loot and
+  5–113 Coin, plus 120% of the Credits/Oil cost of **all deployed troops**, including
+  reinforcements. This covers replacement costs and adds profit; defeat has no payout.
+  Unsent reserves are excluded. Coin remains in-game only.
+- Updated the real-engine offline upgrade lesson, save migration and regression tests.
+
+## Previous update — v0.23
 
 - All 50 offline campaign bases have 1.5x the v0.22 building HP and weapon damage.
   Rewards, first-clear Coin receipts and existing progression remain compatible.

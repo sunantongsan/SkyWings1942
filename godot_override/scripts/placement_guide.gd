@@ -27,6 +27,7 @@ func reason(pos:Vector3)->String:
 func update_cursor()->void:
 	var pos:Vector3=pointer if has_pointer else host.camera_focus
 	if host.mode!="battle":pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
+	footprint.rotation.y=float(host.buildings[host.moving_building].get("yaw",0)) if host.moving_building>=0 else 0.0
 	var error:=reason(pos)
 	footprint.position=pos+Vector3(0,.16,0);footprint.scale=Vector3.ONE*(.4 if host.mode=="battle" else 1.0)
 	if host.mode=="base":

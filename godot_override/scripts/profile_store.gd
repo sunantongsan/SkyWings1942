@@ -97,6 +97,7 @@ func _valid(data:Variant)->bool:
 		if b.type==24 and b.level>5:return false
 		if not b.get("pos") is Array or b.pos.size()!=3:return false
 		if not _number(b.pos[0],-1e12,1e12) or not _number(b.pos[1],0,0) or not _number(b.pos[2],-1e12,1e12):return false
+		if not _number(b.get("yaw",0),-TAU,TAU):return false
 		if b.get("job","") not in ["","build","upgrade"]:return false
 		if b.get("job","")!="":
 			busy+=1

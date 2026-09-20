@@ -109,8 +109,10 @@ func blocking_wall(start:Vector3,end:Vector3,defenders:Array)->Dictionary:
 	for b in defenders:
 		if b.type!=24 or b.hp<=0 or not is_instance_valid(b.node) or b.get("job","")=="build":continue
 		var center:Vector3=b.pos
-		var box:=AABB(center+Vector3(-3.1,-1,-.9),Vector3(6.2,8,1.8))
-		if box.intersects_segment(Vector3(start.x,1,start.z),Vector3(end.x,1,end.z)):
+		var box:=AABB(Vector3(-3.1,-1,-.9),Vector3(6.2,8,1.8))
+		var from:Vector3=(Vector3(start.x,1,start.z)-center).rotated(Vector3.UP,-float(b.get("yaw",0)))
+		var to:Vector3=(Vector3(end.x,1,end.z)-center).rotated(Vector3.UP,-float(b.get("yaw",0)))
+		if box.intersects_segment(from,to):
 			var d:=start.distance_to(center)
 			if d<distance:found=b;distance=d
 	return found

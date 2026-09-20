@@ -78,6 +78,7 @@ var campaign_selected:=-1
 var galaxy_classic:=false
 var battle_campaign:=-1
 var battle_reward:Dictionary={}
+var layout:RefCounted
 var ground:MeshInstance3D
 var terrain_material:ShaderMaterial
 var sun:DirectionalLight3D
@@ -148,6 +149,7 @@ func _ready()->void:
 	defenses=preload("res://scripts/defense_system.gd").new(self)
 	_setup_ui()
 	onboarding=preload("res://scripts/onboarding.gd").new(self)
+	layout=preload("res://scripts/base_layout.gd").new(self)
 	coin_system=preload("res://scripts/coin_system.gd").new(self)
 	placement_guide=preload("res://scripts/placement_guide.gd").new(self)
 	status_bars=preload("res://scripts/status_bars.gd").new(self)
@@ -296,6 +298,7 @@ func _setup_ui()->void:
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	defense_test_button=_button("TEST DEFENSE",_start_defense_drill,Vector2(0,44));iv.add_child(defense_test_button);defense_test_button.hide()
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
+	iv.add_child(_button("ROTATE WALL 90°",func():layout.rotate_selected(),Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
 	build_panel=_make_build_panel();ui_root.add_child(build_panel);build_panel.hide()
 	units_panel=_make_units_panel();ui_root.add_child(units_panel);units_panel.hide()
@@ -449,9 +452,8 @@ func _make_campaign_panel()->PanelContainer:
 	elif campaign_selected>=0:
 		var stage:Dictionary=Campaign.stage(campaign_selected)
 		var unlocked:bool=campaign_selected<=campaign_cleared
-		var paid:bool=campaign_selected<campaign_cleared
 		var label:=Label.new();label.add_theme_font_size_override("font_size",19)
-		label.text="%s • %s • %d defenses • %d stars\nSuggested force: %d+ mixed troops • 150 seconds\n\nVICTORY REWARD\n%s\n%s"%[stage.name,stage.tier,stage.structures.size(),stage.structures[0].level,stage.recommended,Campaign.reward_text(Campaign.reward(campaign_selected,campaign_cleared)),"First-clear Coin bonus already claimed. Resources remain available." if paid else ("GODOT Coin bonus: first victory only." if stage.reward.coins>0 else "Win to receive these resources and unlock the next base.")]
+		label.text="%s • %s • %d defenses • %d stars\nSuggested force: %d+ mixed troops • 150 seconds\n\nVICTORY REWARD\n%s\n%s"%[stage.name,stage.tier,stage.structures.size(),stage.structures[0].level,stage.recommended,Campaign.reward_text(Campaign.reward(campaign_selected,campaign_cleared)),"EVERY WIN: rewards above + 120% of deployed troop Credits/Oil.\nIncludes reinforcements. Coin is awarded on replays too."]
 		column.add_child(label)
 		var actions:=HBoxContainer.new();column.add_child(actions)
 		actions.add_child(_button("BACK",func():_campaign_select(-1),Vector2(180,52)))
@@ -561,14 +563,25 @@ func _upgrade_selected()->void:
 	if tutorial_step==10 and b.type!=0:_toast("Upgrade the Galactic Core first.");return
 	if b.get("job","")!="":_toast("This building is already under construction.");return
 	if b.level>=(5 if b.type==24 else 100):_toast("Maximum level reached.");return
-	var cost:int=500+int(b.type)*120+int(b.level)*360
+	var cost:float=_upgrade_cost(b)
 	if metal<cost:_toast("NOT ENOUGH METAL");return
-	if _builder_busy():_toast("Construction drone busy. Wait for the current job.");return
 	metal-=cost
-	b["job"]="upgrade";b["started"]=colony_time;b["finish"]=colony_time+_upgrade_seconds(b.level+1)
-	_add_work_marker(b)
+	_complete_upgrade(b)
 	_refresh_progress();_save_profile();_dismiss_menus()
-	_toast("Upgrade started. The new level unlocks when construction finishes.")
+	_toast("Upgrade complete! The next level costs twice as much Metal.")
+
+func _upgrade_cost(b:Dictionary)->float:
+	return (860.0+int(b.type)*120.0)*pow(2.0,int(b.level)-1)
+
+func _complete_upgrade(b:Dictionary)->void:
+	b.level=mini(int(b.level)+1,5 if b.type==24 else 100)
+	b["job"]="";b.node.scale=Vector3.ONE*(1+(b.level-1)*.025)
+	b.max_hp=350.0+b.level*120.0;b.hp=b.max_hp
+	if b.type==24:
+		_refresh_wall_model(b);b.node.rotation.y=float(b.get("yaw",0))
+		b.max_hp=650.0+b.level*450.0;b.hp=b.max_hp
+	if is_instance_valid(b.get("work_marker")):b.work_marker.queue_free();b.erase("work_marker")
+	_update_rank_label(b)
 
 func _upgrade_seconds(target_level:int)->int:
 	const TIMES:=[0,0,30,120,300,900,1800,3600,7200,14400,28800]
@@ -634,6 +647,7 @@ func _start_battle(idx:int,campaign_index:int=-1)->void:
 	if battle_campaign>=0:
 		for entry in Campaign.stage(battle_campaign).structures:
 			var enemy:Dictionary=_spawn_building(battle_root,entry.type,entry.pos,entry.level,true)
+			enemy["yaw"]=entry.get("yaw",0.0);enemy.node.rotation.y=enemy.yaw
 			enemy.hp=entry.hp;enemy.max_hp=entry.hp;enemy["campaign_damage"]=entry.shot_damage;battle_targets.append(enemy)
 	else:
 		var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[14,17,17,15,16,14,15] if idx in [4,8,10,14] else [0,8,8,9,6,2,3]
@@ -668,7 +682,7 @@ func _placement_reason(pos:Vector3)->String:
 	if not pos.is_finite():return "Invalid position."
 	if mode!="base":return "Return home to build."
 	if moving_building>=0:
-		if moving_building>=buildings.size() or buildings[moving_building].get("job","")!="":return "Wait for construction to finish."
+		if moving_building>=buildings.size():return "Wait for construction to finish."
 	elif build_type>=0:
 		var reason:=_build_lock_reason(build_type)
 		if not reason.is_empty():return reason
@@ -688,8 +702,8 @@ func _placement_reason(pos:Vector3)->String:
 		if i==moving_building:continue
 		var other:Dictionary=buildings[i]
 		if placing_kind==24 or other.type==24:
-			var extent:=Vector2(6.0,1.4) if placing_kind==24 and other.type==24 else Vector2(6.1,3.8)
-			if absf(other.pos.x-pos.x)<extent.x and absf(other.pos.z-pos.z)<extent.y:return "Wall footprint overlaps another structure."
+			var yaw:float=float(buildings[moving_building].get("yaw",0)) if moving_building>=0 else 0.0
+			if layout.overlaps(pos,placing_kind,yaw,other):return "Wall footprint overlaps another structure."
 		elif other.pos.distance_to(pos)<6.1:return "Too close to another building."
 	return ""
 
@@ -769,6 +783,10 @@ func _finish_battle(win:bool)->void:
 		if is_instance_valid(reserve_panel):reserve_panel.hide()
 		if is_instance_valid(deployment_bar):deployment_bar.hide()
 		if battle_campaign>=0:
+			# Refund all committed troops, including reinforcements, plus a 20% margin.
+			for kind in deployed_stock.size():
+				battle_reward.credits+=ceili(deployed_stock[kind]*_unit_credit_cost(kind)*1.2)
+				battle_reward.oil+=ceili(deployed_stock[kind]*_unit_oil_cost(kind)*1.2)
 			credits+=battle_reward.credits;metal+=battle_reward.metal;oil+=battle_reward.oil;crystal+=battle_reward.crystal;gold+=battle_reward.gold;godot_coins+=int(battle_reward.coins)
 			for key in battle_reward:campaign_earnings[key]=int(campaign_earnings.get(key,0))+int(battle_reward[key])
 			campaign_wins+=1;campaign_cleared=maxi(campaign_cleared,battle_campaign+1)
@@ -830,7 +848,7 @@ func _select_building_at(pos:Vector3)->void:
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
 	defense_test_button.visible=b.type>=21 and b.get("job","")==""
-	selected_detail.text="HP %d/%d\nUpgrade: %d Metal • %s\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,_duration(_upgrade_seconds(b.level+1)),weapon]
+	selected_detail.text="HP %d/%d\nUpgrade: %s Metal • INSTANT\n%s"%[int(b.hp),int(b.max_hp),_fmt(_upgrade_cost(b)),weapon]
 	if b.type>=21:selected_detail.text+="\n"+defenses.description(b.type,b.level)
 	if b.type==24 and b.level>=5:selected_detail.text="FIRE WALL • MAX LEVEL\nHP %d / %d\nBlocks ground units\nClose-range machine gun\nRange %.1f m"%[b.hp,b.max_hp,_weapon_range(b)]
 	if b.type in [18,19,20]:selected_detail.text+="\nCapacity: %d → %d next star\nMaximum 3 camps of this type"%[garrison.capacity_for_level(b.level),garrison.capacity_for_level(b.level+1)]
@@ -858,7 +876,12 @@ func _place_building(pos:Vector3)->void:
 func _ground_hit(screen_pos:Vector2)->Variant:
 	var origin:=camera.project_ray_origin(screen_pos);var dir:=camera.project_ray_normal(screen_pos);return Plane(Vector3.UP,0).intersects_ray(origin,dir)
 
+func _input(event:InputEvent)->void:
+	# Keep an active drag until release, even when a finger crosses a HUD panel.
+	if layout and layout.active and layout.input(event):get_viewport().set_input_as_handled()
+
 func _unhandled_input(event:InputEvent)->void:
+	if layout and layout.input(event):return
 	# Keep touch-to-mouse emulation for Control buttons; world gestures use raw touches.
 	if event is InputEventMouse and event.device==-1:return
 	if onboarding and onboarding.screen.visible:return
@@ -1142,7 +1165,7 @@ func _ensure_roads()->void:
 func _save_profile()->bool:
 	if not has_colony or not profile_ready:return false
 	var records:Array=[]
-	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
+	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"yaw":b.get("yaw",0.0),"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
 	var data:Dictionary={"schema":1,"campaign_cleared":campaign_cleared,"campaign_earnings":campaign_earnings,"campaign_wins":campaign_wins,"ad_rewards":rewarded_ads.save_state() if rewarded_ads else {},"drone_producer":drone_producer,"miner_producer":miner_producer,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
 	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.");return false
 	return true
@@ -1166,7 +1189,10 @@ func _load_profile()->void:
 	training_queue=data.get("training_queue",[])
 	for b in data.buildings:
 		var placed:Dictionary=_spawn_building(home_root,int(b.type),Vector3(b.pos[0],0,b.pos[2]),int(b.level),false)
-		if b.get("job","")!="":
+		placed["yaw"]=float(b.get("yaw",0));placed.node.rotation.y=placed.yaw
+		if b.get("job","")=="upgrade":
+			_complete_upgrade(placed)
+		elif b.get("job","")!="":
 			for key in ["job","started","finish"]:placed[key]=b[key]
 			_add_work_marker(placed)
 	for job in training_queue:
@@ -1265,7 +1291,6 @@ func _update_work_display()->void:
 
 func _begin_move()->void:
 	if mode!="base" or selected_building<0:return
-	if buildings[selected_building].get("job","")!="":_toast("Wait until this construction finishes.");return
 	moving_building=selected_building;build_type=-1;_dismiss_menus()
 	_toast("Tap clear terrain to relocate this structure for free.")
 
@@ -1274,7 +1299,9 @@ func _move_building(pos:Vector3)->void:
 	pos=Vector3(snappedf(pos.x,1),0,snappedf(pos.z,1))
 	var reason:=_placement_reason(pos)
 	if not reason.is_empty():_toast(reason);return
-	var b:Dictionary=buildings[moving_building];b.pos=pos;b.node.position=pos;moving_building=-1
+	var b:Dictionary=buildings[moving_building];b.pos=pos;b.node.position=pos;_update_rank_label(b)
+	if is_instance_valid(b.get("work_marker")):b.work_marker.global_position=pos+Vector3(0,6,0)
+	moving_building=-1
 	garrison.signature="";garrison.sync();_sync_industry_visuals();_save_profile();_dismiss_menus();_toast("Structure relocated.")
 
 func _building_oil_cost(kind:int)->int:
@@ -1401,7 +1428,7 @@ func _home_defense_tick(delta:float)->void:
 
 func _refresh_wall_model(b:Dictionary)->void:
 	var old:Node3D=b.node
-	var model:Node3D=art.building(24,false,int(b.level));home_root.add_child(model);model.position=b.pos
+	var model:Node3D=art.building(24,false,int(b.level));home_root.add_child(model);model.position=b.pos;model.rotation.y=float(b.get("yaw",0))
 	if is_instance_valid(b.get("rank_label")):b.rank_label.reparent(model,true)
 	b.node=model;old.queue_free();_update_rank_label(b)
 

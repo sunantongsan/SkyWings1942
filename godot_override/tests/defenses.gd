@@ -24,6 +24,7 @@ func run()->void:
 	for index in 50:
 		var stage:Dictionary=game.Campaign.stage(index)
 		for entry in stage.structures:
+			if entry.type>=21:continue
 			assert(is_equal_approx(entry.hp,(300.0+index*22.0+index*index*.3)*1.5))
 			assert(is_equal_approx(entry.shot_damage,(2.5+index*.55)*(2.0/1.2 if entry.type==11 else 1.0)*1.5))
 	var built:Array[Dictionary]=[]
@@ -68,9 +69,30 @@ func run()->void:
 		assert(game._can_fire(wall)==(rank==5))
 		if rank<5:
 			game.selected_building=game.buildings.find(wall);game._upgrade_selected()
-			assert(wall.level==rank and wall.get("job","")=="upgrade")
-			game._advance_colony(float(wall.finish)+1)
+			assert(wall.level==rank+1 and wall.get("job","")=="")
+			game._advance_colony(game.colony_time+1)
 	game.selected_building=game.buildings.find(wall);game._upgrade_selected();assert(wall.level==5 and wall.get("job","")=="")
+	# Rotating, dragging, collision rollback and doubled instant costs.
+	game.selected_building=game.buildings.find(wall)
+	game.layout.rotate_selected();assert(is_equal_approx(wall.node.rotation.y,PI/2))
+	assert(not game.defenses.blocking_wall(wall.pos+Vector3(-5,0,2),wall.pos+Vector3(5,0,2),[wall]).is_empty())
+	assert(game.defenses.blocking_wall(wall.pos+Vector3(-5,0,4),wall.pos+Vector3(5,0,4),[wall]).is_empty())
+	var old_position:Vector3=wall.pos
+	game.camera_focus=wall.pos;game._position_camera();game._dismiss_menus()
+	var press:=InputEventScreenTouch.new();press.index=0;press.pressed=true;press.position=game.camera.unproject_position(wall.pos)
+	game._unhandled_input(press)
+	var drag:=InputEventScreenDrag.new();drag.index=0;drag.position=game.camera.unproject_position(wall.pos+Vector3(0,0,10));drag.relative=drag.position-press.position
+	game._unhandled_input(drag);assert(game.layout.active)
+	var release:=InputEventScreenTouch.new();release.index=0;release.pressed=false;release.position=drag.position
+	game._unhandled_input(release);assert(wall.pos==old_position+Vector3(0,0,10) and not game.layout.active)
+	game.selected_building=game.buildings.find(wall);game._begin_move();game._move_building(built[0].pos)
+	assert(wall.pos==old_position+Vector3(0,0,10),"Invalid drop preserves original location")
+	game.moving_building=-1
+	var tower:Dictionary=built[0];game.selected_building=game.buildings.find(tower)
+	var cost:float=game._upgrade_cost(tower);var balance:float=game.metal
+	game._upgrade_selected();assert(tower.level==2 and is_equal_approx(game.metal,balance-cost))
+	assert(game._upgrade_cost(tower)==cost*2 and tower.get("job","")=="")
+	game._upgrade_selected();assert(tower.level==3 and is_equal_approx(game.metal,balance-cost*3))
 	var attacker:Dictionary=enemy(10,wall.pos+Vector3(0,0,6))
 	game._defense_tick([wall],[attacker],.3,1);assert(attacker.hp<1000)
 	attacker.node.position=wall.pos+Vector3(0,0,12);var hp:float=attacker.hp
@@ -88,9 +110,10 @@ func run()->void:
 	for entry in game.buildings:
 		if entry.type==24:
 			walls+=1;assert(entry.node.scene_file_path.ends_with(game.defenses.WALL_FILES[entry.level-1]+".glb"))
-	assert(walls==6 and game.building_levels[21]==1 and game.building_levels[22]==1 and game.building_levels[23]==1)
-	game.camera_focus=Vector3(64,0,0);game.camera.size=22;game._position_camera();game._select_building_at(Vector3(64,0,0))
+	assert(walls==6 and game.building_levels[21]==3 and game.building_levels[22]==1 and game.building_levels[23]==1)
+	game.camera_focus=Vector3(64,0,10);game.camera.size=22;game._position_camera();game._select_building_at(Vector3(64,0,10))
 	await shot("65-fire-wall-upgrade-details")
+	assert(is_equal_approx(game.buildings[14].node.rotation.y,PI/2))
 	game._toggle_build();await shot("66-defense-construction-menu")
 	game.queue_free();await process_frame
 	for suffix in ["",".bak",".tmp"]:

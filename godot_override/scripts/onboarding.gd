@@ -165,7 +165,7 @@ func refresh_guide()->void:
 		guide_action.text="PLACE "+host.BUILDING_NAMES[kind].to_upper()
 	elif step==10:
 		guide_title.text="11 / 13  ·  UPGRADE YOUR CORE"
-		guide_text.text="Tap the Galactic Core and upgrade it to Level 2. Upgrades improve your colony."
+		guide_text.text="Tap the Galactic Core and upgrade it to Level 2. Upgrades finish instantly. Each next level costs twice the Metal."
 		guide_action.text="SELECT GALACTIC CORE"
 	elif step==11:
 		guide_title.text="12 / 13  ·  TRAIN YOUR FLEET"

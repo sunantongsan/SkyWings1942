@@ -80,9 +80,9 @@ func record(topic:String)->void:
 				if frame==0:world_point(Vector3.ZERO,"1. Tap your Galactic Core")
 				if frame==20:game._select_building_at(Vector3.ZERO)
 				if frame==25:point(button_center(game.info_panel,"UPGRADE"),"2. Tap UPGRADE")
-				if frame==58:game._upgrade_selected();assert(game.buildings[0].get("job","")=="upgrade")
-				if frame==64:point(Vector2(180,145),"3. Watch the construction timer")
-				if frame==105:caption.text="Stars increase when the upgrade finishes."
+				if frame==58:game._upgrade_selected();assert(game.buildings[0].level==3 and game.buildings[0].get("job","")=="")
+				if frame==64:point(Vector2(180,145),"3. Level 3 is ready immediately")
+				if frame==105:caption.text="No waiting. The next level costs twice the Metal."
 			"train":
 				if frame==0:point(game.dock.get_child(1).get_global_rect().get_center(),"1. Tap FLEET")
 				if frame==20:game._show_production(6)

@@ -18,7 +18,7 @@ func fight(index:int,amount:int,kind:int)->bool:
 	game.deploy_kind=kind;game.deploy_count=0;game._deploy_fleet(Vector3(-20,0,4));game._launch_assault()
 	for frame in 800:
 		if game.mode!="battle":break
-		game.visual_time+=.2;game._battle_tick(.2)
+		game.visual_time+=.2;game.defenses.tick(.2);game._battle_tick(.2)
 	var won:bool=game.mode=="victory"
 	game._return_home()
 	return won
@@ -53,6 +53,8 @@ func run()->void:
 	game._campaign_start(1);assert(game.mode=="base","Locked stage cannot start")
 	assert(fight(0,8,0),"First base must be beatable with the tutorial's eight Fighters")
 	assert(game.campaign_cleared==1 and game.campaign_wins==1)
+	assert(game.campaign_earnings.credits==Campaign.stage(0).reward.credits+ceili(8*game._unit_credit_cost(0)*1.2))
+	assert(game.campaign_earnings.oil==Campaign.stage(0).reward.oil+ceili(8*game._unit_oil_cost(0)*1.2))
 	var earned:Dictionary=game.campaign_earnings.duplicate()
 	game._finish_battle(true);assert(game.campaign_earnings==earned,"Duplicate completion cannot pay twice")
 	assert(fight(0,8,0),"Cleared base can be replayed")
@@ -64,7 +66,7 @@ func run()->void:
 	assert(fight(49,159,21),"Final base must be beatable with a large advanced army")
 	assert(game.campaign_cleared==50)
 	var saved_coins:int=game.godot_coins
-	assert(saved_coins==Campaign.stage(49).reward.coins)
+	assert(saved_coins==Campaign.stage(49).reward.coins+Campaign.stage(0).reward.coins*2)
 	game._toggle_galaxy();game._campaign_page_to(4);game._campaign_select(49)
 	await shot("52-campaign-complete-replay-rewards")
 	game._campaign_select(-2);await shot("53-campaign-total-earned")
@@ -72,8 +74,10 @@ func run()->void:
 	game.queue_free();await process_frame;await open_game()
 	assert(game.campaign_cleared==50 and game.campaign_earnings==saved_earnings and game.godot_coins==saved_coins)
 	game.unit_stock[0]=8;game._campaign_start(49)
-	assert(game.battle_reward.coins==0,"Coin cannot be farmed again after restarting")
+	await shot("56-fortified-final-base")
+	assert(game.battle_reward.coins==Campaign.stage(49).reward.coins,"Replays pay the advertised Coin reward")
 	game._finish_battle(true)
+	saved_coins+=Campaign.stage(49).reward.coins
 	assert(game.godot_coins==saved_coins)
 	assert(game.campaign_earnings.credits==saved_earnings.credits+Campaign.stage(49).reward.credits)
 	game._return_home()
