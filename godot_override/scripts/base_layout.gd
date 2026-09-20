@@ -162,9 +162,11 @@ func floating_menu()->void:
 	var b:Dictionary=host.buildings[host.selected_building]
 	var wall:bool=b.type in [24,25]
 	host.selected_label.visible=not wall;host.selected_detail.visible=true
+	host.selected_detail.add_theme_font_size_override("font_size",15 if wall else 17)
+	if wall:host.selected_detail.text="MAX LEVEL" if b.level>=5 else "%s M • INSTANT"%host._fmt(host._upgrade_cost(b))
 	var width:=180.0 if wall else 230.0
 	host.info_panel.custom_minimum_size=Vector2(width,0)
-	var height:=230.0 if wall else 330.0
+	var height:=248.0 if wall else 330.0
 	host.info_panel.size=Vector2(width,height)
 	var screen:Vector2=host.camera.unproject_position(b.pos+Vector3(0,2,0))
 	var view:Vector2=host.get_viewport().get_visible_rect().size

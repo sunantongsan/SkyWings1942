@@ -29,9 +29,15 @@ func run()->void:
 	assert(game.buildings[game.BUILD_ORDER.size()].finish==deadline,"Wall placement never advances other construction")
 	game.camera_focus=Vector3(44,0,0);game.camera.size=27;game._position_camera();game.onboarding.refresh_guide();game.layout.floating_menu();game.toast.hide()
 	await process_frame;await process_frame
+	assert(game.wall_delete_button.get_global_rect().end.y<=game.info_panel.get_global_rect().end.y,"Every floating action fits without clipping")
 	if DisplayServer.get_name()!="headless":
 		await RenderingServer.frame_post_draw
 		assert(root.get_texture().get_image().save_png("res://build/review/83-instant-connected-walls-floating-menu.png")==OK)
+	game.info_panel.hide();game.selection_ring.hide()
+	await process_frame;await process_frame
+	if DisplayServer.get_name()!="headless":
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png("res://build/review/84-connected-wall-corner.png")==OK)
 	game._save_profile();var saved:Dictionary=game.profile_store.read_profile(SAVE)
 	assert(not saved.is_empty() and is_equal_approx(saved.buildings.back().yaw,corner.yaw))
 	print("V28_INSTANT_WALLS_BUSY_DRONE_CONNECTION_CORNERS_FLOATING_MENU_PASSED")
