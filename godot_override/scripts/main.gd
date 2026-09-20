@@ -1,7 +1,7 @@
 extends Node3D
 
-const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire","Vehicle Camp","Air Camp","Infantry Camp"]
-const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300,900,900,700]
+const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire","Vehicle Camp","Air Camp","Infantry Camp","Flak Battery","Siege Mortar","Sky Sentinel","Wall"]
+const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300,900,900,700,1400,1800,2000,250]
 const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander","Rune Guardian","Crystal Golem","Starweaver","Attack Pigeon"]
 const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mechanis","Toxicus","Nebularis","Asteroid Belt","Ruins","Orbit Station","Moon Base","Gas Giant","Wormhole"]
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
@@ -21,7 +21,9 @@ var build_panel:PanelContainer
 var units_panel:PanelContainer
 var galaxy_panel:PanelContainer
 var victory_panel:PanelContainer
+var defenses:RefCounted
 var rewarded_ads:RefCounted
+var defense_test_button:Button
 var ad_button:Button
 var app_paused:=false
 var garrison:RefCounted
@@ -112,7 +114,7 @@ var unit_icon_cache:Dictionary={}
 const GROUND_ASSETS := ["battle_tank","siege_tank","artillery","rocket_launcher","mech_warrior","sniper_unit","shield_drone","repair_drone","assault_soldier","elite_commander"]
 const BUILD_ORDER := [0,1,2,5,3,4,6,8,7,9]
 const LANDING_SITES := [Vector3(0,0,0),Vector3(-7,0,-4),Vector3(-12,0,4),Vector3(10,0,6),Vector3(12,0,-5),Vector3(-2,0,10),Vector3(5,0,12),Vector3(4,0,-10),Vector3(-14,0,-8),Vector3(18,0,-11)]
-const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25,20,0,40,30,10,10,10]
+const POWER_DEMAND := [0,0,20,30,25,10,40,35,25,35,30,40,45,25,20,0,40,30,10,10,10,25,35,40,0]
 var home_planet := -1
 var has_colony := false
 var tutorial_step := 0
@@ -125,7 +127,7 @@ var profile_ready := false
 var roads_root:Node3D
 var landing_marker:MeshInstance3D
 var landing_label:Label3D
-const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35,30,30,25]
+const BUILD_SECONDS := [8,15,20,25,30,25,40,45,30,45,40,45,45,30,50,30,45,35,30,30,25,40,55,60,12]
 var colony_time := 0.0
 var training_queue:Array = []
 var production_kind:=6
@@ -143,6 +145,7 @@ func _ready()->void:
 	_setup_environment()
 	_setup_world()
 	_setup_camera()
+	defenses=preload("res://scripts/defense_system.gd").new(self)
 	_setup_ui()
 	onboarding=preload("res://scripts/onboarding.gd").new(self)
 	coin_system=preload("res://scripts/coin_system.gd").new(self)
@@ -168,6 +171,7 @@ func _process(delta:float)->void:
 	battle_feedback.tick(delta)
 	if mode=="base":_home_defense_tick(delta)
 	_projectile_tick(delta)
+	defenses.tick(delta)
 	_visual_tick(delta)
 	status_bars.tick()
 	rewarded_ads.tick()
@@ -290,6 +294,7 @@ func _setup_ui()->void:
 	iv.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(0,48)))
 	ad_button=_button("WATCH AD • −50 MIN",func():rewarded_ads.offer_build(selected_building),Vector2(0,44));iv.add_child(ad_button)
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
+	defense_test_button=_button("TEST DEFENSE",_start_defense_drill,Vector2(0,44));iv.add_child(defense_test_button);defense_test_button.hide()
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
 	build_panel=_make_build_panel();ui_root.add_child(build_panel);build_panel.hide()
@@ -316,8 +321,11 @@ func _make_build_panel()->PanelContainer:
 	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(310,52)))
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
-	for i in BUILD_ORDER+[18,19,20,10,11,12,13,14,15,16,17]:
+	for i in BUILD_ORDER+[21,22,23,24,18,19,20,10,11,12,13,14,15,16,17]:
 		var b:=_asset_button(BUILDING_NAMES[i],"%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
+		if i>=21:
+			b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text+= "\n"+defenses.description(i)
+			b.custom_minimum_size.y=212
 		var reason:=_build_lock_reason(i)
 		b.disabled=not reason.is_empty()
 		if b.disabled:
@@ -473,17 +481,18 @@ func _make_galaxy_panel()->PanelContainer:
 		b.pressed.connect(func(idx=i):_start_battle(idx));grid.add_child(b)
 	return panel
 
-func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp"][i]
+func _building_file(i:int)->String:return ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp","flak_battery","siege_mortar","sky_sentinel","wall_bamboo"][i]
 
 func _spawn_building(parent:Node3D,type:int,pos:Vector3,level:int,enemy:bool)->Dictionary:
-	var root:Node3D=art.building(type,enemy)
+	var root:Node3D=art.building(type,enemy,level)
 	root.position=pos;parent.add_child(root)
-	root.scale=Vector3.ONE*(1.0+(level-1)*.025)
+	root.scale=Vector3.ONE if type==24 else Vector3.ONE*(1.0+(level-1)*.025)
 	for part_name in ["Rotor","Radar","Drill","Turret"]:
 		var part:Node3D=root.find_child(part_name,true,false)
 		if part:animators.append({"node":part,"kind":part_name,"home":parent==home_root})
 	if type==3: art.particles(root,Vector3(0,4.4,-.25),Color("9db4b6"),true,false)
 	var d={"node":root,"type":type,"level":level,"pos":pos,"hp":350.0+level*120.0,"max_hp":350.0+level*120.0}
+	if type==24:d.hp=650.0+level*450.0;d.max_hp=d.hp
 	var rank:=Label3D.new();rank.font_size=44;rank.pixel_size=.018;rank.outline_size=8
 	rank.billboard=BaseMaterial3D.BILLBOARD_ENABLED;rank.modulate=Color("ffd873")
 	rank.no_depth_test=true;root.add_child(rank);rank.top_level=true;d["rank_label"]=rank
@@ -551,7 +560,7 @@ func _upgrade_selected()->void:
 	var b:Dictionary=buildings[selected_building]
 	if tutorial_step==10 and b.type!=0:_toast("Upgrade the Galactic Core first.");return
 	if b.get("job","")!="":_toast("This building is already under construction.");return
-	if b.level>=100:_toast("Maximum level reached.");return
+	if b.level>=(5 if b.type==24 else 100):_toast("Maximum level reached.");return
 	var cost:int=500+int(b.type)*120+int(b.level)*360
 	if metal<cost:_toast("NOT ENOUGH METAL");return
 	if _builder_busy():_toast("Construction drone busy. Wait for the current job.");return
@@ -620,7 +629,7 @@ func _start_battle(idx:int,campaign_index:int=-1)->void:
 	battle_reward=Campaign.reward(campaign_index,campaign_cleared) if campaign_index>=0 else {}
 	mode="battle";battle_map=idx;galaxy_panel.visible=false;info_panel.hide();selection_ring.hide();home_root.visible=false;battle_root.visible=true
 	for c in battle_root.get_children():c.queue_free()
-	_clear_wrecks()
+	_clear_wrecks();defenses.clear()
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
 	if battle_campaign>=0:
 		for entry in Campaign.stage(battle_campaign).structures:
@@ -676,7 +685,12 @@ func _placement_reason(pos:Vector3)->String:
 			if absf(pos.x-obstacle.x)<9 and absf(pos.z-obstacle.z)<8:return "Clear the rocks or trees before building this camp."
 	if garrison and garrison.blocked(pos,moving_building):return "Keep the garrison yards clear."
 	for i in buildings.size():
-		if i!=moving_building and buildings[i].pos.distance_to(pos)<6.1:return "Too close to another building."
+		if i==moving_building:continue
+		var other:Dictionary=buildings[i]
+		if placing_kind==24 or other.type==24:
+			var extent:=Vector2(6.0,1.4) if placing_kind==24 and other.type==24 else Vector2(6.1,3.8)
+			if absf(other.pos.x-pos.x)<extent.x and absf(other.pos.z-pos.z)<extent.y:return "Wall footprint overlaps another structure."
+		elif other.pos.distance_to(pos)<6.1:return "Too close to another building."
 	return ""
 
 func _deploy_fleet(pos:Vector3)->void:
@@ -727,6 +741,9 @@ func _battle_tick(delta:float)->void:
 			var distance:float=Vector2(n.position.x,n.position.z).distance_to(Vector2(e.pos.x,e.pos.z))
 			if distance<best:best=distance;target=e
 		if target.is_empty():continue
+		if not defenses.airborne(int(u.type)):
+			var wall:Dictionary=defenses.blocking_wall(n.position,target.pos,alive)
+			if not wall.is_empty():target=wall;best=Vector2(n.position.x,n.position.z).distance_to(Vector2(wall.pos.x,wall.pos.z))
 		var moving:bool=best>_attack_range(u.type)
 		if moving:n.position=n.position.move_toward(Vector3(target.pos.x,n.position.y,target.pos.z),u.speed*delta)
 		if best>.01:n.look_at(Vector3(target.pos.x,n.position.y,target.pos.z),Vector3.UP,not _is_air_unit(u.type))
@@ -747,6 +764,7 @@ func _finish_battle(win:bool)->void:
 	if mode!="battle":return
 	if win:
 		mode="victory"
+		defenses.clear()
 		battle_feedback.victory()
 		if is_instance_valid(reserve_panel):reserve_panel.hide()
 		if is_instance_valid(deployment_bar):deployment_bar.hide()
@@ -770,7 +788,7 @@ func _return_home()->void:
 	mode="base";victory_panel.hide();battle_root.hide();home_root.show()
 	if is_instance_valid(deployment_bar):deployment_bar.hide()
 	if is_instance_valid(reserve_panel):reserve_panel.hide()
-	dock.show();_clear_missiles();_clear_wrecks()
+	dock.show();_clear_missiles();_clear_wrecks();defenses.clear()
 	battle_campaign=-1;battle_reward={};campaign_selected=-1
 	_apply_map_theme(home_planet);_center_camera();_refresh_progress();_save_profile();_toast("Returned to "+MAP_NAMES[home_planet]+".")
 
@@ -811,7 +829,10 @@ func _select_building_at(pos:Vector3)->void:
 	selected_label.text="%s • %s"%[BUILDING_NAMES[b.type],_rank_text(b.level)]
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
+	defense_test_button.visible=b.type>=21 and b.get("job","")==""
 	selected_detail.text="HP %d/%d\nUpgrade: %d Metal • %s\n%s"%[int(b.hp),int(b.max_hp),500+b.type*120+b.level*360,_duration(_upgrade_seconds(b.level+1)),weapon]
+	if b.type>=21:selected_detail.text+="\n"+defenses.description(b.type,b.level)
+	if b.type==24 and b.level>=5:selected_detail.text="FIRE WALL • MAX LEVEL\nHP %d / %d\nBlocks ground units\nClose-range machine gun\nRange %.1f m"%[b.hp,b.max_hp,_weapon_range(b)]
 	if b.type in [18,19,20]:selected_detail.text+="\nCapacity: %d → %d next star\nMaximum 3 camps of this type"%[garrison.capacity_for_level(b.level),garrison.capacity_for_level(b.level+1)]
 	if b.type in [6,12,13,16]:
 		selected_detail.text+="\nOwn queue: %d / %d"%[_producer_queue_count(best),_producer_queue_limit(best)]
@@ -1202,6 +1223,9 @@ func _advance_colony(now:float)->void:
 				if b.job=="upgrade":b.level+=1
 				b["job"]="";b.node.scale=Vector3.ONE*(1+(b.level-1)*.025)
 				b.max_hp=350.0+b.level*120.0;b.hp=b.max_hp
+				if b.type==24:
+					_refresh_wall_model(b)
+					b.max_hp=650.0+b.level*450.0;b.hp=b.max_hp
 				if is_instance_valid(b.get("work_marker")):b.work_marker.queue_free();b.erase("work_marker")
 				changed=true
 		while not training_queue.is_empty() and float(training_queue[0].finish)<=colony_time:
@@ -1254,6 +1278,7 @@ func _move_building(pos:Vector3)->void:
 	garrison.signature="";garrison.sync();_sync_industry_visuals();_save_profile();_dismiss_menus();_toast("Structure relocated.")
 
 func _building_oil_cost(kind:int)->int:
+	if kind>=21:return [150,250,300,0][kind-21]
 	if kind>=18:return 100
 	return [300,150,250,200][kind-14] if kind>=14 else (350 if kind==10 else (200 if kind==11 else 0))
 
@@ -1316,6 +1341,9 @@ func _industry_tick(_delta:float)->void:
 func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->void:
 	for tower in defenders:
 		if not _can_fire(tower):continue
+		if tower.type>=21:
+			if is_instance_valid(tower.node):defenses.fire(tower,attackers,delta)
+			continue
 		if not is_instance_valid(tower.node):continue
 		tower["fire_wait"]=float(tower.get("fire_wait",0))-delta
 		var target:Dictionary={}
@@ -1342,14 +1370,16 @@ func _start_defense_drill()->void:
 	for b in buildings:
 		if _can_fire(b):ready=true;break
 	if not ready:_toast("Complete a defense tower or upgrade any building to 5 stars.");return
-	build_panel.hide();onboarding.refresh_guide()
+	build_panel.hide();info_panel.hide();onboarding.refresh_guide()
 	var center:=Vector3.ZERO
 	for b in buildings:
 		if _can_fire(b):center=b.pos;break
+	if selected_building>=0 and selected_building<buildings.size() and buildings[selected_building].type>=21:center=buildings[selected_building].pos
 	for i in 3:
-		var n:Node3D=_unit_model(0,true);home_root.add_child(n)
-		n.position=center+Vector3(-4+i*4,3,11)
-		home_attackers.append({"node":n,"type":0,"hp":20.0,"max_hp":20.0,"target":center})
+		var kind:int=[0,10,18][i]
+		var n:Node3D=_unit_model(kind,true);home_root.add_child(n)
+		n.position=center+Vector3(-3+i*3,_unit_height(kind),6 if i>0 else 9)
+		home_attackers.append({"node":n,"type":kind,"hp":200.0 if selected_building>=0 and buildings[selected_building].type>=21 else 20.0,"max_hp":200.0 if selected_building>=0 and buildings[selected_building].type>=21 else 20.0,"target":center,"drill_age":0.0})
 	camera_focus=center;_position_camera()
 	_toast("DEFENSE DRILL: towers auto-target approaching enemies. No colony damage.")
 
@@ -1358,10 +1388,22 @@ func _home_defense_tick(delta:float)->void:
 	for i in range(home_attackers.size()-1,-1,-1):
 		var enemy:Dictionary=home_attackers[i]
 		if enemy.hp<=0 or not is_instance_valid(enemy.node):home_attackers.remove_at(i);continue
-		var target:Vector3=enemy.target+Vector3(0,3,0)
+		enemy["drill_age"]=float(enemy.get("drill_age",0))+delta
+		if enemy.drill_age>20:
+			enemy.node.queue_free();home_attackers.remove_at(i);continue
+		var target:Vector3=enemy.target+Vector3(0,_unit_height(int(enemy.get("type",0))),0)
+		if not defenses.airborne(int(enemy.get("type",0))):
+			var wall:Dictionary=defenses.blocking_wall(enemy.node.position,target,buildings)
+			if not wall.is_empty():continue
 		enemy.node.position=enemy.node.position.move_toward(target,delta*.65)
 		if enemy.node.position.distance_to(target)<1:
 			enemy.node.queue_free();home_attackers.remove_at(i);_toast("Drill: enemy breached the perimeter. Add or upgrade defenses.")
+
+func _refresh_wall_model(b:Dictionary)->void:
+	var old:Node3D=b.node
+	var model:Node3D=art.building(24,false,int(b.level));home_root.add_child(model);model.position=b.pos
+	if is_instance_valid(b.get("rank_label")):b.rank_label.reparent(model,true)
+	b.node=model;old.queue_free();_update_rank_label(b)
 
 func _rank_text(level:int)->String:
 	return "★".repeat(level) if level<=5 else "★ × %d"%level
@@ -1372,12 +1414,14 @@ func _update_rank_label(b:Dictionary)->void:
 	b.rank_label.global_position=b.node.global_position+Vector3(0,5.2*(1+(b.level-1)*.025),0)
 
 func _can_fire(b:Dictionary)->bool:
-	return b.hp>0 and b.get("job","")!="build" and (b.type in [8,11,17] or b.level>=5)
+	return b.hp>0 and b.get("job","")!="build" and (b.type in [8,11,17,21,22,23] or b.level>=5)
 
 func _weapon_range(b:Dictionary)->float:
+	if b.type>=21:return defenses.weapon_range(b)
 	return (19.0 if b.type in [11,17] else 12.0)+minf(6.0,b.level*.3)
 
 func _shot_damage(b:Dictionary,difficulty:int)->float:
+	if b.type>=21:return defenses.damage(b)
 	var base:float=2.0+difficulty*.8+b.level*.3
 	var veteran_bonus:float=maxf(0,b.level-4)*1.5
 	return (base+veteran_bonus)*(2.0 if b.type==11 else (1.6 if b.type==17 else 1.0))

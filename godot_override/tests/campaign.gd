@@ -61,7 +61,7 @@ func run()->void:
 	var before:Dictionary=game.campaign_earnings.duplicate()
 	assert(not fight(49,8,0),"Final base must defeat the starter squad")
 	assert(game.campaign_earnings==before and game.campaign_cleared==49,"Defeat grants no reward or progress")
-	assert(fight(49,106,21),"Final base must be beatable with a large advanced army")
+	assert(fight(49,159,21),"Final base must be beatable with a large advanced army")
 	assert(game.campaign_cleared==50)
 	var saved_coins:int=game.godot_coins
 	assert(saved_coins==Campaign.stage(49).reward.coins)

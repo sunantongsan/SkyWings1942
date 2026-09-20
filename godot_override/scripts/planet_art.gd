@@ -1,7 +1,7 @@
 extends RefCounted
 ## Authored GLB instances, restrained environment dressing and mobile effects.
 const ROOT := "res://assets/models/"
-const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp"]
+const NAMES := ["galactic_core","fusion_reactor","metal_extractor","oil_processor","crystal_mine","resource_vault","star_hangar","research_lab","laser_tower","shield_generator","gold_refinery","missile_bastion","vehicle_factory","barracks","godot_citadel","astral_well","summoning_sanctum","runebolt_spire","vehicle_camp","air_camp","infantry_camp","flak_battery","siege_mortar","sky_sentinel","wall_bamboo"]
 var obstacles:Dictionary={}
 var scene_cache: Dictionary = {}
 var materials: Dictionary = {}
@@ -12,8 +12,14 @@ func model(name: String) -> Node3D:
 		scene_cache[name] = load(ROOT + name + ".glb")
 	return (scene_cache[name] as PackedScene).instantiate() as Node3D
 
-func building(kind: int, enemy: bool) -> Node3D:
-	var root := model(NAMES[kind])
+func building(kind: int, enemy: bool, level:int=1) -> Node3D:
+	var wall_names:=["wall_bamboo","wall_earth","wall_concrete","wall_steel","wall_fire"]
+	var root := model(wall_names[clampi(level-1,0,4)] if kind==24 else NAMES[kind])
+	if kind==24 and level>=5:
+		for x in [-2.1,2.1]:
+			var fire:=particles(root,Vector3(x,3.15,0),Color("ff761a"))
+			fire.amount=12;fire.lifetime=.65;fire.initial_velocity_min=1.5;fire.initial_velocity_max=2.7
+			fire.gravity=Vector3(0,1,0)
 	if enemy:
 		for mesh in root.find_children("*", "MeshInstance3D", true, false):
 			for i in mesh.mesh.get_surface_count():

@@ -3,7 +3,28 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
-## Current update — v0.22
+## Current update — v0.23
+
+- All 50 offline campaign bases have 1.5x the v0.22 building HP and weapon damage.
+  Rewards, first-clear Coin receipts and existing progression remain compatible.
+- Four buildable defenses with original GLBs and rendered individual icons:
+  Flak Battery (rapid fire, ground + air), Siege Mortar (ground-only ballistic
+  shells, splash applied at impact), Sky Sentinel (three homing anti-air missiles
+  with a reload gap; never targets ground), and upgradeable wall segments.
+- Walls have five separate models: bamboo, earth, concrete, steel, and fire.
+  HP increases at each completed upgrade. Five stars is the wall's maximum and
+  enables short-range machine guns; earlier walls do not fire. Neighboring
+  sections can touch end-to-end. Ground movement respects intact wall barriers.
+- New weapon targeting treats hover drones as air. Shells can miss moving targets,
+  affect only ground targets within their impact radius, and never damage friendly
+  defenders. Rockets apply damage only on reaching a live air target.
+- Select a new defense and tap TEST DEFENSE to run a mixed ground/air drill.
+  Drills end after 20 seconds and do not damage the player's colony.
+- Tests cover exact 1.5x campaign stats, both machine-gun target classes, shell
+  flight and splash exclusions, three-missile bursts/reload, wall material upgrades,
+  max level, placement, blockage, save/reload, and screenshots of the new assets.
+
+## Previous update — v0.22
 
 - Offline campaign of 50 bases, unlocked sequentially, with five ten-base sectors.
   Preview every base, its exact rewards, defenses and suggested army before deploying.
