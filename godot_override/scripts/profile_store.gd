@@ -45,6 +45,12 @@ func _valid(data:Variant)->bool:
 	if not queue is Array or queue.size()>maxi(20,data.buildings.size()*20):return false
 	if not _number(data.get("godot_coins",0),0,1e12):return false
 	if not _number(data.get("last_coin_day",-1),-1,1e9):return false
+	if not _number(data.get("campaign_cleared",0),0,50):return false
+	if not _number(data.get("campaign_wins",0),0,1e12):return false
+	var earnings=data.get("campaign_earnings",{})
+	if not earnings is Dictionary:return false
+	for key in ["credits","metal","oil","crystal","gold","coins"]:
+		if not _number(earnings.get(key,0),0,1e15):return false
 	var cleared=data.get("cleared_obstacles",[])
 	if not cleared is Array or cleared.size()>360:return false
 	var ids:Dictionary={}

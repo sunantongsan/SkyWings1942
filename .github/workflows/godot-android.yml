@@ -97,6 +97,13 @@ jobs:
           grep -q REPEAT_TRAINING_DIRECT_50_MINUTE_REWARDS_COIN_ADS_AND_RESTART_PASSED visual-checks.log
           if grep -q 'SCRIPT ERROR' visual-checks.log; then exit 1; fi
 
+      - name: Verify offline campaign rewards and progression
+        run: |
+          set -o pipefail
+          timeout 180s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/campaign.gd 2>&1 | tee campaign-checks.log
+          grep -q OFFLINE_50_BASES_DIFFICULTY_REWARDS_REPLAY_SAVE_MIGRATION_PASSED campaign-checks.log
+          if grep -q 'SCRIPT ERROR' campaign-checks.log; then exit 1; fi
+
       - name: Upload scene review
         if: always()
         uses: actions/upload-artifact@v4
@@ -106,6 +113,7 @@ jobs:
             game/build/review/*.png
             visual-checks.log
             lesson-checks.log
+            campaign-checks.log
             game/assets/tutorial/*.ogv
             game/assets/models/manifest.json
 

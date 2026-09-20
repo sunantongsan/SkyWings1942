@@ -67,6 +67,15 @@ var battle_units:Array[Dictionary]=[]
 var battle_damage:=0.0
 var battle_elapsed:=0.0
 var battle_map:=1
+const Campaign=preload("res://scripts/campaign.gd")
+var campaign_cleared:=0
+var campaign_earnings:Dictionary={}
+var campaign_wins:=0
+var campaign_page:=0
+var campaign_selected:=-1
+var galaxy_classic:=false
+var battle_campaign:=-1
+var battle_reward:Dictionary={}
 var ground:MeshInstance3D
 var terrain_material:ShaderMaterial
 var sun:DirectionalLight3D
@@ -405,8 +414,55 @@ func _make_units_panel()->PanelContainer:
 		drone.pressed.connect(_buy_drone);grid.add_child(drone)
 	return panel
 
+func _campaign_select(index:int)->void:
+	campaign_selected=index;_refresh_progress()
+
+func _campaign_page_to(index:int)->void:
+	campaign_page=clampi(index,0,4);campaign_selected=-1;_refresh_progress()
+
+func _campaign_start(index:int)->void:
+	if index<0 or index>=Campaign.COUNT or index>campaign_cleared:
+		_toast("Clear the previous base to unlock this battle.");return
+	_start_battle(int(Campaign.stage(index).theme),index)
+
+func _make_campaign_panel()->PanelContainer:
+	var panel:=_panel("OFFLINE CAMPAIGN • %d / 50 CLEARED"%campaign_cleared)
+	var column:VBoxContainer=panel.get_child(0)
+	var tabs:=HBoxContainer.new();column.add_child(tabs)
+	for sector in 5:
+		var tab:=_button("%02d–%02d"%[sector*10+1,sector*10+10],func(n=sector):_campaign_page_to(n),Vector2(130,46))
+		if sector==campaign_page:tab.modulate=Color("79e5c0")
+		tabs.add_child(tab)
+	tabs.add_child(_button("TOTAL EARNED",func():_campaign_select(-2),Vector2(200,46)))
+	tabs.add_child(_button("CLASSIC MAP",func():galaxy_classic=true;_refresh_progress(),Vector2(190,46)))
+	if campaign_selected==-2:
+		var summary:=Label.new();summary.text="CAMPAIGN REWARDS • %d VICTORIES\n\n%s\n\nIn-game resources only. Saved on this device."%[campaign_wins,Campaign.reward_text(campaign_earnings)];summary.add_theme_font_size_override("font_size",21);column.add_child(summary)
+		column.add_child(_button("BACK TO BASES",func():_campaign_select(-1),Vector2(0,52)))
+	elif campaign_selected>=0:
+		var stage:Dictionary=Campaign.stage(campaign_selected)
+		var unlocked:bool=campaign_selected<=campaign_cleared
+		var paid:bool=campaign_selected<campaign_cleared
+		var label:=Label.new();label.add_theme_font_size_override("font_size",19)
+		label.text="%s • %s • %d defenses • %d stars\nSuggested force: %d+ mixed troops • 150 seconds\n\nVICTORY REWARD\n%s\n%s"%[stage.name,stage.tier,stage.structures.size(),stage.structures[0].level,stage.recommended,Campaign.reward_text(Campaign.reward(campaign_selected,campaign_cleared)),"First-clear Coin bonus already claimed. Resources remain available." if paid else ("GODOT Coin bonus: first victory only." if stage.reward.coins>0 else "Win to receive these resources and unlock the next base.")]
+		column.add_child(label)
+		var actions:=HBoxContainer.new();column.add_child(actions)
+		actions.add_child(_button("BACK",func():_campaign_select(-1),Vector2(180,52)))
+		var attack:=_button("SCOUT & DEPLOY" if unlocked else "LOCKED • CLEAR BASE %02d"%campaign_selected,func():_campaign_start(campaign_selected),Vector2(520,52));attack.disabled=not unlocked;actions.add_child(attack)
+	else:
+		var grid:=_scroll_grid(panel,5)
+		for index in range(campaign_page*10,campaign_page*10+10):
+			var stage:Dictionary=Campaign.stage(index)
+			var reward:Dictionary=Campaign.reward(index,campaign_cleared)
+			var state:String="CLEARED" if index<campaign_cleared else ("NEXT BASE" if index==campaign_cleared else "LOCKED • PREVIEW")
+			var card:=_asset_button(stage.name,"%s • %s\n%d Credits / %d Metal\n%d Oil / %d Crystal\n%d Gold / %d Coin\nTAP FOR REWARDS"%[stage.tier,state,reward.credits,reward.metal,reward.oil,reward.crystal,reward.gold,reward.coins],"",Vector2(210,172))
+			if index==campaign_cleared:card.add_theme_stylebox_override("normal",_style(Color("215361"),12,Color("79e5c0"),2))
+			card.pressed.connect(func(n=index):_campaign_select(n));grid.add_child(card)
+	return panel
+
 func _make_galaxy_panel()->PanelContainer:
+	if not galaxy_classic:return _make_campaign_panel()
 	var panel:=_panel("GALAXY MAP / AI OUTPOSTS")
+	panel.get_child(0).add_child(_button("OFFLINE CAMPAIGN • 50 BASES",func():galaxy_classic=false;_refresh_progress(),Vector2(0,46)))
 	var grid:=_scroll_grid(panel,5)
 	for i in 15:
 		var b:=_asset_button(MAP_NAMES[i],("GODOT / LV %02d / %s" if i in [4,8,10,14] else "LEVEL %02d / %s")%[i+1,"EASY" if i<3 else ("NORMAL" if i<7 else ("HARD" if i<11 else "EXTREME"))],"",Vector2(200,130))
@@ -551,22 +607,30 @@ func _toggle_galaxy()->void:
 	galaxy_panel.visible=not galaxy_panel.visible;units_panel.hide();build_panel.hide();info_panel.hide()
 	onboarding.refresh_guide()
 
-func _start_battle(idx:int)->void:
+func _start_battle(idx:int,campaign_index:int=-1)->void:
 	if mode!="base" or tutorial_step<12 or idx<0 or idx>=15:return
-	if idx==home_planet:_toast("This world is your home. Choose a rival outpost.");return
+	if campaign_index>=0 and (campaign_index>=Campaign.COUNT or campaign_index>campaign_cleared):return
+	if campaign_index<0 and idx==home_planet:_toast("This world is your home. Choose a rival outpost.");return
 	if Array(unit_stock).reduce(func(a,b):return a+b,0)<=0:_toast("Train a fleet before attacking.");return
 	build_type=-1;landing_marker.hide();landing_label.hide()
 	build_panel.hide();units_panel.hide()
 	if is_instance_valid(coin_system.panel):coin_system.panel.hide()
 	_save_profile()
+	battle_campaign=campaign_index
+	battle_reward=Campaign.reward(campaign_index,campaign_cleared) if campaign_index>=0 else {}
 	mode="battle";battle_map=idx;galaxy_panel.visible=false;info_panel.hide();selection_ring.hide();home_root.visible=false;battle_root.visible=true
 	for c in battle_root.get_children():c.queue_free()
 	_clear_wrecks()
 	battle_targets.clear();battle_units.clear();battle_damage=0;battle_elapsed=0;_apply_map_theme(idx)
-	var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[14,17,17,15,16,14,15] if idx in [4,8,10,14] else [0,8,8,9,6,2,3]
-	for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],1+idx,true))
-	for i in floori(idx/3.0):
-		battle_targets.append(_spawn_building(battle_root,17 if idx in [4,8,10,14] else 11,Vector3(-12+i*8,0,-12),1+idx,true))
+	if battle_campaign>=0:
+		for entry in Campaign.stage(battle_campaign).structures:
+			var enemy:Dictionary=_spawn_building(battle_root,entry.type,entry.pos,entry.level,true)
+			enemy.hp=entry.hp;enemy.max_hp=entry.hp;enemy["campaign_damage"]=entry.shot_damage;battle_targets.append(enemy)
+	else:
+		var epos=[Vector3(0,0,-5),Vector3(-8,0,-1),Vector3(8,0,-1),Vector3(-5,0,5),Vector3(5,0,5),Vector3(-13,0,6),Vector3(13,0,6)];var etypes=[14,17,17,15,16,14,15] if idx in [4,8,10,14] else [0,8,8,9,6,2,3]
+		for i in epos.size():battle_targets.append(_spawn_building(battle_root,etypes[i],epos[i],1+idx,true))
+		for i in floori(idx/3.0):
+			battle_targets.append(_spawn_building(battle_root,17 if idx in [4,8,10,14] else 11,Vector3(-12+i*8,0,-12),1+idx,true))
 	raid_stock=unit_stock.duplicate()
 	awaiting_deployment=true;deployed_stock.resize(UNIT_NAMES.size());deployed_stock.fill(0);deployment_groups.clear()
 	deploy_count=8
@@ -643,7 +707,7 @@ func _deploy_fleet(pos:Vector3)->void:
 
 func _battle_tick(delta:float)->void:
 	if awaiting_deployment:return
-	_defense_tick(battle_targets,battle_units,delta,battle_map+1)
+	_defense_tick(battle_targets,battle_units,delta,battle_campaign+1 if battle_campaign>=0 else battle_map+1)
 	var survivors:=0
 	for u in battle_units:
 		if u.get("hp",0)>0 and is_instance_valid(u.node):survivors+=1
@@ -686,8 +750,16 @@ func _finish_battle(win:bool)->void:
 		battle_feedback.victory()
 		if is_instance_valid(reserve_panel):reserve_panel.hide()
 		if is_instance_valid(deployment_bar):deployment_bar.hide()
-		var reward:=Vector4(8000+battle_map*700,4200+battle_map*350,2600+battle_map*220,900+battle_map*90);credits+=reward.x;metal+=reward.y;oil+=reward.z;crystal+=reward.w
-		var l:Label=victory_panel.find_child("Reward",true,false);l.text="%s conquered\nDamage 100%%\n+%d Credits   +%d Metal   +%d Oil   +%d Crystal"%[MAP_NAMES[battle_map],int(reward.x),int(reward.y),int(reward.z),int(reward.w)];victory_panel.visible=true
+		if battle_campaign>=0:
+			credits+=battle_reward.credits;metal+=battle_reward.metal;oil+=battle_reward.oil;crystal+=battle_reward.crystal;gold+=battle_reward.gold;godot_coins+=int(battle_reward.coins)
+			for key in battle_reward:campaign_earnings[key]=int(campaign_earnings.get(key,0))+int(battle_reward[key])
+			campaign_wins+=1;campaign_cleared=maxi(campaign_cleared,battle_campaign+1)
+			var label:Label=victory_panel.find_child("Reward",true,false)
+			label.text="BASE %02d SECURED • %d / 50 CLEARED\n%s\n%s"%[battle_campaign+1,campaign_cleared,Campaign.reward_text(battle_reward),"CAMPAIGN COMPLETE! Replay bases for resources." if campaign_cleared==50 else "Next base unlocked. Return home to prepare."]
+			victory_panel.show()
+		else:
+			var reward:=Vector4(8000+battle_map*700,4200+battle_map*350,2600+battle_map*220,900+battle_map*90);credits+=reward.x;metal+=reward.y;oil+=reward.z;crystal+=reward.w
+			var l:Label=victory_panel.find_child("Reward",true,false);l.text="%s conquered\nDamage 100%%\n+%d Credits   +%d Metal   +%d Oil   +%d Crystal"%[MAP_NAMES[battle_map],int(reward.x),int(reward.y),int(reward.z),int(reward.w)];victory_panel.visible=true
 		if tutorial_step==12:tutorial_step=13
 		_save_profile()
 	else:_return_home();battle_feedback.defeat();_toast("FLEET WITHDREW — regroup and try again")
@@ -699,6 +771,7 @@ func _return_home()->void:
 	if is_instance_valid(deployment_bar):deployment_bar.hide()
 	if is_instance_valid(reserve_panel):reserve_panel.hide()
 	dock.show();_clear_missiles();_clear_wrecks()
+	battle_campaign=-1;battle_reward={};campaign_selected=-1
 	_apply_map_theme(home_planet);_center_camera();_refresh_progress();_save_profile();_toast("Returned to "+MAP_NAMES[home_planet]+".")
 
 func _economy_tick(delta:float)->void:
@@ -719,7 +792,7 @@ func _update_top_bar()->void:
 	if resource_labels.size()!=7:return
 	var values:=[credits,metal,oil,crystal,power,gold,float(godot_coins)]
 	for i in 7:resource_labels[i].text=_fmt(values[i])
-	status_label.text=(MAP_NAMES[maxi(home_planet,0)].to_upper()) if mode in ["base","welcome"] else "%s  /  %d%%"%[MAP_NAMES[battle_map].to_upper(),int(battle_damage)]
+	status_label.text=(MAP_NAMES[maxi(home_planet,0)].to_upper()) if mode in ["base","welcome"] else "%s  /  %d%%"%[("BASE %02d"%[battle_campaign+1] if battle_campaign>=0 else MAP_NAMES[battle_map].to_upper()),int(battle_damage)]
 
 func _fmt(v:float)->String:
 	if v>=1000000:return "%.2fM"%(v/1000000.0)
@@ -1049,13 +1122,18 @@ func _save_profile()->bool:
 	if not has_colony or not profile_ready:return false
 	var records:Array=[]
 	for b in buildings:records.append({"type":b.type,"level":b.level,"pos":[b.pos.x,0,b.pos.z],"job":b.get("job",""),"started":b.get("started",0),"finish":b.get("finish",0)})
-	var data:Dictionary={"schema":1,"ad_rewards":rewarded_ads.save_state() if rewarded_ads else {},"drone_producer":drone_producer,"miner_producer":miner_producer,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
+	var data:Dictionary={"schema":1,"campaign_cleared":campaign_cleared,"campaign_earnings":campaign_earnings,"campaign_wins":campaign_wins,"ad_rewards":rewarded_ads.save_state() if rewarded_ads else {},"drone_producer":drone_producer,"miner_producer":miner_producer,"godot_coins":godot_coins,"last_coin_day":last_coin_day,"cleared_obstacles":cleared_obstacles,"clearing_jobs":clearing_jobs,"gold":gold,"drone_count":drone_count,"miner_count":miner_count,"drone_finish":drone_finish,"miner_finish":miner_finish,"colony_time":colony_time,"training_queue":training_queue,"home_planet":home_planet,"tutorial_step":tutorial_step,"tutorial_dismissed":tutorial_dismissed,"resources":[credits,metal,oil,crystal],"unit_stock":Array(unit_stock),"buildings":records}
 	if not profile_store.write_profile(profile_path,data):_toast("Could not save progress. Free some device storage and try again.");return false
 	return true
 
 func _load_profile()->void:
 	var data:Dictionary=profile_store.read_profile(profile_path)
 	if data.is_empty():return
+	campaign_cleared=clampi(int(data.get("campaign_cleared",0)),0,Campaign.COUNT)
+	campaign_earnings={}
+	for key in data.get("campaign_earnings",{}):campaign_earnings[key]=int(data.campaign_earnings[key])
+	campaign_wins=maxi(0,int(data.get("campaign_wins",0)))
+	campaign_page=mini(campaign_cleared/10,4)
 	drone_producer=int(data.get("drone_producer",-1));miner_producer=int(data.get("miner_producer",-1))
 	godot_coins=int(data.get("godot_coins",0));last_coin_day=int(data.get("last_coin_day",-1));cleared_obstacles=data.get("cleared_obstacles",[]);clearing_jobs=data.get("clearing_jobs",[])
 	rewarded_ads.load_state(data.get("ad_rewards",{}))
@@ -1253,7 +1331,7 @@ func _defense_tick(defenders:Array,attackers:Array,delta:float,difficulty:int)->
 			if turret.global_position.distance_to(point)>.01:turret.look_at(point,Vector3.UP,true)
 		if float(tower.fire_wait)>0:continue
 		tower["fire_wait"]=2.0 if tower.type==11 else 1.2
-		var damage:float=_shot_damage(tower,difficulty)
+		var damage:float=float(tower.get("campaign_damage",_shot_damage(tower,difficulty)))
 		target.hp-=damage
 		_weapon_effect(tower.node.global_position+Vector3(0,3,0),target.node,target.node.global_position,tower.type==11,tower.type>=14)
 		if target.hp<=0:_destroy_entity(target,false)

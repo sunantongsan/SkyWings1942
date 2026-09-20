@@ -3,7 +3,25 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
-## Current update — v0.21
+## Current update — v0.22
+
+- Offline campaign of 50 bases, unlocked sequentially, with five ten-base sectors.
+  Preview every base, its exact rewards, defenses and suggested army before deploying.
+- Structure health and aggregate defense damage increase at every stage; later
+  sectors add more defenses and alternate Galaxy and Godot environments.
+- Victories pay Credits, Metal, Oil, Crystal and Gold. Bases 21–50 also pay a
+  first-clear-only GODOT Coin bonus; bases 30/40/50 add two extra Coins.
+  Cleared bases can be replayed for resources, with zero repeat Coin reward.
+- TOTAL EARNED shows campaign resource totals and victory count. Progress, rewards
+  and Coins are persisted together; v0.21 colonies load with campaign base 1 open.
+- Defeat, retreat and a duplicate completion do not award campaign rewards.
+  All rewards are local, non-transferable in-game assets.
+- The original 15-world map remains available through CLASSIC MAP. New campaign
+  bases are separate enemy outposts, even if they share the player's home biome.
+- CI verifies all 50 difficulty steps, starter/final battles, exact reward totals,
+  repeat victories, Coin persistence, old-save migration and landscape screenshots.
+
+## Previous update — v0.21
 
 - Original attack-pigeon launcher icon and a matching text-free startup illustration.
   These are two independently generated PNG assets, not a sprite atlas. Only the
