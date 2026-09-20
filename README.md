@@ -3,7 +3,25 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
-## Current update — v0.24
+## Current update — v0.25
+
+- Wall selection only shows UPGRADE, DELETE and an SVG rotation icon. Repeated
+  rotation and wall upgrades keep the menu open. Tap empty terrain to dismiss.
+- Wall deletion remaps producer queues and durable ad receipt targets, including
+  an explicit removed-target sentinel; deleted targets never boost another job.
+- Walls appear before other defensive equipment in the construction list.
+- Level colors: 1 original, 2 blue, 3 red, 4 black, 5 gold, 6+ red/gold with
+  lightweight animated sparkles. GLB materials are cloned/cached by rank;
+  level-1 originals and neighboring buildings are never recolored accidentally.
+  Walls retain their distinct physical material with rank-colored fittings.
+- Enemy layouts reserve separate sites for every weapon and progressively close
+  the front, rear and flanking perimeter. Mortars sit behind the front defenses;
+  machine guns and anti-air missiles cover approaches from separate positions.
+- Regression tests cover compact controls, repeated rotation, deletion/save/queue
+  references, unique material palettes, sparkles, non-overlapping enemy sites,
+  starter/final army combat and real screenshots.
+
+## Previous update — v0.24
 
 - Drag colony buildings directly to relocate for free, including ongoing construction.
   Invalid placements roll back. Empty-ground drags still pan the camera.

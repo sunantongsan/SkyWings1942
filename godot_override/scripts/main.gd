@@ -79,6 +79,8 @@ var galaxy_classic:=false
 var battle_campaign:=-1
 var battle_reward:Dictionary={}
 var layout:RefCounted
+var wall_rotate_button:Button
+var wall_delete_button:Button
 var ground:MeshInstance3D
 var terrain_material:ShaderMaterial
 var sun:DirectionalLight3D
@@ -298,7 +300,9 @@ func _setup_ui()->void:
 	iv.add_child(_button("UPGRADE",_upgrade_selected,Vector2(0,58)))
 	defense_test_button=_button("TEST DEFENSE",_start_defense_drill,Vector2(0,44));iv.add_child(defense_test_button);defense_test_button.hide()
 	iv.add_child(_button("MOVE",_begin_move,Vector2(0,48)))
-	iv.add_child(_button("ROTATE WALL 90°",func():layout.rotate_selected(),Vector2(0,48)))
+	wall_rotate_button=_button("",func():layout.rotate_selected(),Vector2(56,56))
+	wall_rotate_button.icon=load("res://assets/icons/rotate_wall.svg");wall_rotate_button.tooltip_text="Rotate wall 90°";wall_rotate_button.hide();iv.add_child(wall_rotate_button)
+	wall_delete_button=_button("DELETE",func():layout.delete_selected(),Vector2(0,52));wall_delete_button.hide();iv.add_child(wall_delete_button)
 	iv.add_child(_button("CLOSE",func():info_panel.hide();selection_ring.hide(),Vector2(0,44)))
 	build_panel=_make_build_panel();ui_root.add_child(build_panel);build_panel.hide()
 	units_panel=_make_units_panel();ui_root.add_child(units_panel);units_panel.hide()
@@ -324,7 +328,7 @@ func _make_build_panel()->PanelContainer:
 	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(310,52)))
 	actions.add_child(_button("DEFENSE DRILL",_start_defense_drill,Vector2(230,52)))
 	var grid:=_scroll_grid(panel,5)
-	for i in BUILD_ORDER+[21,22,23,24,18,19,20,10,11,12,13,14,15,16,17]:
+	for i in BUILD_ORDER.slice(0,7)+[24,8,21,22,23,7,9,18,19,20,10,11,12,13,14,15,16,17]:
 		var b:=_asset_button(BUILDING_NAMES[i],"%s M / %d O • %ds"%[_fmt(BUILDING_COST[i]),_building_oil_cost(i),BUILD_SECONDS[i]],"buildings/"+_building_file(i),Vector2(200,158))
 		if i>=21:
 			b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text+= "\n"+defenses.description(i)
@@ -568,6 +572,7 @@ func _upgrade_selected()->void:
 	metal-=cost
 	_complete_upgrade(b)
 	_refresh_progress();_save_profile();_dismiss_menus()
+	if b.type==24:_select_building_at(b.pos)
 	_toast("Upgrade complete! The next level costs twice as much Metal.")
 
 func _upgrade_cost(b:Dictionary)->float:
@@ -847,10 +852,23 @@ func _select_building_at(pos:Vector3)->void:
 	selected_label.text="%s • %s"%[BUILDING_NAMES[b.type],_rank_text(b.level)]
 	var weapon:String="Auto-defense unlocks at 5 stars"
 	if _can_fire(b):weapon="AUTO-DEFENSE • %.1f damage / shot\nRange %.1f m"%[_shot_damage(b,home_planet+1),_weapon_range(b)]
-	defense_test_button.visible=b.type>=21 and b.get("job","")==""
+	var wall:bool=b.type==24
+	for control in selected_label.get_parent().get_children():
+		if control is Button and control.text in ["PRODUCE","SPEED UP","MOVE","CLOSE"]:control.visible=not wall
+	wall_rotate_button.visible=wall;wall_delete_button.visible=wall
+	ad_button.visible=not wall and b.get("job","")!=""
+	info_panel.get_child(0).scroll_vertical=0
+	defense_test_button.visible=not wall and b.type>=21 and b.get("job","")==""
 	selected_detail.text="HP %d/%d\nUpgrade: %s Metal • INSTANT\n%s"%[int(b.hp),int(b.max_hp),_fmt(_upgrade_cost(b)),weapon]
 	if b.type>=21:selected_detail.text+="\n"+defenses.description(b.type,b.level)
 	if b.type==24 and b.level>=5:selected_detail.text="FIRE WALL • MAX LEVEL\nHP %d / %d\nBlocks ground units\nClose-range machine gun\nRange %.1f m"%[b.hp,b.max_hp,_weapon_range(b)]
+	if wall:
+		selected_detail.text="%s\n%s"%[defenses.WALL_NAMES[int(b.level)-1],"MAX LEVEL" if b.level>=5 else "%s Metal • INSTANT"%_fmt(_upgrade_cost(b))]
+		for control in selected_label.get_parent().get_children():
+			if control is Button and control.text=="UPGRADE":control.disabled=b.level>=5 or b.get("job","")!=""
+	else:
+		for control in selected_label.get_parent().get_children():
+			if control is Button and control.text=="UPGRADE":control.disabled=false
 	if b.type in [18,19,20]:selected_detail.text+="\nCapacity: %d → %d next star\nMaximum 3 camps of this type"%[garrison.capacity_for_level(b.level),garrison.capacity_for_level(b.level+1)]
 	if b.type in [6,12,13,16]:
 		selected_detail.text+="\nOwn queue: %d / %d"%[_producer_queue_count(best),_producer_queue_limit(best)]
@@ -1436,6 +1454,7 @@ func _rank_text(level:int)->String:
 	return "★".repeat(level) if level<=5 else "★ × %d"%level
 
 func _update_rank_label(b:Dictionary)->void:
+	preload("res://scripts/building_rank.gd").apply(b.node,int(b.level),int(b.type))
 	if not is_instance_valid(b.get("rank_label")):return
 	b.rank_label.text="CONSTRUCTING" if b.get("job","")=="build" else _rank_text(int(b.level))
 	b.rank_label.global_position=b.node.global_position+Vector3(0,5.2*(1+(b.level-1)*.025),0)

@@ -87,7 +87,7 @@ func _valid(data:Variant)->bool:
 		if not request is Dictionary:return false
 		if request.get("kind","build")=="coins":continue
 		if request.get("kind","build")!="build":return false
-		if not _number(request.get("index",-1),0,data.buildings.size()-1):return false
+		if not _number(request.get("index",-1),-1,data.buildings.size()-1):return false
 		if request.get("job","") not in ["build","upgrade"] or not _number(request.get("started",-1),0,1e12) or not _number(request.get("level",0),1,100):return false
 	var busy:int=clear_jobs.size()
 	var kinds:Dictionary={}

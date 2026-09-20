@@ -38,6 +38,12 @@ func run()->void:
 			hp+=entry.hp
 			if entry.type in [8,11,17] or entry.level>=5:dps+=entry.shot_damage/(2.0 if entry.type==11 else 1.2)
 			assert(absf(entry.pos.x)<16 and absf(entry.pos.z)<13)
+		for i in stage.structures.size():
+			var a:Dictionary=stage.structures[i]
+			if a.type==24:continue
+			for j in range(i+1,stage.structures.size()):
+				var b:Dictionary=stage.structures[j]
+				if b.type!=24:assert(a.pos.distance_to(b.pos)>=6.9,"Defense weapons have reserved, non-overlapping sites")
 		assert(hp>last_hp and stage.reward.credits>last_reward)
 		assert(stage.difficulty==index+1)
 		assert(dps>last_dps,"Enemy damage output must increase at every stage")

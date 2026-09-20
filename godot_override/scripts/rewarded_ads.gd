@@ -112,6 +112,6 @@ func tick()->void:
 		for token in inbox.duplicate():receive(str(token));inbox.erase(token)
 	if not is_instance_valid(host.ad_button):return
 	var index:int=host.selected_building
-	var active:bool=host.mode=="base" and index>=0 and index<host.buildings.size() and host.buildings[index].get("job","")!=""
+	var active:bool=host.mode=="base" and index>=0 and index<host.buildings.size() and host.buildings[index].get("job","")!="" and host.buildings[index].type!=24
 	host.ad_button.visible=active;host.ad_button.disabled=not pending.is_empty()
 	host.ad_button.text="AD IN PROGRESS" if not pending.is_empty() else "WATCH AD • −50 MIN"

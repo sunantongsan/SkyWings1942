@@ -115,7 +115,59 @@ func run()->void:
 	await shot("65-fire-wall-upgrade-details")
 	assert(is_equal_approx(game.buildings[14].node.rotation.y,PI/2))
 	game._toggle_build();await shot("66-defense-construction-menu")
+	await rank_colors_and_wall_menu()
 	game.queue_free();await process_frame
 	for suffix in ["",".bak",".tmp"]:
 		if FileAccess.file_exists(SAVE+suffix):DirAccess.remove_absolute(SAVE+suffix)
 	print("V23_DIFFICULTY_150_PERCENT_TYPED_WEAPONS_IMPACT_WALLS_SAVE_PASSED");quit(0)
+
+func rank_colors_and_wall_menu()->void:
+	game._dismiss_menus();game.tutorial_dismissed=true;game.onboarding.refresh_guide()
+	var wall:Dictionary=game.buildings[14]
+	game._select_building_at(wall.pos)
+	var visible:Array[String]=[]
+	for control in game.selected_label.get_parent().get_children():
+		if control is Button and control.visible:visible.append(control.text)
+	assert(visible==["UPGRADE","","DELETE"],"Wall only has upgrade, rotation icon and delete")
+	assert(game.wall_rotate_button.icon!=null)
+	var yaw:float=float(wall.get("yaw",0))
+	for i in 4:game.wall_rotate_button.pressed.emit()
+	assert(is_equal_approx(wall.yaw,yaw),"Four rotation taps complete a full turn")
+	assert(game.info_panel.visible,"Rotation keeps the compact wall menu open")
+	game.camera_focus=wall.pos;game.camera.size=24;game._position_camera()
+	await shot("67-compact-wall-menu-rotation-icon")
+	var index:int=game.buildings.size()
+	var factory:Dictionary=game._spawn_building(game.home_root,12,Vector3(150,0,0),1,false)
+	game.training_queue.append({"type":10,"producer":index,"finish":game.colony_time+60})
+	game.production_building=index;game.miner_producer=index
+	game.rewarded_ads.requests["removed-wall"]={"kind":"build","index":14,"job":"build","started":game.colony_time,"level":5}
+	game.rewarded_ads.requests["later-factory"]={"kind":"build","index":index,"job":"build","started":game.colony_time,"level":1}
+	game.wall_delete_button.pressed.emit()
+	assert(game.buildings.size()==index and game.buildings[index-1]==factory)
+	assert(game.training_queue.back().producer==index-1 and game.production_building==index-1 and game.miner_producer==index-1)
+	assert(game.rewarded_ads.requests["removed-wall"].index==-1 and game.rewarded_ads.requests["later-factory"].index==index-1)
+	assert(game._save_profile(),"Deleting a wall preserves valid queue and ad receipt references")
+	var data:Dictionary=game.profile_store.read_profile(SAVE)
+	assert(data.buildings.size()==index and data.training_queue.back().producer==index-1)
+	var balance:int=game.godot_coins;game.rewarded_ads.receive("removed-wall")
+	assert(game.godot_coins==balance and factory.get("job","")=="","A deleted target cannot reward or modify another building")
+	game._dismiss_menus()
+	var showcase:=Node3D.new();game.world_root.add_child(showcase)
+	var samples:Array[Dictionary]=[]
+	for level in range(1,7):
+		var b:Dictionary=game._spawn_building(showcase,0,Vector3(180+((level-1)%3)*10,0,((level-1)/3)*14),level,false)
+		samples.append(b)
+		assert(int(b.node.get_meta("paint_rank"))==level)
+		assert((b.node.get_node_or_null("RankSparkles")!=null)==(level>=6))
+	var colors:Array[Color]=[]
+	for b in samples:
+		var mesh:MeshInstance3D=b.node.find_children("*","MeshInstance3D",true,false)[0]
+		colors.append(mesh.get_active_material(0).albedo_color)
+	for i in colors.size():
+		for j in range(i+1,colors.size()):
+			if i==2 and j==5:continue
+			assert(colors[i]!=colors[j],"Paint variants must not overwrite another building's material")
+	game.camera_focus=Vector3(190,0,7);game.camera.size=45;game._position_camera()
+	await shot("68-building-star-colors-one-to-six")
+	print("V25_COMPACT_WALL_DELETE_QUEUE_REMAP_RANK_PAINT_AND_SPARKLES_PASSED")
+	showcase.queue_free()

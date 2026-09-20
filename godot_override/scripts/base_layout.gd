@@ -78,3 +78,26 @@ func input(event:InputEvent)->bool:
 		candidate=-1;active=false;touch_id=-2;host.drag_camera=false;host.touch_points.clear();host.pointer_moved=true
 		return true
 	return false
+
+func delete_selected()->void:
+	if host.mode!="base" or host.selected_building<0:return
+	var index:int=host.selected_building
+	if index>=host.buildings.size() or host.buildings[index].type!=24:return
+	cancel()
+	var wall:Dictionary=host.buildings.pop_at(index)
+	wall.node.queue_free()
+	for job in host.training_queue:
+		if int(job.get("producer",-1))>index:job.producer=int(job.producer)-1
+	for key in ["production_building","drone_producer","miner_producer"]:
+		if int(host.get(key))>index:host.set(key,int(host.get(key))-1)
+	# Durable ad receipts continue to address the same building after removal.
+	# -1 is a removed target: it can be acknowledged but cannot affect another job.
+	var claims:Array=host.rewarded_ads.requests.values()
+	claims.append(host.rewarded_ads.pending)
+	for claim in claims:
+		if claim.get("kind","")!="build":continue
+		if int(claim.index)==index:claim.index=-1
+		elif int(claim.index)>index:claim.index=int(claim.index)-1
+	host.selected_building=-1;host.moving_building=-1;host.build_type=-1
+	host._dismiss_menus();host.garrison.signature="";host._refresh_progress();host.garrison.sync();host._sync_industry_visuals()
+	host._save_profile();host._toast("Wall removed.")
