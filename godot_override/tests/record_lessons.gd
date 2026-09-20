@@ -22,6 +22,9 @@ func reset_colony(topic:String)->void:
 	game=load("res://scenes/main.tscn").instantiate();game.profile_path=SAVE;root.add_child(game)
 	await process_frame;await process_frame
 	game._found_colony(0);game.onboarding.close_lesson(false);game.set_process(false)
+	# Keep this disposable colony ahead of wall time: software rendering can take
+	# longer than production timers. Advance only one video frame per capture.
+	game.colony_time=Time.get_unix_time_from_system()+86400.0
 	game.onboarding.guide_suppressed=true;game.onboarding.refresh_guide()
 	game.credits=10000;game.metal=20000;game.oil=6000;game.crystal=2000
 	if topic=="power":game._spawn_building(game.home_root,0,Vector3.ZERO,1,false)
@@ -108,6 +111,7 @@ func record(topic:String)->void:
 					point(Vector2(580-(frame-60),400),"PINCH two fingers to zoom")
 					marker2.show();marker2.position=Vector2(700+frame-60,400);game.camera.size=36-(frame-60)*.18
 				game._position_camera()
+		game._advance_colony(game.colony_time+1.0/FPS)
 		game._process(1.0/FPS);game.toast.hide()
 		marker.phase=frame*.4;marker.queue_redraw();marker2.phase=frame*.4;marker2.queue_redraw()
 		await process_frame
