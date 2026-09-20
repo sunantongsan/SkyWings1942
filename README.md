@@ -3,7 +3,34 @@
 Android landscape base-building prototype in Godot 4.4.1 / GDScript.
 The original Android Canvas version remains on `legacy-android-canvas`.
 
-## Current update — v0.20
+## Current update — v0.21
+
+- Original attack-pigeon launcher icon and a matching text-free startup illustration.
+  These are two independently generated PNG assets, not a sprite atlas. Only the
+  splash uses the illustration; gameplay remains the live Godot 3D world.
+- Saved colonies enter the base directly. First-time players go straight to the
+  homeworld picker. Removed the welcome copy and extra Continue/Begin screen.
+- Seven offline, looping, 8-second Theora clips use actual gameplay and UI captures:
+  building, power, upgrading, camps, training, deployment and touch camera control.
+  A visible touch marker demonstrates actions. Construction completion in the clip
+  is explicitly labeled as accelerated demo time.
+- A new colony opens the first clip. Mission cards offer WATCH DEMO; TRY IT returns
+  to the real colony and opens the relevant action. GUIDE contains all lessons,
+  with replay/close controls. Watching never changes the player's colony or stock.
+- Build videos after importing assets/icons:
+  `xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/record_lessons.gd`
+  then `python3 tools/encode_lessons.py game`. GitHub Actions runs both before APK
+  export. The editable project artifact includes all `.ogv` files; source-only
+  checkouts display an explicit fallback until this build step is run.
+- Asset paths: `godot_override/assets/branding/launcher.png` (512×512),
+  `godot_override/assets/branding/startup.png` (1280×720).
+  Generated with the built-in image tool, then resized only for Android packaging.
+  Prompts: original comic blue-grey attack pigeon in teal armor and orange pilot
+  goggles, readable square mobile icon; separate wide text-free sci-fi colony
+  illustration with the same pigeon, oversized-cannon tank, aircraft and worn
+  corrugated-roof hangar, matching teal/orange colors. No borrowed game assets.
+
+## Previous update — v0.20
 
 - Production menus remain open for repeated orders; CLOSE is manual. Each factory
   retains its own queue, unlocks and capacity checks. Scrolling is preserved.

@@ -74,9 +74,18 @@ jobs:
       - name: Import GLBs and render building icons
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y xvfb libgl1-mesa-dri
+          sudo apt-get install -y xvfb libgl1-mesa-dri ffmpeg
           godot --headless --path game --editor --import --quit
           timeout 90s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/render_icons.gd
+          godot --headless --path game --editor --import --quit
+
+      - name: Record and encode real-game tutorial videos
+        run: |
+          set -o pipefail
+          timeout 600s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/record_lessons.gd 2>&1 | tee lesson-checks.log
+          grep -q REAL_GAME_TUTORIAL_RECORDING_PASSED lesson-checks.log
+          if grep -q 'SCRIPT ERROR' lesson-checks.log; then exit 1; fi
+          python3 tools/encode_lessons.py game
           godot --headless --path game --editor --import --quit
 
       - name: Verify gameplay and capture real Godot scene
@@ -84,6 +93,7 @@ jobs:
           set -o pipefail
           timeout 180s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/capture.gd 2>&1 | tee visual-checks.log
           grep -q GALAXY_VISUAL_AND_GAMEPLAY_CHECKS_PASSED visual-checks.log
+          grep -q DIRECT_ENTRY_AND_OFFLINE_VIDEO_LESSONS_PASSED visual-checks.log
           grep -q REPEAT_TRAINING_DIRECT_50_MINUTE_REWARDS_COIN_ADS_AND_RESTART_PASSED visual-checks.log
           if grep -q 'SCRIPT ERROR' visual-checks.log; then exit 1; fi
 
@@ -95,6 +105,8 @@ jobs:
           path: |
             game/build/review/*.png
             visual-checks.log
+            lesson-checks.log
+            game/assets/tutorial/*.ogv
             game/assets/models/manifest.json
 
       - name: Reuse Android test signing key

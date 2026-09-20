@@ -968,7 +968,7 @@ func _found_colony(planet:int)->void:
 	colony_time=Time.get_unix_time_from_system()
 	home_planet=planet;has_colony=true;tutorial_step=0;tutorial_dismissed=false
 	credits=3000;metal=10000;oil=1000;crystal=500;power=0
-	_save_profile();onboarding.enter_colony()
+	_save_profile();onboarding.enter_colony();onboarding.show_lesson("build")
 
 func _build_lock_reason(kind:int)->String:
 	if kind<0 or kind>=BUILDING_NAMES.size():return "Unknown structure."

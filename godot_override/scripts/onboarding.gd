@@ -1,5 +1,5 @@
 extends RefCounted
-## Native responsive UI over the live 3D world. No raster welcome poster.
+## Direct entry, homeworld selection, and offline videos recorded from the real game.
 var host:Node3D
 var screen:Control
 var panel:PanelContainer
@@ -14,6 +14,10 @@ var guide:PanelContainer
 var guide_title:Label
 var guide_text:Label
 var guide_action:Button
+var guide_video:Button
+var video:VideoStreamPlayer
+var lesson:=""
+const LESSONS:={"build":"Place your first base", "power":"Add power and industry", "upgrade":"Upgrade a building", "camp":"Build an army camp", "train":"Queue your troops", "raid":"Deploy and attack", "camera":"Move and zoom"}
 var guide_progress:ProgressBar
 var guide_suppressed:=false
 var settle_frames:=0
@@ -32,6 +36,7 @@ func _init(game:Node3D)->void:
 	guide_progress=ProgressBar.new();guide_progress.max_value=13;guide_progress.show_percentage=false;guide_progress.custom_minimum_size.y=5;content.add_child(guide_progress)
 	guide_text=_label("",17,Color("c2d7dc"));guide_text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;content.add_child(guide_text)
 	guide_action=host._button("",_guide_pressed,Vector2(0,52));guide_action.add_theme_font_size_override("font_size",17);content.add_child(guide_action)
+	guide_video=host._button("▶ WATCH DEMO",func():show_lesson(current_lesson()),Vector2(0,46));content.add_child(guide_video)
 	guide.hide()
 	layout()
 
@@ -47,20 +52,9 @@ func _clear()->void:
 	for p in [host.build_panel,host.units_panel,host.galaxy_panel]:p.hide()
 
 func welcome()->void:
-	page="welcome";_clear();host.mode="welcome"
-	column.add_child(_label("GALAXY 1942   /   COLONY COMMAND",17,Color("7ee1d4")))
-	var spacer:=Control.new();spacer.custom_minimum_size.y=16;column.add_child(spacer)
-	column.add_child(_label("YOUR WORLD.\nYOUR COMMAND.",48))
-	var intro:=_label("Choose your homeworld. Build a colony. Lead your fleet.",21,Color("b4cbd4"));intro.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;column.add_child(intro)
-	var description:=_label("A guided expedition teaches you one step at a time.\nDrag to explore your planet. Pinch to zoom.",18,Color("b4cbd4"));description.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;column.add_child(description)
-	if host.has_colony:
-		column.add_child(_label("COLONY SAVED  /  "+host.MAP_NAMES[host.home_planet].to_upper(),18,Color("89dfb4")))
-		column.add_child(host._button("CONTINUE EXPEDITION",enter_colony,Vector2(0,64)))
-	else:
-		column.add_child(_label("LANDING SUPPLIES  /  10K Metal · 3K Credits · 1K Oil · 500 Crystal",16,Color("d9c598")))
-		column.add_child(host._button("BEGIN EXPEDITION",choose_world,Vector2(0,64)))
-	column.add_child(host._button("HOW TO PLAY",show_help,Vector2(0,52)))
-	layout()
+	# Startup art is the engine splash. No welcome text or extra tap for saved colonies.
+	if host.has_colony:enter_colony()
+	else:choose_world()
 
 func choose_world()->void:
 	if host.has_colony:return
@@ -79,7 +73,6 @@ func choose_world()->void:
 		var biome_label:=_label(BIOMES[i],12,Color("9ab6c2"));biome_label.mouse_filter=Control.MOUSE_FILTER_IGNORE;text.add_child(biome_label)
 	selection_label=_label("Select a world to establish your colony.",18,Color("93d6c7"));column.add_child(selection_label)
 	var footer:=HBoxContainer.new();footer.add_theme_constant_override("separation",12);column.add_child(footer)
-	footer.add_child(host._button("BACK",welcome,Vector2(120,56)))
 	confirm_button=host._button("ESTABLISH COLONY",_confirm_world,Vector2(0,56));confirm_button.size_flags_horizontal=Control.SIZE_EXPAND_FILL;confirm_button.disabled=true;footer.add_child(confirm_button)
 	if selected_planet>=0:select_world(selected_planet)
 	layout()
@@ -99,21 +92,66 @@ func _confirm_world()->void:
 
 func enter_colony()->void:
 	if not host.has_colony:return
+	stop_video()
 	page="";screen.hide();host.header.show();host.dock.show();host.mode="base"
 	host._apply_map_theme(host.home_planet);host._center_camera();host._refresh_progress()
 
+func current_lesson()->String:
+	if host.tutorial_step==0:return "build"
+	if host.tutorial_step<10:return "power"
+	if host.tutorial_step==10:return "upgrade"
+	if host.tutorial_step==11:return "camp" if host.garrison.capacity(0)<8 else "train"
+	return "raid"
+
+func stop_video()->void:
+	if is_instance_valid(video):video.stop();video.stream=null
+	video=null
+
 func show_help()->void:
-	help_return=page
-	page="help";_clear()
-	column.add_child(_label("COMMANDER'S FIELD GUIDE",30))
-	var text:=_label("1   CHOOSE A WORLD — settle a permanent home for this colony.\n\n2   BUILD — follow the mission card and choose a green tile; red tiles are blocked (the glowing site is a suggestion).\n\n3   GATHER — production begins when the matching facility is built.\n\n4   UPGRADE — tap a building, then use UPGRADE to improve it.\n\n5   TRAIN — Star Hangar builds aircraft and drones; Vehicle Factory builds vehicles; Barracks trains troops. Upgrade each facility to unlock higher-tier units. Each selected producer has its own queue and level unlocks. Build separate Air, Vehicle and Infantry Camps for army space (maximum three of each); each star adds five slots. Training uses Credits and Oil. Mining vehicles require a Vehicle Factory and Gold Refinery.\n\n6   RAID — open the Galaxy Map, choose a rival outpost and return with rewards.\n\nDRAG to move the camera. PINCH or use + / − to zoom. Progress saves on this device. Construction and training continue while away. Offline resource production is capped at 8 hours. Raids are against AI. Select portraits on the right and tap the green outer area to send reinforcements during combat. Choose ALL RESERVES to deploy every remaining unit of that type. Deployed troops are consumed; unused reserves stay home.\n\nGODOT COIN — tap the GODOT COIN card in the top resource bar for daily rewards, resource exchange and speed-ups. Tap a rock or tree, then REMOVE to assign a free construction drone to an obstacle: 100 Metal + 50 Oil, 20 seconds. Clearing may reward coins and continues while away. Health bars appear above units and buildings; cyan bars and ACTIVE JOBS show timed work.",18,Color("bed3da"));text.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	var scroll:=preload("res://scripts/touch_scroll.gd").new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.custom_minimum_size.y=345;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.add_child(text);text.size_flags_horizontal=Control.SIZE_EXPAND_FILL;column.add_child(scroll)
-	column.add_child(host._button("BACK TO EXPEDITION",func():
-		if help_return=="welcome":welcome()
-		else:
-			page="";screen.hide();host.header.show();host.dock.show();refresh_guide()
-	,Vector2(0,56)))
+	stop_video();page="help";_clear()
+	column.add_child(_label("WATCH • THEN TRY",30))
+	var grid:=GridContainer.new();grid.columns=2;grid.size_flags_vertical=Control.SIZE_EXPAND_FILL;column.add_child(grid)
+	for key in LESSONS:
+		var button:Button=host._button("▶ "+LESSONS[key],func(k=key):show_lesson(k),Vector2(420,80));button.size_flags_horizontal=Control.SIZE_EXPAND_FILL;grid.add_child(button)
+	column.add_child(host._button("CLOSE",func():close_lesson(false),Vector2(0,54)))
 	layout()
+
+func show_lesson(key:String)->void:
+	if not LESSONS.has(key):return
+	stop_video();lesson=key;page="video";_clear()
+	column.add_child(_label("▶ "+LESSONS[key].to_upper(),24))
+	var path:String="res://assets/tutorial/"+key+".ogv"
+	if ResourceLoader.exists(path):
+		var aspect:=AspectRatioContainer.new();aspect.ratio=16.0/9.0;aspect.size_flags_vertical=Control.SIZE_EXPAND_FILL;column.add_child(aspect)
+		video=VideoStreamPlayer.new();video.expand=true;video.stream=load(path);video.loop=true;video.mouse_filter=Control.MOUSE_FILTER_IGNORE;aspect.add_child(video);video.play()
+	else:
+		# Editable source can be opened before the capture/encode step; never show an empty player.
+		column.add_child(_label("Video not installed. Use TRY IT to follow this step in your colony.",18))
+	var row:=HBoxContainer.new();row.add_theme_constant_override("separation",12);column.add_child(row)
+	row.add_child(host._button("REPLAY",func():
+		if is_instance_valid(video):video.stop();video.play()
+	,Vector2(160,54)))
+	row.add_child(host._button("TRY IT",func():close_lesson(true),Vector2(220,54)))
+	row.add_child(host._button("ALL LESSONS",show_help,Vector2(230,54)))
+	row.add_child(host._button("CLOSE",func():close_lesson(false),Vector2(140,54)))
+	layout()
+
+func close_lesson(try_it:bool)->void:
+	stop_video();page="";screen.hide()
+	if not host.has_colony:choose_world();return
+	host.header.show();host.dock.show();refresh_guide()
+	if not try_it:return
+	match lesson:
+		"camera":host._center_camera();host._toast("Drag with one finger. Pinch with two fingers to zoom.")
+		"build","power":
+			if host.tutorial_step<10:_guide_pressed()
+			else:host._toggle_build()
+		"camp":host._begin_build(19)
+		"train":host._toggle_units()
+		"upgrade":
+			for b in host.buildings:
+				if b.type==0:host._select_building_at(b.pos);break
+		"raid":host._toggle_galaxy()
 
 func refresh_guide()->void:
 	var step:int=host.tutorial_step
@@ -145,6 +183,8 @@ func refresh_guide()->void:
 		guide_title.text="12 / 13 · BUILD AN AIR CAMP"
 		guide_text.text="Build a separate Air Camp on clear ground. It holds 10 aircraft; then train eight Fighters."
 		guide_action.text="BUILD AIR CAMP"
+	guide_text.text="Watch the demo, then try it in your colony." if step<13 else "Your colony is ready. Keep expanding!"
+	guide_video.visible=step<13
 	if host._builder_busy() and step<=10:guide_action.text="CONSTRUCTION IN PROGRESS"
 	layout()
 
@@ -163,7 +203,7 @@ func _guide_pressed()->void:
 func layout()->void:
 	var size:Vector2=host.get_viewport().get_visible_rect().size
 	screen.position=Vector2.ZERO;screen.size=size
-	var width:float=minf(size.x-80,1120 if page=="planets" else 900)
+	var width:float=minf(size.x-80,1120 if page in ["planets","video"] else 960)
 	panel.position=Vector2((size.x-width)/2,32);panel.size=Vector2(width,size.y-64)
 	guide.position=Vector2(maxf(24.0,host.header.position.x),110);guide.size=Vector2(302,0)
 	settle_frames=3
@@ -174,5 +214,5 @@ func tick()->void:
 	if settle_frames<=0:return
 	settle_frames-=1
 	var size:Vector2=host.get_viewport().get_visible_rect().size
-	panel.size=Vector2(minf(size.x-80,1120 if page=="planets" else 900),size.y-64)
+	panel.size=Vector2(minf(size.x-80,1120 if page in ["planets","video"] else 960),size.y-64)
 	guide.size=Vector2(302,guide.get_combined_minimum_size().y)

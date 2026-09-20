@@ -29,11 +29,11 @@ func run()->void:
 		if FileAccess.file_exists(QA_SAVE+suffix):DirAccess.remove_absolute(QA_SAVE+suffix)
 	root.size=Vector2i(1280,720)
 	await open_game()
-	assert(game.onboarding.page=="welcome" and not game.has_colony)
+	assert(game.onboarding.page=="planets" and not game.has_colony)
 	assert(game.buildings.is_empty() and game.unit_stock[0]==0)
-	assert(not FileAccess.file_exists(QA_SAVE),"Opening welcome must not create a colony")
-	await shot("00-welcome")
-	assert(game.onboarding.panel.get_rect().end.y<=720,"Welcome card must fit on screen")
+	assert(not FileAccess.file_exists(QA_SAVE),"Opening the world picker must not create a colony")
+	await shot("00-direct-homeworld-picker")
+	assert(game.onboarding.panel.get_rect().end.y<=720,"World picker must fit on screen")
 	game.onboarding.show_help();await shot("00a-field-guide");game.onboarding.welcome()
 	game.onboarding.choose_world()
 	assert(game.onboarding.planet_buttons.size()==15 and game.onboarding.confirm_button.disabled)
@@ -42,6 +42,14 @@ func run()->void:
 	await shot("00b-choose-homeworld")
 	game.onboarding._confirm_world()
 	assert(game.has_colony and game.home_planet==2 and game.mode=="base")
+	assert(game.onboarding.page=="video","New colony opens the first video lesson")
+	if DisplayServer.get_name()!="headless":
+		assert(is_instance_valid(game.onboarding.video) and game.onboarding.video.is_playing())
+		await create_timer(.7).timeout
+		assert(game.onboarding.video.stream_position>0,"Offline tutorial video advances")
+		await shot("00h-first-video-lesson")
+	game.onboarding.close_lesson(false)
+	assert(not game.onboarding.screen.visible and game.buildings.is_empty(),"Video playback never constructs anything in the real colony")
 	assert(game.buildings.is_empty() and game.power==0)
 	var initial_metal:float=game.metal
 	var initial_credits:float=game.credits
@@ -88,8 +96,8 @@ func run()->void:
 			game._save_profile();game.queue_free();await process_frame
 			await open_game()
 			assert(game.has_colony and game.home_planet==2 and game.tutorial_step==4)
-			assert(game.buildings.size()==4 and game.onboarding.page=="welcome")
-			await shot("00f-welcome-back")
+			assert(game.buildings.size()==4 and game.onboarding.page.is_empty() and game.mode=="base")
+			await shot("00f-direct-resume")
 			game.onboarding.enter_colony()
 	assert(game.buildings.size()==10 and game.tutorial_step==10)
 	assert(game._build_lock_reason(0)!="","Only one Core is allowed")
@@ -532,6 +540,7 @@ func run()->void:
 	for suffix in ["",".bak",".tmp"]:
 		if FileAccess.file_exists(QA_SAVE+suffix):DirAccess.remove_absolute(QA_SAVE+suffix)
 	print("PERSISTENT_CONSTRUCTION_UPGRADE_TRAINING_QUEUE_PASSED")
+	print("DIRECT_ENTRY_AND_OFFLINE_VIDEO_LESSONS_PASSED")
 	print("GALAXY_VISUAL_AND_GAMEPLAY_CHECKS_PASSED")
 	print("NEW_COLONY_TOUCH_ORDER_SAVE_RELOAD_AND_RAID_PASSED")
 	quit(0)

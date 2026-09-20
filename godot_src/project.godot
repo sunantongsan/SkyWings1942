@@ -3,6 +3,12 @@ config_version=5
 
 [application]
 config/name="GALAXY 1942"
+config/icon="res://assets/branding/launcher.png"
+boot_splash/image="res://assets/branding/startup.png"
+boot_splash/show_image=true
+boot_splash/fullsize=true
+boot_splash/use_filter=true
+boot_splash/bg_color=Color(0.02, 0.06, 0.10, 1)
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
 
