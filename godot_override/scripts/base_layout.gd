@@ -6,11 +6,20 @@ var start:=Vector2.ZERO
 var touch_id:=-2
 var drag_offset:=Vector3.ZERO
 var rotating:=false
+var upgrade_all:=false
+var scope:HBoxContainer
+var one:Button
+var all:Button
 var done:Button
 func _init(game:Node3D)->void:
 	host=game
 	done=host._button("DONE",func():host.build_type=-1;host.placement_guide.has_pointer=false;done.hide(),Vector2(140,52))
 	host.ui_root.add_child(done);done.hide()
+	scope=HBoxContainer.new();scope.add_theme_constant_override("separation",8)
+	one=host._button("ONE",func():upgrade_all=false;floating_menu(),Vector2(88,40))
+	all=host._button("ALL",func():upgrade_all=true;floating_menu(),Vector2(88,40))
+	for button in [one,all]:button.toggle_mode=true;button.add_theme_font_size_override("font_size",16);scope.add_child(button)
+	host.selected_label.get_parent().add_child(scope);host.selected_label.get_parent().move_child(scope,0);scope.hide()
 func half_size(kind:int)->Vector2:return Vector2(3,.7) if kind in [24,25] else (Vector2(6.5,5) if kind in [18,19,20] else Vector2(3.1,3.1))
 func overlaps(pos:Vector3,kind:int,yaw:float,other:Dictionary)->bool:
 	var a:=half_size(kind);var b:=half_size(int(other.type))
@@ -163,13 +172,40 @@ func floating_menu()->void:
 	var wall:bool=b.type in [24,25]
 	host.selected_label.visible=not wall;host.selected_detail.visible=true
 	host.selected_detail.add_theme_font_size_override("font_size",15 if wall else 17)
-	if wall:host.selected_detail.text="MAX LEVEL" if b.level>=5 else "%s M • INSTANT"%host._fmt(host._upgrade_cost(b))
-	var width:=180.0 if wall else 230.0
+	scope.visible=b.type==24
+	one.set_pressed_no_signal(not upgrade_all);all.set_pressed_no_signal(upgrade_all)
+	var quote:=wall_quote()
+	if wall:
+		if b.type==24 and upgrade_all:host.selected_detail.text="ALL: %d walls • %s M"%[quote.indices.size(),host._fmt(quote.cost)] if not quote.indices.is_empty() else "ALL WALLS AT MAX"
+		else:host.selected_detail.text="MAX LEVEL" if b.level>=5 else "%s M • INSTANT"%host._fmt(host._upgrade_cost(b))
+	var width:=210.0 if wall else 230.0
 	host.info_panel.custom_minimum_size=Vector2(width,0)
-	var height:=248.0 if wall else 330.0
+	var height:=324.0 if b.type==24 else (248.0 if wall else 330.0)
 	host.info_panel.size=Vector2(width,height)
 	var screen:Vector2=host.camera.unproject_position(b.pos+Vector3(0,2,0))
 	var view:Vector2=host.get_viewport().get_visible_rect().size
 	host.info_panel.position=Vector2(clampf(screen.x+65,16,view.x-width-16),clampf(screen.y-height*.5,104,view.y-height-90))
 	for control in host.selected_label.get_parent().get_children():
-		if control is Button and control.text=="UPGRADE":control.tooltip_text="%s Metal"%host._fmt(host._upgrade_cost(b))
+		if control is Button and control.text=="UPGRADE":
+			var bulk:bool=b.type==24 and upgrade_all
+			var cost:float=quote.cost if bulk else host._upgrade_cost(b)
+			control.disabled=host.tutorial_step<10 or (host.tutorial_step==10 and b.type!=0) or host.metal<cost or (not quote.ready if bulk else (b.level>=(5 if wall else 100) or b.get("job","")!="" or (not wall and host._builder_busy())))
+			control.tooltip_text="%s Metal"%host._fmt(cost)
+
+func wall_quote()->Dictionary:
+	var indices:Array[int]=[];var cost:=0.0;var ready:=true
+	for i in host.buildings.size():
+		var b:Dictionary=host.buildings[i]
+		if b.type!=24 or b.level>=5:continue
+		indices.append(i);cost+=host._upgrade_cost(b)
+		if b.get("job","")!="":ready=false
+	return {"indices":indices,"cost":cost,"ready":ready and not indices.is_empty()}
+func upgrade_all_walls()->void:
+	if host.mode!="base" or host.tutorial_step<11:return
+	var quote:=wall_quote()
+	if not quote.ready:host._toast("No walls ready to upgrade.");return
+	if host.metal<quote.cost:host._toast("ALL requires %s Metal. No walls upgraded."%host._fmt(quote.cost));return
+	host.metal-=quote.cost
+	for index in quote.indices:host._complete_upgrade(host.buildings[index])
+	host._refresh_progress();host._save_profile();floating_menu()
+	host._toast("%d walls upgraded by one level."%quote.indices.size())

@@ -249,7 +249,7 @@ func _setup_camera()->void:
 
 func _setup_ui()->void:
 	ui=CanvasLayer.new();add_child(ui)
-	ui_root=Control.new();ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui_root=Control.new();ui_root.theme=preload("res://scripts/ui_skin.gd").theme();ui_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ui_root.mouse_filter=Control.MOUSE_FILTER_IGNORE;ui.add_child(ui_root)
 	header=HBoxContainer.new();header.add_theme_constant_override("separation",8);ui_root.add_child(header)
 	var brand:=PanelContainer.new();brand.custom_minimum_size=Vector2(225,72)
@@ -280,7 +280,7 @@ func _setup_ui()->void:
 	dock.add_child(_button("BUILD",_toggle_build,Vector2(180,64)))
 	dock.add_child(_button("FLEET",_toggle_units,Vector2(180,64)))
 	var galaxy_button:=_button("GALAXY MAP",_toggle_galaxy,Vector2(224,64))
-	galaxy_button.add_theme_stylebox_override("normal",_style(Color("176d75"),12,Color("69d9c8"),1));dock.add_child(galaxy_button)
+	galaxy_button.add_theme_stylebox_override("normal",_style(Color("248447"),12,Color("b6ed72"),1));dock.add_child(galaxy_button)
 	dock.add_child(_button("HOME",_home_action,Vector2(120,64)))
 	dock.add_child(_button("+",func():_zoom(-3),Vector2(64,64)))
 	dock.add_child(_button("−",func():_zoom(3),Vector2(64,64)))
@@ -337,7 +337,8 @@ func _make_build_panel()->PanelContainer:
 			b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text+= "\n"+defenses.description(i)
 			b.custom_minimum_size.y=212
 		var reason:=_build_lock_reason(i)
-		b.disabled=not reason.is_empty()
+		b.disabled=not reason.is_empty() or metal<BUILDING_COST[i] or oil<_building_oil_cost(i)
+		b.set_meta("available",func(kind=i):return _build_lock_reason(kind).is_empty() and metal>=BUILDING_COST[kind] and oil>=_building_oil_cost(kind))
 		if b.disabled:
 			b.get_child(0).modulate=Color(.45,.55,.6)
 			b.tooltip_text=reason
@@ -379,7 +380,7 @@ func _production_level(kind:int)->int:
 func _unit_lock_reason(idx:int,index:int=-1)->String:
 	if tutorial_step<11:return "Complete the Core upgrade mission"
 	if index<0:index=_producer_for(UNIT_FACILITY[idx])
-	if index<0:return "Build "+BUILDING_NAMES[UNIT_FACILITY[idx]]
+	if index<0 or index>=buildings.size():return "Build "+BUILDING_NAMES[UNIT_FACILITY[idx]]
 	var producer:Dictionary=buildings[index]
 	if producer.type!=UNIT_FACILITY[idx]:return "Wrong producer for this unit."
 	if producer.get("job","")!="":return "This producer is under construction."
@@ -411,7 +412,7 @@ func _make_units_panel()->PanelContainer:
 	for kind in [6,12,13,16]:
 		var button:=_button("GODOT SANCTUM" if kind==16 else BUILDING_NAMES[kind].to_upper(),func(k=kind):_show_production(k),Vector2(225,54))
 		button.add_theme_font_size_override("font_size",17)
-		if kind==production_kind:button.add_theme_stylebox_override("normal",_style(Color("176d75"),12,Color("69d9c8"),1))
+		if kind==production_kind:button.add_theme_stylebox_override("normal",_style(Color("248447"),12,Color("b6ed72"),1))
 		tabs.add_child(button)
 	tabs.add_child(_button("SPEED UP",func():coin_system.show_panel(),Vector2(170,54)))
 	var grid:=_scroll_grid(panel,4)
@@ -423,19 +424,22 @@ func _make_units_panel()->PanelContainer:
 		var reason:=_unit_lock_reason(i,producer)
 		var detail:String="LV %d • Ready %d • %ds\n%d C / %d O"%[UNIT_TIER[i],unit_stock[i],_unit_train_seconds(i),cost,_unit_oil_cost(i)] if reason.is_empty() else "LOCKED • "+reason
 		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,168))
-		b.disabled=not reason.is_empty()
+		b.disabled=not reason.is_empty() or credits<cost or oil<_unit_oil_cost(i)
+		b.set_meta("available",func(kind=i,owner=producer):return _unit_lock_reason(kind,owner).is_empty() and credits>=_unit_credit_cost(kind) and oil>=_unit_oil_cost(kind))
 		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
 		b.pressed.connect(func(idx=i,owner=producer):_train_unit(idx,owner));grid.add_child(b)
 	if production_kind==12:
 		var miner:=_asset_button("Mining Vehicle","LV 1 • 15s • 600 M / 150 O\nRequires Gold Refinery","units/mining_vehicle",Vector2(230,168))
 		miner.disabled=level<1 or building_levels[10]<1 or miner_finish>0
+		miner.set_meta("available",_can_build_miner);miner.disabled=not _can_build_miner()
 		miner.pressed.connect(_build_miner);grid.add_child(miner)
 		var coin_truck:=_asset_button("Coin Prospector","60s • 4000 M / 1200 O\nSearch forest; deliver Coins to Core","units/coin_prospector",Vector2(230,168))
-		coin_truck.disabled=level<2
+		coin_truck.set_meta("available",_can_build_prospector);coin_truck.disabled=not _can_build_prospector()
 		coin_truck.pressed.connect(func():logistics.build_coin_truck());grid.add_child(coin_truck)
 	if production_kind==6:
 		var drone:=_asset_button("Construction Drone","LV 1 • 15s • %d / 10 • %d Gold"%[drone_count,DRONE_PRICES[mini(drone_count-1,8)]],"units/construction_drone",Vector2(230,168))
 		drone.disabled=level<1 or drone_count>=10 or drone_finish>0
+		drone.set_meta("available",_can_build_drone);drone.disabled=not _can_build_drone()
 		drone.pressed.connect(_buy_drone);grid.add_child(drone)
 	return panel
 
@@ -471,7 +475,7 @@ func _make_campaign_panel()->PanelContainer:
 		column.add_child(label)
 		var actions:=HBoxContainer.new();column.add_child(actions)
 		actions.add_child(_button("BACK",func():_campaign_select(-1),Vector2(180,52)))
-		var attack:=_button("SCOUT & DEPLOY" if unlocked else "LOCKED • CLEAR BASE %02d"%campaign_selected,func():_campaign_start(campaign_selected),Vector2(520,52));attack.disabled=not unlocked;actions.add_child(attack)
+		var attack:=_button("SCOUT & DEPLOY" if unlocked else "LOCKED • CLEAR BASE %02d"%campaign_selected,func():_campaign_start(campaign_selected),Vector2(520,52));attack.set_meta("available",func():return campaign_selected>=0 and campaign_selected<=campaign_cleared and tutorial_step>=12 and Array(unit_stock).any(func(count):return count>0));attack.disabled=not attack.get_meta("available").call();actions.add_child(attack)
 	else:
 		var grid:=_scroll_grid(panel,5)
 		for index in range(campaign_page*10,campaign_page*10+10):
@@ -575,6 +579,7 @@ func _upgrade_selected()->void:
 	if selected_building<0 or selected_building>=buildings.size():_toast("SELECT A BUILDING FIRST");return
 	var b:Dictionary=buildings[selected_building]
 	if tutorial_step==10 and b.type!=0:_toast("Upgrade the Galactic Core first.");return
+	if b.type==24 and layout.upgrade_all:layout.upgrade_all_walls();return
 	if b.get("job","")!="":_toast("This building is already under construction.");return
 	if b.level>=(5 if b.type in [24,25] else 100):_toast("Maximum level reached.");return
 	var cost:float=_upgrade_cost(b)
@@ -847,6 +852,10 @@ func _economy_tick(delta:float)->void:
 			4:crystal=minf(1e12,crystal+delta*.9*b.level)
 
 func _update_top_bar()->void:
+	for control in ui_root.find_children("*","Button",true,false):
+		if control.is_visible_in_tree() and control.has_meta("available"):
+			control.disabled=not control.get_meta("available").call()
+			if control.get_child_count()>0 and control.get_child(0) is VBoxContainer:control.get_child(0).modulate=Color(.55,.6,.6) if control.disabled else Color.WHITE
 	if resource_labels.size()!=7:return
 	var values:=[credits,metal,oil,crystal,power,gold,float(godot_coins)]
 	for i in 7:resource_labels[i].text=_fmt(values[i])
@@ -1006,16 +1015,15 @@ func _mat(color:Color,emit:=Color.TRANSPARENT,energy:=0.0,alpha:=1.0)->StandardM
 	return m
 func _button(text:String,cb:Callable,size:Vector2)->Button:
 	var b:=Button.new();b.text=text;b.custom_minimum_size=size;b.add_theme_font_size_override("font_size",20)
-	b.add_theme_color_override("font_color",Color("dfebec"))
-	b.add_theme_color_override("font_disabled_color",Color("72868d"))
-	b.add_theme_stylebox_override("disabled",_style(Color("14242c"),12,Color("2e414c"),1))
-	b.add_theme_stylebox_override("normal",_style(Color("183644"),12,Color("4a6877"),1))
-	b.add_theme_stylebox_override("hover",_style(Color("24515b"),12,Color("83dcc9"),2))
-	b.add_theme_stylebox_override("pressed",_style(Color("0f242c"),12,Color("83dcc9"),2))
+	preload("res://scripts/ui_skin.gd").button(b)
+	if text=="DEFENSE DRILL" or text=="TEST DEFENSE":b.set_meta("available",func():return mode=="base" and home_attackers.is_empty() and buildings.any(func(building):return _can_fire(building)))
 	b.pressed.connect(cb);return b
 
 func _style(bg:Color,radius:int,border:Color,width:int)->StyleBoxFlat:
-	var s:=StyleBoxFlat.new();s.bg_color=bg;s.border_color=border;s.set_border_width_all(width);s.corner_radius_top_left=radius;s.corner_radius_top_right=radius;s.corner_radius_bottom_left=radius;s.corner_radius_bottom_right=radius;s.content_margin_left=14;s.content_margin_right=14;s.content_margin_top=10;s.content_margin_bottom=10;return s
+	var s:=StyleBoxFlat.new();s.bg_color=bg;s.border_color=border;s.set_border_width_all(width);s.corner_radius_top_left=radius;s.corner_radius_top_right=radius;s.corner_radius_bottom_left=radius;s.corner_radius_bottom_right=radius;s.content_margin_left=14;s.content_margin_right=14;s.content_margin_top=10;s.content_margin_bottom=10
+	if radius>=10 and bg.a>.9:
+		s.shadow_size=4;s.shadow_offset=Vector2(0,4);s.shadow_color=Color(0.01,.04,.06,.5);s.border_width_bottom=maxi(width,4);s.border_width_top=maxi(width,2)
+	return s
 
 func _position_camera()->void:
 	camera.position=camera_focus+Vector3(29,38,33)
@@ -1556,6 +1564,8 @@ func _refresh_deployment()->void:
 		var available:int=raid_stock[kind]-deployed_stock[kind]
 		deploy_picker.set_item_text(kind,"%s (%d)"%[UNIT_NAMES[kind],available])
 		deploy_picker.set_item_disabled(kind,available<=0)
+	deployment_bar.get_child(2).disabled=deployment_groups.is_empty()
+	deployment_bar.get_child(3).disabled=battle_units.is_empty()
 	deployment_bar.get_child(2).visible=awaiting_deployment
 	deployment_bar.get_child(3).visible=awaiting_deployment
 	deploy_status.text="%d ACTIVE / %d RESERVE"%[_active_units(),_reserve_count()]
@@ -1724,3 +1734,15 @@ func _dismiss_menus()->void:
 	if coin_system and is_instance_valid(coin_system.panel):coin_system.panel.hide()
 	if rewarded_ads and is_instance_valid(rewarded_ads.result_panel):rewarded_ads.result_panel.hide()
 	if is_instance_valid(selection_ring):selection_ring.hide()
+
+func _can_build_drone()->bool:
+	var producer:=_producer_for(6)
+	return producer>=0 and buildings[producer].get("job","")=="" and drone_count<10 and drone_finish<=0 and gold>=DRONE_PRICES[mini(drone_count-1,8)]
+func _can_build_miner()->bool:
+	var producer:=_producer_for(12);var capacity:=0
+	for b in buildings:
+		if b.type==10 and b.get("job","")!="build":capacity+=3
+	return producer>=0 and buildings[producer].get("job","")=="" and miner_finish<=0 and miner_count<capacity and metal>=600 and oil>=150
+func _can_build_prospector()->bool:
+	var producer:=_producer_for(12)
+	return logistics!=null and producer>=0 and buildings[producer].level>=2 and buildings[producer].get("job","")=="" and _producer_queue_count(producer)<_producer_queue_limit(producer) and logistics.coin_count+logistics.orders.size()<3 and metal>=4000 and oil>=1200

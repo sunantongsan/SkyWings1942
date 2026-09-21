@@ -23,23 +23,26 @@ func show_panel()->void:
 	panel=host._panel("GODOT COIN • %d • 1 COIN = 10 MIN"%host.godot_coins)
 	host.ui_root.add_child(panel);host.build_panel.hide();host.units_panel.hide();host.info_panel.hide()
 	var grid:GridContainer=host._scroll_grid(panel,3)
-	var daily:Button=host._button("DAILY LOGIN\n+20 GODOT COIN",claim_daily,Vector2(320,86));daily.disabled=day()<=host.last_coin_day;grid.add_child(daily)
+	var daily:Button=host._button("DAILY LOGIN\n+20 GODOT COIN",claim_daily,Vector2(320,86));daily.disabled=day()<=host.last_coin_day;daily.set_meta("available",func():return day()>host.last_coin_day);grid.add_child(daily)
 	grid.add_child(host._button("WATCH AD → +5 GODOT COIN",func():host.rewarded_ads.offer_coins(),Vector2(320,86)))
 	grid.add_child(host._button("AD PRIVACY OPTIONS",func():host.rewarded_ads.privacy(),Vector2(320,86)))
 	for resource in ["Metal","Oil","Credits","Crystal"]:
-		grid.add_child(host._button("10 COIN → 1,000 "+resource,func(r=resource):exchange(r),Vector2(320,86)))
+		var exchange_button:Button=host._button("10 COIN → 1,000 "+resource,func(r=resource):exchange(r),Vector2(320,86))
+		exchange_button.disabled=host.godot_coins<10;exchange_button.set_meta("available",func():return host.godot_coins>=10);grid.add_child(exchange_button)
 	grid.add_child(host._button("CLEAR ROCKS / TREES\n100 Metal + 50 Oil • 1 drone • 20s",begin_clear,Vector2(320,86)))
 	for i in host.buildings.size():
 		var b:Dictionary=host.buildings[i]
 		if b.get("job","")=="":continue
-		grid.add_child(host._button("FINISH %s\n%s • %d COIN"%[b.job.to_upper(),host.BUILDING_NAMES[b.type],price(b.finish)],func(index=i):speed_build(index),Vector2(320,86)))
+		var finish_button:Button=host._button("FINISH %s\n%s • %d COIN"%[b.job.to_upper(),host.BUILDING_NAMES[b.type],price(b.finish)],func(index=i):speed_build(index),Vector2(320,86))
+		finish_button.disabled=host.godot_coins<price(b.finish);finish_button.set_meta("available",func(building=b):return building.get("job","")!="" and host.godot_coins>=price(building.finish));grid.add_child(finish_button)
 		grid.add_child(host._button("WATCH AD • −50 MIN\n"+host.BUILDING_NAMES[b.type],func(index=i):host.rewarded_ads.offer_build(index),Vector2(320,86)))
 	for index in host.buildings.size():
 		var kind:int=host.buildings[index].type
 		if kind not in [6,12,13,16]:continue
 		var finish:=first_finish(kind,index)
 		if finish<=host.colony_time:continue
-		grid.add_child(host._button("FINISH NEXT UNIT\n%s #%d • %d COIN"%[host.BUILDING_NAMES[kind],index+1,price(finish)],func(k=kind,owner=index):speed_line(k,owner),Vector2(320,86)))
+		var unit_button:Button=host._button("FINISH NEXT UNIT\n%s #%d • %d COIN"%[host.BUILDING_NAMES[kind],index+1,price(finish)],func(k=kind,owner=index):speed_line(k,owner),Vector2(320,86))
+		unit_button.disabled=host.godot_coins<price(finish);unit_button.set_meta("available",func(k=kind,owner=index):return first_finish(k,owner)>host.colony_time and host.godot_coins>=price(first_finish(k,owner)));grid.add_child(unit_button)
 	if obstacle_id>=0 and host.art.obstacles.has(obstacle_id):
 		grid.add_child(host._button("ASSIGN DRONE TO CLEAR\n100 Metal + 50 Oil • 20s",clear_selected,Vector2(320,86)))
 	layout()

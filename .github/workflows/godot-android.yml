@@ -127,6 +127,13 @@ jobs:
           grep -q V28_INSTANT_WALLS_BUSY_DRONE_CONNECTION_CORNERS_FLOATING_MENU_PASSED wall-checks.log
           if grep -q 'SCRIPT ERROR' wall-checks.log; then exit 1; fi
 
+      - name: Verify bulk wall upgrades and availability colors
+        run: |
+          set -o pipefail
+          timeout 90s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/all_walls.gd 2>&1 | tee all-walls-checks.log
+          grep -q V29_ALL_WALLS_ATOMIC_COST_MAX_SKIP_ONE_SCOPE_SAVE_GREEN_DISABLED_PASSED all-walls-checks.log
+          if grep -q 'SCRIPT ERROR' all-walls-checks.log; then exit 1; fi
+
       - name: Upload scene review
         if: always()
         uses: actions/upload-artifact@v4
@@ -140,6 +147,7 @@ jobs:
             defense-checks.log
             forest-checks.log
             wall-checks.log
+            all-walls-checks.log
             game/assets/tutorial/*.ogv
             game/assets/models/manifest.json
 

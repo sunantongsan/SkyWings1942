@@ -25,7 +25,7 @@ func run()->void:
 	game._toggle_build();game._dismiss_menus();assert(game.build_type==-1)
 	game._select_building_at(second.pos);game.layout.floating_menu()
 	assert(game.info_panel.get_theme_stylebox("panel") is StyleBoxEmpty)
-	assert(not game.selected_label.visible and game.info_panel.size.y<260)
+	assert(not game.selected_label.visible and game.info_panel.size.y<350)
 	assert(game.buildings[game.BUILD_ORDER.size()].finish==deadline,"Wall placement never advances other construction")
 	game.camera_focus=Vector3(44,0,0);game.camera.size=27;game._position_camera();game.onboarding.refresh_guide();game.layout.floating_menu();game.toast.hide()
 	await process_frame;await process_frame
