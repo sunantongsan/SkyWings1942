@@ -3,6 +3,7 @@ extends Node3D
 const BUILDING_NAMES := ["Galactic Core","Fusion Reactor","Metal Extractor","Oil Processor","Crystal Mine","Resource Vault","Star Hangar","Research Lab","Laser Tower","Shield Generator","Gold Refinery","Missile Bastion","Vehicle Factory","Barracks","Godot Citadel","Astral Well","Summoning Sanctum","Runebolt Spire","Vehicle Camp","Air Camp","Infantry Camp","Flak Battery","Siege Mortar","Sky Sentinel","Wall","Base Gate"]
 const BUILDING_COST := [0,700,500,600,800,900,1200,1200,850,1300,1500,1200,1400,1000,1800,1000,1500,1300,900,900,700,1400,1800,2000,250,500]
 const UNIT_NAMES := ["Fighter","Interceptor","Bomber","Heavy Fighter","Stealth Fighter","Gunship","Missile Cruiser","Destroyer","Battle Cruiser","Carrier","Battle Tank","Siege Tank","Artillery","Rocket Launcher","Mech Warrior","Sniper Unit","Shield Drone","Repair Drone","Assault Soldier","Elite Commander","Rune Guardian","Crystal Golem","Starweaver","Attack Pigeon"]
+const PIGEON_HP := 60.0
 const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mechanis","Toxicus","Nebularis","Asteroid Belt","Ruins","Orbit Station","Moon Base","Gas Giant","Wormhole"]
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
 const MAP_ACCENT := [Color("42d884"),Color("ff6a36"),Color("9de7ff"),Color("ffc05c"),Color("7688ff"),Color("43d7ff"),Color("9faeba"),Color("83e342"),Color("d268ff"),Color("c2b19c"),Color("ffce81"),Color("5ae8ff"),Color("e5e6ea"),Color("ff9f5c"),Color("a968ff")]
@@ -423,6 +424,7 @@ func _make_units_panel()->PanelContainer:
 		var cost:int=_unit_credit_cost(i)
 		var reason:=_unit_lock_reason(i,producer)
 		var detail:String="LV %d • Ready %d • %ds\n%d C / %d O"%[UNIT_TIER[i],unit_stock[i],_unit_train_seconds(i),cost,_unit_oil_cost(i)] if reason.is_empty() else "LOCKED • "+reason
+		if i==23 and reason.is_empty():detail+="\nDefenses first • 60 HP"
 		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,168))
 		b.disabled=not reason.is_empty() or credits<cost or oil<_unit_oil_cost(i)
 		b.set_meta("available",func(kind=i,owner=producer):return _unit_lock_reason(kind,owner).is_empty() and credits>=_unit_credit_cost(kind) and oil>=_unit_oil_cost(kind))
@@ -755,10 +757,25 @@ func _deploy_fleet(pos:Vector3)->void:
 		n.look_at(Vector3(0,n.position.y,0),Vector3.UP,not _is_air_unit(kind))
 		battle_units.append({"node":n,"type":kind,"hp":220.0+kind*30.0,"max_hp":220.0+kind*30.0,"damage":12.0+kind*1.5,"speed":2.7+kind*.08})
 		if kind>=20:
-			var stats:Array=[[480.0,27.0,3.4],[1050.0,45.0,2.0],[330.0,36.0,3.0],[90.0,5.0,4.2]][kind-20]
+			var stats:Array=[[480.0,27.0,3.4],[1050.0,45.0,2.0],[330.0,36.0,3.0],[PIGEON_HP,5.0,4.2]][kind-20]
 			var unit:Dictionary=battle_units.back();unit.hp=stats[0];unit.max_hp=stats[0];unit.damage=stats[1];unit.speed=stats[2]
 	_refresh_deployment()
 	_toast("Unit placed. Tap another location or press ATTACK." if awaiting_deployment else "Reinforcements deployed!")
+
+func _assault_target(unit:Dictionary,candidates:Array)->Dictionary:
+	var target:Dictionary={}
+	var best:=INF
+	var priority_found:=false
+	var position:Vector3=unit.node.position
+	for candidate in candidates:
+		if candidate.hp<=0 or not is_instance_valid(candidate.node):continue
+		# Pigeons hunt active weapon emplacements, including armed five-star buildings.
+		var priority:bool=int(unit.type)==23 and _can_fire(candidate)
+		if priority_found and not priority:continue
+		var distance:float=Vector2(position.x,position.z).distance_to(Vector2(candidate.pos.x,candidate.pos.z))
+		if (priority and not priority_found) or distance<best:
+			target=candidate;best=distance;priority_found=priority
+	return target
 
 func _battle_tick(delta:float)->void:
 	if awaiting_deployment:return
@@ -776,12 +793,9 @@ func _battle_tick(delta:float)->void:
 	for u in battle_units:
 		if u.get("hp",0)<=0 or not is_instance_valid(u.node):continue
 		var n:Node3D=u.node
-		var target:Dictionary={};var best:=INF
-		for e in alive:
-			if e.hp<=0 or not is_instance_valid(e.node):continue
-			var distance:float=Vector2(n.position.x,n.position.z).distance_to(Vector2(e.pos.x,e.pos.z))
-			if distance<best:best=distance;target=e
+		var target:Dictionary=_assault_target(u,alive)
 		if target.is_empty():continue
+		var best:float=Vector2(n.position.x,n.position.z).distance_to(Vector2(target.pos.x,target.pos.z))
 		if not defenses.airborne(int(u.type)):
 			var wall:Dictionary=defenses.blocking_wall(n.position,target.pos,alive)
 			if not wall.is_empty():target=wall;best=Vector2(n.position.x,n.position.z).distance_to(Vector2(wall.pos.x,wall.pos.z))

@@ -134,6 +134,12 @@ jobs:
           grep -q V29_ALL_WALLS_ATOMIC_COST_MAX_SKIP_ONE_SCOPE_SAVE_GREEN_DISABLED_PASSED all-walls-checks.log
           if grep -q 'SCRIPT ERROR' all-walls-checks.log; then exit 1; fi
 
+      - name: Verify pigeon defense priorities
+        run: |
+          set -o pipefail
+          timeout 90s godot --headless --path game --script res://tests/pigeon.gd 2>&1 | tee pigeon-checks.log
+          grep -q V30_PIGEON_PRIORITY_FRAGILE_FALLBACK_PASSED pigeon-checks.log
+          if grep -q 'SCRIPT ERROR' pigeon-checks.log; then exit 1; fi
       - name: Upload scene review
         if: always()
         uses: actions/upload-artifact@v4
@@ -148,6 +154,7 @@ jobs:
             forest-checks.log
             wall-checks.log
             all-walls-checks.log
+            pigeon-checks.log
             game/assets/tutorial/*.ogv
             game/assets/models/manifest.json
 
