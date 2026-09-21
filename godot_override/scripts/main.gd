@@ -425,7 +425,7 @@ func _make_units_panel()->PanelContainer:
 		var reason:=_unit_lock_reason(i,producer)
 		var detail:String="LV %d • Ready %d • %ds\n%d C / %d O"%[UNIT_TIER[i],unit_stock[i],_unit_train_seconds(i),cost,_unit_oil_cost(i)] if reason.is_empty() else "LOCKED • "+reason
 		if i==23 and reason.is_empty():detail+="\nDefenses first • 60 HP"
-		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,168))
+		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,210))
 		b.disabled=not reason.is_empty() or credits<cost or oil<_unit_oil_cost(i)
 		b.set_meta("available",func(kind=i,owner=producer):return _unit_lock_reason(kind,owner).is_empty() and credits>=_unit_credit_cost(kind) and oil>=_unit_oil_cost(kind))
 		if b.disabled:b.get_child(0).modulate=Color(.8,.84,.86)
