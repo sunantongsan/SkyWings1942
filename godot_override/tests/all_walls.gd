@@ -41,7 +41,7 @@ func run()->void:
 	var enabled:=0;var disabled:=0;var price_preserved:=false
 	for button in game.build_panel.find_children("*","Button",true,false):
 		if button.has_meta("available"):
-			var column:Node=button.get_child(0)
+			var column:Node=button.get_child(0) if button.get_child_count()>0 else button
 			for label in column.get_children():
 				if label is Label and label.text=="Fusion Reactor":price_preserved="700" in column.get_child(column.get_child_count()-1).text
 			if button.disabled:disabled+=1
