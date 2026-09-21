@@ -340,9 +340,9 @@ func _make_build_panel()->PanelContainer:
 		b.disabled=not reason.is_empty() or metal<BUILDING_COST[i] or oil<_building_oil_cost(i)
 		b.set_meta("available",func(kind=i):return _build_lock_reason(kind).is_empty() and metal>=BUILDING_COST[kind] and oil>=_building_oil_cost(kind))
 		if b.disabled:
-			b.get_child(0).modulate=Color(.45,.55,.6)
+			b.get_child(0).modulate=Color(.8,.84,.86)
 			b.tooltip_text=reason
-			b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text=reason
+			if not reason.is_empty():b.get_child(0).get_child(b.get_child(0).get_child_count()-1).text=reason
 		b.pressed.connect(func(idx=i):_begin_build(idx));grid.add_child(b)
 	return panel
 
@@ -426,7 +426,7 @@ func _make_units_panel()->PanelContainer:
 		var b:=_asset_button(UNIT_NAMES[i],detail,"units/"+_unit_asset(i),Vector2(230,168))
 		b.disabled=not reason.is_empty() or credits<cost or oil<_unit_oil_cost(i)
 		b.set_meta("available",func(kind=i,owner=producer):return _unit_lock_reason(kind,owner).is_empty() and credits>=_unit_credit_cost(kind) and oil>=_unit_oil_cost(kind))
-		if b.disabled:b.get_child(0).modulate=Color(.45,.55,.6)
+		if b.disabled:b.get_child(0).modulate=Color(.8,.84,.86)
 		b.pressed.connect(func(idx=i,owner=producer):_train_unit(idx,owner));grid.add_child(b)
 	if production_kind==12:
 		var miner:=_asset_button("Mining Vehicle","LV 1 • 15s • 600 M / 150 O\nRequires Gold Refinery","units/mining_vehicle",Vector2(230,168))
@@ -855,7 +855,7 @@ func _update_top_bar()->void:
 	for control in ui_root.find_children("*","Button",true,false):
 		if control.is_visible_in_tree() and control.has_meta("available"):
 			control.disabled=not control.get_meta("available").call()
-			if control.get_child_count()>0 and control.get_child(0) is VBoxContainer:control.get_child(0).modulate=Color(.55,.6,.6) if control.disabled else Color.WHITE
+			if control.get_child_count()>0 and control.get_child(0) is VBoxContainer:control.get_child(0).modulate=Color(.8,.84,.86) if control.disabled else Color.WHITE
 	if resource_labels.size()!=7:return
 	var values:=[credits,metal,oil,crystal,power,gold,float(godot_coins)]
 	for i in 7:resource_labels[i].text=_fmt(values[i])
@@ -1079,7 +1079,7 @@ func _asset_button(title:String,detail:String,icon:String,minimum:Vector2)->Butt
 	if not icon.is_empty() and ResourceLoader.exists(path):
 		var image:=TextureRect.new();image.texture=load(path);image.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;image.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;image.custom_minimum_size.y=82;image.mouse_filter=Control.MOUSE_FILTER_IGNORE;col.add_child(image)
 	for text in [title,detail]:
-		var label:=Label.new();label.text=text;label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;label.add_theme_font_size_override("font_size",17 if text==title else 14);label.modulate=Color("dfebec") if text==title else Color("8fc7be");label.mouse_filter=Control.MOUSE_FILTER_IGNORE;col.add_child(label)
+		var label:=Label.new();label.text=text;label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER;label.add_theme_font_size_override("font_size",17 if text==title else 14);label.modulate=Color.WHITE;label.add_theme_color_override("font_color",Color("f1ffe8") if text==title else Color("e0f4d7"));label.add_theme_color_override("font_outline_color",Color("12351f"));label.add_theme_constant_override("outline_size",2);label.clip_text=true;label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS;label.mouse_filter=Control.MOUSE_FILTER_IGNORE;col.add_child(label)
 	return b
 
 func _layout_ui()->void:

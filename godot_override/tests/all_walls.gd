@@ -38,11 +38,15 @@ func run()->void:
 	var save:Dictionary=game.profile_store.read_profile(SAVE);assert(not save.is_empty() and save.resources[1]==0)
 	assert(upgrade.get_theme_stylebox("normal") is StyleBoxTexture and upgrade.get_theme_stylebox("disabled") is StyleBoxTexture)
 	game._toggle_build();game.metal=1000;game.oil=100;game._update_top_bar()
-	var enabled:=0;var disabled:=0
+	var enabled:=0;var disabled:=0;var price_preserved:=false
 	for button in game.build_panel.find_children("*","Button",true,false):
 		if button.has_meta("available"):
+			var column:Node=button.get_child(0)
+			for label in column.get_children():
+				if label is Label and label.text=="Fusion Reactor":price_preserved="700" in column.get_child(column.get_child_count()-1).text
 			if button.disabled:disabled+=1
 			else:enabled+=1
+	assert(price_preserved,"Prices remain visible when affordability changes from disabled to enabled")
 	assert(enabled>0 and disabled>0,"Catalog reflects resource availability")
 	await shot("87-dimensional-build-menu-states")
 	print("V29_ALL_WALLS_ATOMIC_COST_MAX_SKIP_ONE_SCOPE_SAVE_GREEN_DISABLED_PASSED")

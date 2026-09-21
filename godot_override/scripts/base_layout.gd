@@ -176,8 +176,9 @@ func floating_menu()->void:
 	one.set_pressed_no_signal(not upgrade_all);all.set_pressed_no_signal(upgrade_all)
 	var quote:=wall_quote()
 	if wall:
-		if b.type==24 and upgrade_all:host.selected_detail.text="ALL: %d walls • %s M"%[quote.indices.size(),host._fmt(quote.cost)] if not quote.indices.is_empty() else "ALL WALLS AT MAX"
-		else:host.selected_detail.text="MAX LEVEL" if b.level>=5 else "%s M • INSTANT"%host._fmt(host._upgrade_cost(b))
+		if b.type==24 and upgrade_all:host.selected_detail.text="ALL: %d walls • %d M"%[quote.indices.size(),int(quote.cost)] if not quote.indices.is_empty() else "ALL WALLS AT MAX"
+		else:host.selected_detail.text="MAX LEVEL" if b.level>=5 else "%d M • INSTANT"%int(host._upgrade_cost(b))
+		if b.type==24 and upgrade_all and host.metal<quote.cost:host.selected_detail.text+="\nNeed %d more Metal"%ceili(quote.cost-host.metal)
 	var width:=210.0 if wall else 230.0
 	host.info_panel.custom_minimum_size=Vector2(width,0)
 	var height:=324.0 if b.type==24 else (248.0 if wall else 330.0)
