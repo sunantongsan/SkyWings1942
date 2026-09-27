@@ -2,6 +2,7 @@ extends RefCounted
 ## Deterministic offline campaign. Stage indices are independent of homeworlds.
 const COUNT:=50
 const DIFFICULTY_MULTIPLIER:=1.5
+const FORTIFICATION_BOOST:=1.9
 const TIERS:=["FRONTIER", "CONTESTED", "HARD", "ELITE", "LEGENDARY"]
 const NAMES:=["Scout Post", "Supply Depot", "Mining Station", "Patrol Base", "Relay Fort", "Foundry", "Air Command", "Defense Grid", "Stronghold", "Sector Citadel"]
 const POSITIONS:=[Vector3(-3.5,0,0),Vector3(-10.5,0,0),Vector3(3.5,0,0),Vector3(-10.5,0,-7),Vector3(-3.5,0,-7),Vector3(10.5,0,-7),Vector3(-10.5,0,7),Vector3(3.5,0,7),Vector3(10.5,0,7)]
@@ -37,8 +38,12 @@ static func stage(index:int)->Dictionary:
 		structures.append({"type":23,"pos":Vector3(10.5,0,0),"level":level,"hp":health*1.4,"shot_damage":10.0+index})
 	if tier%2==1:
 		for entry in structures:entry.pos.z=-entry.pos.z
+	# Apply the same additional 90% to every structure and weapon, including walls.
+	for entry in structures:
+		entry.hp*=FORTIFICATION_BOOST
+		entry.shot_damage*=FORTIFICATION_BOOST
 	var coin_bonus:=5+index*2+(10 if number%10==0 else 0)
-	return {"index":index,"number":number,"name":"%02d • %s"%[number,NAMES[index%10]],"tier":TIERS[tier],"theme":(index*7)%15,"structures":structures,"difficulty":number,"recommended":ceili((8+index*2)*DIFFICULTY_MULTIPLIER),"reward":{"credits":1800+index*320,"metal":900+index*180,"oil":700+index*100,"crystal":100+index*45,"gold":30+index*12,"coins":coin_bonus}}
+	return {"index":index,"number":number,"name":"%02d • %s"%[number,NAMES[index%10]],"tier":TIERS[tier],"theme":(index*7)%15,"structures":structures,"difficulty":number,"recommended":ceili((8+index*2)*DIFFICULTY_MULTIPLIER*FORTIFICATION_BOOST),"reward":{"credits":1800+index*320,"metal":900+index*180,"oil":700+index*100,"crystal":100+index*45,"gold":30+index*12,"coins":coin_bonus}}
 
 static func reward(index:int,_cleared:int)->Dictionary:
 	var result:Dictionary=stage(index).reward.duplicate()

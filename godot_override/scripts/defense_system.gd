@@ -55,6 +55,7 @@ func fire(tower:Dictionary,attackers:Array,delta:float)->void:
 		launch(origin,target,attackers,power,false,0)
 	tower["shots_fired"]=int(tower.get("shots_fired",0))+1
 func tracer(origin:Vector3,destination:Vector3)->void:
+	if not host._allow_cosmetic():return
 	var bullet:MeshInstance3D=host.art.cuboid(host.world_root,Vector3(.09,.7,.09),origin,Color("ffd276"),true)
 	var direction:Vector3=destination-origin
 	if direction.length()>.01:bullet.quaternion=Quaternion(Vector3.UP,direction.normalized())

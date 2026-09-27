@@ -140,6 +140,12 @@ jobs:
           timeout 90s godot --headless --path game --script res://tests/pigeon.gd 2>&1 | tee pigeon-checks.log
           grep -q V30_PIGEON_PRIORITY_FRAGILE_FALLBACK_PASSED pigeon-checks.log
           if grep -q 'SCRIPT ERROR' pigeon-checks.log; then exit 1; fi
+      - name: Verify fortified campaign and low graphics
+        run: |
+          set -o pipefail
+          timeout 120s xvfb-run -a godot --audio-driver Dummy --path game --script res://tests/performance.gd 2>&1 | tee performance-checks.log
+          grep -q V31_FIFTY_BASES_190_PERCENT_LOW_GRAPHICS_INVENTORY_AND_EFFECTS_PASSED performance-checks.log
+          if grep -q 'SCRIPT ERROR' performance-checks.log; then exit 1; fi
       - name: Upload scene review
         if: always()
         uses: actions/upload-artifact@v4
@@ -155,6 +161,7 @@ jobs:
             wall-checks.log
             all-walls-checks.log
             pigeon-checks.log
+            performance-checks.log
             game/assets/tutorial/*.ogv
             game/assets/models/manifest.json
 

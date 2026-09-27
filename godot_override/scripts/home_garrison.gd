@@ -42,7 +42,7 @@ func blocked(pos:Vector3,ignore:int=-1)->bool:
 		if absf(pos.x-pads[i].x)<9 and absf(pos.z-pads[i].z)<8:return true
 	return false
 func sync()->void:
-	var key:String=str(host.unit_stock)+str(host.training_queue.size())
+	var key:String=str(host.unit_stock)+str(host.training_queue.size())+str(host.performance.low)
 	for b in host.buildings:key+=str([b.type,b.level,b.pos,b.get("job","")])
 	if key==signature:return
 	signature=key
@@ -71,7 +71,7 @@ func sync()->void:
 		label.text="%s • %s\n%d / %d READY • %d QUEUED"%[TITLES[group],host._rank_text(building.level),ready,room,queued(group)];label.position=Vector3(0,3.5,-5);yard.add_child(label);labels.append(label)
 		if building.get("job","")=="build":label.text+="\nUNDER CONSTRUCTION";continue
 		# Bounded representative models, always backed by this facility's allocated stock.
-		var limit:=6 if group==1 else 9
+		var limit:int=(3 if group==1 else 4) if host.performance.low else (6 if group==1 else 9)
 		var kinds:Array[int]=[];var used:Dictionary={}
 		for kind in inventory:
 			if kinds.size()<limit:kinds.append(kind);used[kind]=1
@@ -79,7 +79,7 @@ func sync()->void:
 			for kind in used:
 				if used[kind]<inventory[kind] and kinds.size()<limit:kinds.append(kind);used[kind]+=1
 		for i in kinds.size():
-			if actors.size()>=60:break
+			if actors.size()>=(24 if host.performance.low else 60):break
 			var kind:int=kinds[i];var actor:Node3D=host._unit_model(kind);root.add_child(actor)
 			var parked:Vector3=pos+Vector3((i%3-1)*3.8,.22,floori(i/3.0)*(4.3 if group==1 else 2.8)-3)
 			if kind==23:parked.y=.85

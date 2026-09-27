@@ -8,6 +8,11 @@ const MAP_NAMES := ["Terra","Volcanis","Cryon","Desertus","Noctis","Aquara","Mec
 const MAP_GROUND := [Color("315b3a"),Color("592820"),Color("a9c7d8"),Color("8a633d"),Color("24293a"),Color("1d566c"),Color("4f5960"),Color("45622f"),Color("392851"),Color("47443f"),Color("5a5144"),Color("4a5058"),Color("74736d"),Color("8a6c49"),Color("251c48")]
 const MAP_ACCENT := [Color("42d884"),Color("ff6a36"),Color("9de7ff"),Color("ffc05c"),Color("7688ff"),Color("43d7ff"),Color("9faeba"),Color("83e342"),Color("d268ff"),Color("c2b19c"),Color("ffce81"),Color("5ae8ff"),Color("e5e6ea"),Color("ff9f5c"),Color("a968ff")]
 
+var performance:RefCounted
+var simulation_accumulator:=0.0
+var status_accumulator:=0.0
+var economy_accumulator:=0.0
+var cosmetic_budget:=0.0
 var camera:Camera3D
 var world_root:Node3D
 var home_root:Node3D
@@ -150,6 +155,7 @@ func _ready()->void:
 	_setup_environment()
 	_setup_world()
 	_setup_camera()
+	performance=preload("res://scripts/performance.gd").new(self)
 	defenses=preload("res://scripts/defense_system.gd").new(self)
 	_setup_ui()
 	onboarding=preload("res://scripts/onboarding.gd").new(self)
@@ -171,16 +177,26 @@ func _ready()->void:
 	onboarding.welcome()
 
 func _process(delta:float)->void:
+	cosmetic_budget=minf(12.0,cosmetic_budget+delta*(70.0 if performance.low else 220.0))
 	placement_guide.tick()
-	if has_colony:_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()))
-	if mode=="battle": _battle_tick(delta)
+	economy_accumulator+=delta
+	if has_colony and economy_accumulator>=.1:
+		_advance_colony(maxf(colony_time,Time.get_unix_time_from_system()));economy_accumulator=0.0
+	# Fixed combat cadence on both quality modes; never change damage with graphics.
+	simulation_accumulator+=delta
+	var steps:=0
+	while simulation_accumulator>=.05 and steps<4:
+		if mode=="battle":_battle_tick(.05)
+		if mode=="base":_home_defense_tick(.05)
+		simulation_accumulator-=.05;steps+=1
 	garrison.tick(delta)
 	battle_feedback.tick(delta)
-	if mode=="base":_home_defense_tick(delta)
 	_projectile_tick(delta)
 	defenses.tick(delta)
 	_visual_tick(delta)
-	status_bars.tick()
+	status_accumulator+=delta
+	if status_accumulator>=.1:
+		status_bars.tick();status_accumulator=fmod(status_accumulator,.1)
 	rewarded_ads.tick()
 	autosave_time+=delta
 	if autosave_time>=10.0:_save_profile();autosave_time=0.0
@@ -326,6 +342,9 @@ func _setup_ui()->void:
 
 func _make_build_panel()->PanelContainer:
 	var panel:=_panel("CONSTRUCTION  /  DEVELOP YOUR HOMEWORLD")
+	var quality:=_button("",func():performance.toggle(),Vector2(180,48))
+	panel.get_child(0).get_child(0).add_child(quality)
+	performance.button=quality;performance.refresh_button()
 	var actions:=HBoxContainer.new();panel.get_child(0).add_child(actions)
 	actions.add_child(_button("GODOT COIN / REWARDS",func():coin_system.show_panel(),Vector2(230,52)))
 	actions.add_child(_button("CLEAR ROCKS / TREES",func():coin_system.begin_clear(),Vector2(230,52)))
@@ -1007,6 +1026,7 @@ func _zoom(delta:float)->void:camera.size=clampf(camera.size+delta,24,84)
 func _explode(pos:Vector3)->void:
 	art.particles(world_root,pos+Vector3.UP,Color("ffb564"),false,true)
 	art.particles(world_root,pos+Vector3.UP,Color("647575"),true,true)
+	if performance and performance.low:return # Keep explosion particles; omit the transient light.
 	var flash:=OmniLight3D.new();flash.position=pos+Vector3(0,2,0);flash.light_color=Color("ff9b56");flash.light_energy=4;flash.omni_range=6;world_root.add_child(flash)
 	var tw:=create_tween();tw.tween_property(flash,"light_energy",0,.45);tw.finished.connect(flash.queue_free)
 
@@ -1122,7 +1142,7 @@ func _setup_life()->void:
 func _visual_tick(delta:float)->void:
 	if onboarding:onboarding.tick()
 	visual_time+=delta
-	_industry_tick(delta)
+	if mode=="base":_industry_tick(delta)
 	if layout:layout.floating_menu()
 	for i in range(animators.size()-1,-1,-1):
 		var item:Dictionary=animators[i]
@@ -1139,6 +1159,7 @@ func _visual_tick(delta:float)->void:
 	if landing_marker.visible:landing_marker.scale=Vector3.ONE*(1.0+.025*sin(visual_time*3.0))
 
 func _laser(from:Vector3,to:Vector3)->void:
+	if not _allow_cosmetic():return
 	var beam:=MeshInstance3D.new()
 	var mesh:=CylinderMesh.new();mesh.top_radius=.10;mesh.bottom_radius=.10;mesh.height=from.distance_to(to);mesh.radial_segments=6
 	beam.mesh=mesh;beam.material_override=art.mat(Color("88f7e4"),true)
@@ -1427,7 +1448,7 @@ func _industry_tick(_delta:float)->void:
 	for job in clearing_jobs:jobs.append(Vector3(job.pos[0],0,job.pos[2]))
 	for b in buildings:
 		b.node.visible=b.pos.distance_to(camera_focus)<85
-		_update_rank_label(b)
+		if b.node.visible:_update_rank_label(b)
 		if b.get("job","")!="":jobs.append(b.pos)
 	for i in drone_visuals.size():
 		var base:Vector3=jobs[i] if i<jobs.size() else Vector3((i%5)*1.5-3,0,-5-floori(i/5.0)*2)
@@ -1502,12 +1523,15 @@ func _refresh_wall_model(b:Dictionary)->void:
 	var old:Node3D=b.node
 	var model:Node3D=art.building(int(b.type),false,int(b.level));home_root.add_child(model);model.position=b.pos;model.rotation.y=float(b.get("yaw",0))
 	if is_instance_valid(b.get("rank_label")):b.rank_label.reparent(model,true)
-	b.node=model;old.queue_free();_update_rank_label(b)
+	b.node=model;b.erase("rank_signature");old.queue_free();_update_rank_label(b)
 
 func _rank_text(level:int)->String:
 	return "★".repeat(level) if level<=5 else "★ × %d"%level
 
 func _update_rank_label(b:Dictionary)->void:
+	var rank_signature:=str([b.level,b.get("job",""),b.pos])
+	if b.get("rank_signature","")==rank_signature:return
+	b.rank_signature=rank_signature
 	preload("res://scripts/building_rank.gd").apply(b.node,int(b.level),int(b.type))
 	if not is_instance_valid(b.get("rank_label")):return
 	b.rank_label.text="CONSTRUCTING" if b.get("job","")=="build" else _rank_text(int(b.level))
@@ -1690,7 +1714,13 @@ func _fire_animation(model:Node3D)->void:
 	var recoil:=model.create_tween();recoil.tween_property(parts.Weapon,"position",rest,.22)
 	model.set_meta("recoil_tween",recoil)
 
+func _allow_cosmetic()->bool:
+	if not performance or not performance.low:return true
+	if cosmetic_budget<1.0:return false
+	cosmetic_budget-=1.0;return true
+
 func _muzzle_flash(pos:Vector3)->void:
+	if not _allow_cosmetic():return
 	var flash:=_sphere(.18,art.mat(Color("ffe8a8"),true));world_root.add_child(flash);flash.position=pos
 	var fade:=flash.create_tween();fade.tween_property(flash,"scale",Vector3.ONE*.05,.12);fade.tween_callback(flash.queue_free)
 
@@ -1700,6 +1730,8 @@ func _destroy_entity(entity:Dictionary,structure:bool)->void:
 	var model:Node3D=entity.node
 	var pos:Vector3=model.global_position
 	_explode(pos)
+	if performance.low and wreck_root.get_child_count()>=16:
+		var oldest:Node=wreck_root.get_child(0);wreck_root.remove_child(oldest);oldest.queue_free()
 	var group:=Node3D.new();group.name="StructureWreck" if structure else "UnitWreck";wreck_root.add_child(group)
 	model.reparent(group,true)
 	for label in model.find_children("*","Label3D",true,false):label.hide()

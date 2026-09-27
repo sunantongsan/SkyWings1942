@@ -25,8 +25,8 @@ func run()->void:
 		var stage:Dictionary=game.Campaign.stage(index)
 		for entry in stage.structures:
 			if entry.type>=21:continue
-			assert(is_equal_approx(entry.hp,(300.0+index*22.0+index*index*.3)*1.5))
-			assert(is_equal_approx(entry.shot_damage,(2.5+index*.55)*(2.0/1.2 if entry.type==11 else 1.0)*1.5))
+			assert(is_equal_approx(entry.hp,(300.0+index*22.0+index*index*.3)*1.5*game.Campaign.FORTIFICATION_BOOST))
+			assert(is_equal_approx(entry.shot_damage,(2.5+index*.55)*(2.0/1.2 if entry.type==11 else 1.0)*1.5*game.Campaign.FORTIFICATION_BOOST))
 	var built:Array[Dictionary]=[]
 	for kind in [21,22,23,24]:
 		game._begin_build(kind);game._place_building(Vector3(40+(kind-21)*8,0,0))
