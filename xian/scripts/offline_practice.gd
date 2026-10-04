@@ -23,6 +23,7 @@ var level_picker: OptionButton
 var models: Array = []
 var unit_models: Array = []
 var projectiles: Array = []
+var last_fx_revision=0
 var records: Dictionary = {}
 var level=1
 var selected_kind=0
@@ -70,7 +71,7 @@ func button(parent: Node, value: String, callback: Callable) -> Button:
 	var b=Button.new();b.text=value;b.custom_minimum_size.y=44;b.pressed.connect(callback);parent.add_child(b);return b
 func world_pos(p: Vector2, height=0.0) -> Vector3:return Vector3((p.x-7.5)*3,height,(p.y-7.5)*3)
 func start_level(value: int):
-	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;pivot=Vector3.ZERO;position_camera()
+	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;last_fx_revision=0;pivot=Vector3.ZERO;position_camera()
 	for child in battlefield.get_children():child.queue_free()
 	models.clear();unit_models.clear();projectiles.clear()
 	art.box(battlefield,Vector3(0,-0.15,0),Vector3(160,0.3,160),"718178" if level%2==0 else "597152")
@@ -174,6 +175,7 @@ func _process(delta):
 			if shot.has("unit"):
 				var actor=unit_models[shot.unit].node;var direction: Vector2=shot.to-shot.from
 				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",[0.7,1.0,1.1][shot.kind])
+			if shot.has("to"):art.impact_fx(battlefield,world_pos(shot.to,1.0),int(shot.kind))
 			if not shot.enemy and shot.kind!=1:continue
 			var node=art.box(battlefield,world_pos(shot.from,2),Vector3(0.16,0.12,1.1),"ee8868" if shot.enemy else "adf0ff")
 			projectiles.append({"node":node,"start":world_pos(shot.from,2),"end":world_pos(shot.to,1),"age":0.0})
@@ -190,7 +192,7 @@ func _process(delta):
 	for i in range(sim.buildings.size()):
 		var b=sim.buildings[i];models[i].bar.scale.x=maxf(0.001,b.hp/b.max_hp)
 		if b.hp<=0 and models[i].node.visible:
-			models[i].node.hide();art.box(battlefield,world_pos(b.pos,0.12),Vector3(2.1,0.24,2.1),"6c695c")
+			models[i].node.hide();art.box(battlefield,world_pos(b.pos,0.12),Vector3(2.1,0.24,2.1),"6c695c");art.rubble(battlefield,world_pos(b.pos,0.15));art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
 	for i in range(sim.units.size()):
 		var u=sim.units[i];var node=unit_models[i].node
 		node.visible=u.hp>0;unit_models[i].bar.scale.x=maxf(0.001,u.hp/u.max_hp)
