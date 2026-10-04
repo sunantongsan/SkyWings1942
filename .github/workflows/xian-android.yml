@@ -58,6 +58,9 @@ jobs:
           grep XIAN_SMOKE_PASSED smoke.log
           godot --headless --path xian --script res://tests/auth.gd 2>&1 | tee auth.log
           grep XIAN_AUTH_PASSED auth.log
+          godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log
+          grep XIAN_TOUCH_BUILD_PASSED touch.log
+          if grep -E 'SCRIPT ERROR|Parse Error' touch.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' auth.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' smoke.log; then exit 1; fi
       - name: Export Android

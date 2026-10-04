@@ -45,33 +45,67 @@ func building(kind: String, level: int, fill = 0.5) -> Node3D:
 					var stave=box(root,Vector3(cos(angle),1.05,sin(angle)),Vector3(0.53,1.5,0.12),"687e7d")
 					stave.rotation.y=-angle+PI/2
 				cone(root,Vector3(0,0.4+fill*1.5,0),0.93,0.93,0.04,"6de0dc",12)
-			elif kind == "crystal" or kind == "spring":
+			elif kind == "spring":
+				cone(root,Vector3(0,1.25,0),0.22,0.22,1.3,"d6d7bd",10)
+				cone(root,Vector3(0,1.8,0),0.75,0.95,0.25,"c4d1c6",12)
+				cone(root,Vector3(0,2.2,0),0.25,0.06,0.75,"68dbba",8)
+			elif kind == "crystal":
 				for i in range(3):
-					var q = cone(root,Vector3((i-1)*0.48,1.45,0),0.35,0,1.4+fill,"9ae8ca",5)
+					var q = cone(root,Vector3((i-1)*0.48,1.45,0),0.35,0,1.4+fill,"79dfef",5)
 					q.rotation_degrees.z = (i-1)*20
 			else:
 				for x in [-0.8,0.8]: box(root,Vector3(x,1.4,0),Vector3(0.13,1.8,0.13),"644a37")
 				roof(root,2.4,1.5,accent)
-		"tower", "ward":
-			box(root,Vector3(0,1.3,0),Vector3(1.25,2.6,1.25),"9caa9c")
-			box(root,Vector3(0,2.6,0),Vector3(2,0.2,2),"c0ae7d")
-			roof(root,3.2,1.8,accent)
-			if kind == "ward": cone(root,Vector3(0,4,0),0.3,0,0.7,"9ae8ca",5)
-			else: box(root,Vector3(0,2.8,-1),Vector3(1.5,0.12,0.2),"644a37")
-		_:
-			var height = 1.7 if kind == "hall" else 1.2
-			box(root,Vector3(0,height/2+0.25,0),Vector3(1.9,height,1.7),"decda4")
-			for x in [-0.83,0.83]:
-				box(root,Vector3(x,height/2+0.25,-0.9),Vector3(0.15,height,0.15),"8b4e38")
-			box(root,Vector3(0,0.7,-0.87),Vector3(0.5,0.9,0.06),"4c3d32")
-			roof(root,height+0.65,1.8,accent)
-			if kind == "hall": roof(root,height+1.35,1.3,accent)
-			if kind == "granary" or kind == "kitchen":
-				for i in range(1+int(fill*4)):
-					cone(root,Vector3(-0.9+i*0.45,0.42,-1.1),0.24,0.18,0.55,"d7b76e")
-			if kind == "training":
-				box(root,Vector3(1,1,0),Vector3(0.15,1.8,0.15),"6b4d33")
-				box(root,Vector3(1,1.5,0),Vector3(1,0.12,0.12),"6b4d33")
+		"ward":
+			cone(root,Vector3(0,0.35,0),1.1,0.85,0.5,"70678e",8)
+			for i in range(4):
+				var angle=i*PI/2
+				box(root,Vector3(cos(angle)*0.85,1.15,sin(angle)*0.85),Vector3(0.25,1.6,0.25),"c1b2db")
+			cone(root,Vector3(0,2,0),0.55,0,2.2,"ba89ef",6)
+		"tower":
+			for x in [-0.7,0.7]:
+				for z in [-0.7,0.7]:box(root,Vector3(x,1.4,z),Vector3(0.25,2.8,0.25),"795a37")
+			box(root,Vector3(0,2.6,0),Vector3(2.1,0.25,2.1),"be9b5b")
+			for x in [-0.9,0.9]:box(root,Vector3(x,3,0),Vector3(0.15,0.65,2),"b07c45")
+			box(root,Vector3(0,2.95,-0.75),Vector3(1.8,0.15,0.18),"e3c483")
+			box(root,Vector3(0,3,-0.85),Vector3(0.12,0.12,1.3),"535d67")
+		"granary":
+			box(root,Vector3(0,0.65,0),Vector3(2.15,1,1.7),"926338")
+			box(root,Vector3(0,1.18,0),Vector3(1.95,0.12,1.5),"efd38d")
+			for x in [-0.8,0,0.8]:box(root,Vector3(x,0.7,-0.88),Vector3(0.12,1.1,0.08),"d8aa60")
+			for i in range(4):cone(root,Vector3(-0.7+i*0.45,1.38,0),0.28,0.1,0.38,"eedba6",8)
+		"training":
+			box(root,Vector3(0,0.25,0),Vector3(2.5,0.2,2.4),"b69972")
+			for x in [-0.7,0.7]:
+				box(root,Vector3(x,1,0),Vector3(0.17,1.6,0.17),"704b2e")
+				box(root,Vector3(x,1.2,0),Vector3(0.8,0.15,0.15),"704b2e")
+				cone(root,Vector3(x,1.65,0),0.22,0.22,0.3,"c4a27b")
+			box(root,Vector3(0,1,-0.95),Vector3(1.8,0.1,0.1),"535b60")
+		"recruit":
+			for x in [-0.85,0.85]:box(root,Vector3(x,1.3,0),Vector3(0.28,2.4,0.28),"ad433b")
+			roof(root,2.7,1.8,"984642")
+			box(root,Vector3(0,2.1,0),Vector3(1.65,0.45,0.18),"dbb355")
+			box(root,Vector3(1,1.4,-0.8),Vector3(0.55,1.1,0.08),"bc4036")
+		"hall", "kitchen", "dorm", "servant":
+			var colors={"hall":"347e72","kitchen":"ad623b","dorm":"526fa3","servant":"94834a"}
+			var height=2.0 if kind=="hall" else 1.9 if kind=="dorm" else 1.1
+			box(root,Vector3(0,height/2+0.25,0),Vector3(2,height,1.8),"decda4")
+			box(root,Vector3(0,0.75,-0.93),Vector3(0.5,1,0.08),"4c3d32")
+			roof(root,height+0.65,1.75,colors[kind])
+			if kind=="hall":
+				roof(root,height+1.4,1.3,"347e72")
+				for x in [-0.85,0.85]:box(root,Vector3(x,1.2,-1),Vector3(0.22,2,0.22),"a24438")
+			elif kind=="kitchen":
+				box(root,Vector3(0.7,2,0.5),Vector3(0.45,2.4,0.45),"655b54")
+				cone(root,Vector3(-0.5,0.65,-1.05),0.45,0.5,0.6,"444d50",10)
+				cone(root,Vector3(-0.5,0.98,-1.05),0.43,0.43,0.05,"eab767",10)
+			elif kind=="dorm":
+				box(root,Vector3(0,1.35,-1.05),Vector3(2.3,0.15,0.6),"b99f78")
+				for x in [-0.65,0.65]:box(root,Vector3(x,1.85,-0.94),Vector3(0.35,0.5,0.06),"8fbed5")
+			elif kind=="servant":
+				box(root,Vector3(1,0.65,-0.9),Vector3(0.12,1.1,0.12),"634c35").rotation_degrees.z=25
+				box(root,Vector3(0.8,1.15,-0.9),Vector3(0.6,0.25,0.3),"7f8f96")
+
 	return root
 func person(kind: int) -> Node3D:
 	var root = Node3D.new()

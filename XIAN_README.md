@@ -46,3 +46,13 @@ Android Google login reuses the original browser OAuth callback `com.sunantongsa
 Native callback source: `native/xian/src`. Extract Godot 4.4.1 `android_source.zip` into `xian/android/build`, run `python3 tools/prepare_xian_android.py`, then use the Android Gradle export. CI does this automatically.
 
 Google Play Games is NOT enabled yet. It is distinct from Google account login. Required setup: the game's Play Games project ID, Android OAuth credential for `com.xianofclans.strategy` with the installed APK signing SHA-1, a game-server OAuth client, and enabled test accounts in Play Console. Never use an unverified player ID to access a Supabase save. Reuse of the old Google OAuth backend does not automatically register this Android package with Play Games.
+
+## Mobile building update 0.34
+
+- Pinch the map with two fingers to zoom; the +/− controls and mouse wheel also work.
+- Swipe menus vertically to scroll with inertia. A vertical swipe never places a building.
+- Drag a building card sideways out of the construction menu, position it on the map and release to build. Alternatively select the card, then drag on the map. Green means an empty buildable cell; red means occupied or outside the 16×16 base. The server still checks workers, resources and limits.
+- The cancel button clears placement. Existing buildings can be moved using their Move action and the same preview.
+- Fourteen building types have distinct silhouettes/details and matching rendered thumbnails. Run `res://tests/render_buildings.gd` with a display to regenerate the icons after model changes.
+- Ground extends continuously under the base and scenery; the base no longer sits on a raised slab.
+- `res://tests/touch_build.gd` covers pinch without accidental builds, occupied/out-of-bounds rejection, drag from cards and vertical menu scrolling. Real-device feel remains a device test.

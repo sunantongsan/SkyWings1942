@@ -16,6 +16,13 @@ func run():
 	await process_frame;await process_frame
 	DirAccess.make_dir_recursive_absolute("res://build/review")
 	root.get_texture().get_image().save_png("res://build/review/bamboo.png")
+	scene.catalog=[]
+	for kind in kinds+["wall"]:scene.catalog.append({"id":kind,"name":{"hall":"ฐานสำนัก","well":"บ่อน้ำ","kitchen":"โรงอาหาร"}.get(kind,kind),"water":100,"rice":50,"stone":10,"seconds":30})
+	scene.mode="build";scene.show_side();scene.choose_build("well")
+	scene.update_preview(scene.camera.unproject_position(scene.cell_pos(8,8)))
+	await process_frame;await process_frame
+	root.get_texture().get_image().save_png("res://build/review/build-menu.png")
+	scene.clear_preview()
 	scene.draw_terrain("mountain")
 	await process_frame;await process_frame
 	root.get_texture().get_image().save_png("res://build/review/mountain.png")

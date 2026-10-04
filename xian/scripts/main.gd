@@ -35,6 +35,27 @@ var battle_nodes: Array = []
 var auth_status: Label
 var auth_controls: Array[Control] = []
 var auth_signup = false
+var sidebar_scroll: ScrollContainer
+var menu_touch = -1
+var menu_start = Vector2.ZERO
+var menu_start_scroll = 0.0
+var menu_scrolling = false
+var menu_button: Button
+var menu_velocity = 0.0
+var menu_scroll_value = 0.0
+var menu_last_time = 0.0
+var fingers: Dictionary = {}
+var pinching = false
+var card_origin = Vector2.ZERO
+var card_kind = ""
+var card_drag = false
+var build_cards: Array = []
+var preview: Node3D
+var preview_tile: MeshInstance3D
+var preview_model: Node3D
+var preview_cell = Vector2i(-1,-1)
+var preview_ok = false
+var placement_drag = false
 var font = preload("res://assets/NotoSansThai.ttf")
 
 func _ready():
@@ -65,7 +86,7 @@ func _ready():
 	theme.set_color("font_color","Label",Color("f3e7c8"));ui.theme=theme
 	var header=panel(Vector2(16,12),Vector2(1248,66));top=label(header,"XIAN OF CLANS   •   เซียน ออฟ แคลน",24)
 	var sidebar=panel(Vector2(960,92),Vector2(304,530))
-	var scroll=ScrollContainer.new();scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;sidebar.add_child(scroll)
+	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
 	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกศิษย์","train"],["บุกสำนัก","raid"],["จับคู่ฝึกปราณ","match"],["หยก / เช็กอิน","jade"]]:
@@ -83,7 +104,7 @@ func panel(pos: Vector2, extent: Vector2) -> PanelContainer:
 func label(parent: Node, text: String, size=18) -> Label:
 	var l=Label.new();l.text=text;l.add_theme_font_size_override("font_size",size);l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;l.size_flags_horizontal=Control.SIZE_EXPAND_FILL;parent.add_child(l);return l
 func button(parent: Node, text: String, callback: Callable) -> Button:
-	var b=Button.new();b.text=text;b.custom_minimum_size=Vector2(0,46);b.pressed.connect(callback);parent.add_child(b);return b
+	var b=Button.new();b.mouse_filter=Control.MOUSE_FILTER_PASS;b.text=text;b.custom_minimum_size=Vector2(0,46);b.pressed.connect(callback);parent.add_child(b);return b
 func clear(node: Node):
 	for child in node.get_children():node.remove_child(child);child.queue_free()
 func message(text: String):
@@ -157,21 +178,25 @@ func navigate(target: String):
 	if state.is_empty():message("กรุณาเข้าสู่ระบบและตั้งสำนักก่อน");return
 	if api.busy:return
 	if battle_visual and target!="raid":battle_visual=false;draw_base()
-	mode=target;chosen_build="";moving=false;close_modal()
+	mode=target;chosen_build="";moving=false;clear_preview();close_modal()
 	if target=="match":api.action("match_start")
 	elif target=="raid" and not state.has("raid"):api.action("scout")
 	elif target=="raid" and state.has("raid"):draw_battle();show_side()
 	else:show_side()
 func show_side():
+	build_cards.clear()
 	clear(side)
 	label(side,"XIAN OF CLANS",23)
 	if state.is_empty():label(side,"เริ่มต้นตำนานสำนักของคุณ");return
 	label(side,"ช่างว่าง %d/%d • ศิษย์ %d/%d" % [int(caps.get("workers",1))-int(caps.get("busy",0)),int(caps.get("workers",1)),army_total(),int(caps.get("army",10))],16)
 	match mode:
 		"build":
-			label(side,"เลือกอาคาร แล้วแตะที่ว่าง",20)
+			label(side,"เลื่อนขึ้นลงเพื่อเลือก\nลากรูปอาคารออกมาวางบนพื้น",20)
+			button(side,"ยกเลิกการวาง",func():chosen_build="";clear_preview())
 			for c in catalog:
-				button(side,"%s\nน้ำ %d ข้าว %d หิน %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds],choose_build.bind(c.id))
+				var card=button(side,"%s\nน้ำ %d ข้าว %d\nหิน %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds],choose_build.bind(c.id))
+				card.icon=building_icon(c.id);card.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;card.expand_icon=true;card.add_theme_constant_override("icon_max_width",76);card.custom_minimum_size=Vector2(272,100)
+				build_cards.append({"node":card,"kind":c.id})
 		"train":
 			label(side,"ฝึกกองกำลัง",25)
 			var portrait=TextureRect.new();portrait.texture=load("res://assets/disciple-reference.jpg");portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(240,125);side.add_child(portrait)
@@ -191,6 +216,7 @@ func show_side():
 		_:
 			if selected>=0 and selected<state.buildings.size():
 				var b=state.buildings[selected];var c=find_catalog(b.id)
+				var portrait=TextureRect.new();portrait.texture=building_icon(b.id);portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(180,140);side.add_child(portrait)
 				label(side,c.get("name",b.id),26)
 				label(side,"ระดับ %d" % int(b.level))
 				clock_label=label(side,remaining(b.finish))
@@ -199,7 +225,7 @@ func show_side():
 				else:
 					label(side,"อัปเกรด: น้ำ %d / ข้าว %d / หิน %d" % [int(c.water*pow(2,b.level)),int(c.rice*pow(2,b.level)),int(c.stone*pow(2,b.level))],16)
 					button(side,"อัปเกรด",send.bind("upgrade",{"index":selected}))
-				button(side,"ย้ายอาคาร",func():moving=true;message("แตะช่องว่างเพื่อย้ายอาคาร"))
+				button(side,"ย้ายอาคาร",func():moving=true;message("ลากบนพื้นไปยังช่องสีเขียว แล้วปล่อยเพื่อย้าย"))
 			else:
 				label(side,"สำนักของคุณ",27)
 				label(side,"1. สร้างบ่อน้ำและโรงอาหาร\n2. สร้างโกดังเพิ่มความจุ\n3. รับศิษย์และบุกสำนัก\n4. เล่นจับคู่ระหว่างรอ",20)
@@ -209,7 +235,11 @@ func show_side():
 				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d หิน %d" % [d.attacker,d.water,d.rice,d.stone],16)
 			button(side,"อัปเดตข้อมูล",send.bind("sync",{}))
 func send(action: String,args: Dictionary):api.action(action,args)
-func choose_build(kind: String):chosen_build=kind;message("แตะพื้นที่ว่างเพื่อสร้าง "+find_catalog(kind).get("name",kind))
+func building_icon(kind: String) -> Texture2D:
+	return load("res://assets/buildings/"+kind+".png")
+func choose_build(kind: String):
+	chosen_build=kind;moving=false;clear_preview()
+	message("ลากบนพื้นเพื่อวาง "+find_catalog(kind).get("name",kind)+" • เขียว: วางได้ / แดง: วางไม่ได้")
 func find_catalog(kind: String) -> Dictionary:
 	for c in catalog:
 		if c.id==kind:return c
@@ -271,10 +301,10 @@ func cell_pos(x: float,y: float) -> Vector3:return Vector3((x-7.5)*3,0,(y-7.5)*3
 func draw_terrain(kind: String):
 	map_drawn=kind;clear(terrain)
 	var mountain=kind=="mountain"
-	art.box(terrain,Vector3(0,-1,0),Vector3(53,2,53),"a4aaa0" if mountain else "728854")
+	art.box(terrain,Vector3(0,-0.15,0),Vector3(160,0.3,160),"a4aaa0" if mountain else "728854")
 	for x in range(16):
 		for y in range(16):
-			art.box(terrain,cell_pos(x,y)+Vector3(0,0.01,0),Vector3(2.96,0.03,2.96),("a3a99e" if (x+y)%2==0 else "9da598") if mountain else ("8b9c68" if (x+y)%2==0 else "859862"))
+			art.box(terrain,cell_pos(x,y)+Vector3(0,0.002,0),Vector3(3,0.004,3),("a3a99e" if (x+y)%2==0 else "9da598") if mountain else ("8b9c68" if (x+y)%2==0 else "859862"))
 	var rng=RandomNumberGenerator.new();rng.seed=421
 	for i in range(70):
 		var angle=rng.randf()*TAU;var radius=rng.randf_range(34,43);var p=Vector3(cos(angle)*radius,0,sin(angle)*radius)
@@ -313,20 +343,132 @@ func draw_base():
 			actors.append({"node":person,"from":cell_pos(6+i*0.4,9+kind),"to":cell_pos(7+i*0.4,10+kind),"phase":i,"kind":kind})
 func position_camera():
 	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
-func zoom(amount: float):camera.size=clampf(camera.size+amount,24,72)
+func zoom(amount: float):camera.size=clampf(camera.size+amount,18,80)
+func world_area(pos: Vector2) -> bool:
+	return Rect2(0,82,950,500).has_point(pos)
+func clear_preview():
+	if is_instance_valid(preview):preview.queue_free()
+	preview=null;preview_ok=false;placement_drag=false
+func valid_cell(cell: Vector2i) -> bool:
+	if cell.x<0 or cell.y<0 or cell.x>15 or cell.y>15:return false
+	for i in range(state.get("buildings",[]).size()):
+		var b=state.buildings[i]
+		if moving and i==selected:continue
+		if int(b.x)==cell.x and int(b.y)==cell.y:return false
+	return true
+func update_preview(pos: Vector2):
+	if not world_area(pos):
+		preview_ok=false
+		if is_instance_valid(preview):preview.visible=false
+		return
+	var hit=Plane(Vector3.UP,0).intersects_ray(camera.project_ray_origin(pos),camera.project_ray_normal(pos))
+	if hit==null:return
+	preview_cell=Vector2i(roundi(hit.x/3+7.5),roundi(hit.z/3+7.5))
+	preview_ok=valid_cell(preview_cell)
+	if not is_instance_valid(preview):
+		preview=Node3D.new();add_child(preview)
+		preview_tile=art.box(preview,Vector3(0,0.06,0),Vector3(2.95,0.08,2.95),"54dd7c")
+		var kind=chosen_build if not moving else str(state.buildings[selected].id)
+		preview_model=art.building(kind,1);preview.add_child(preview_model);preview_model.position.y=0.12
+	preview.visible=true;preview.position=cell_pos(preview_cell.x,preview_cell.y)
+	preview_tile.material_override=art.material("54dd7c" if preview_ok else "ed5555")
+func drop_build(pos: Vector2):
+	update_preview(pos)
+	if not preview_ok or api.busy:
+		message("วางไม่ได้: เลือกช่องว่างภายในสำนัก" if not preview_ok else "กำลังบันทึก กรุณารอสักครู่");return
+	if moving:
+		api.action("move",{"index":selected,"x":preview_cell.x,"y":preview_cell.y});moving=false
+	else:api.action("build",{"type":chosen_build,"x":preview_cell.x,"y":preview_cell.y})
+	clear_preview()
+func pan_view(relative: Vector2):
+	pivot+=Vector3(-relative.x-relative.y,0,relative.x-relative.y)*camera.size/1400.0
+	pivot.x=clampf(pivot.x,-28,28);pivot.z=clampf(pivot.z,-28,28);position_camera()
+func card_at(pos: Vector2) -> String:
+	if not Rect2(960,92,304,530).has_point(pos):return ""
+	for c in build_cards:
+		if is_instance_valid(c.node) and c.node.get_global_rect().has_point(pos):return c.kind
+	return ""
+func menu_input(event) -> bool:
+	var menu_rect=Rect2(960,92,304,530)
+	if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==InputEvent.DEVICE_ID_EMULATION and menu_rect.has_point(event.position):return true
+	if event is InputEventScreenTouch:
+		if event.pressed and menu_rect.has_point(event.position) and fingers.is_empty():
+			menu_touch=event.index;menu_start=event.position;menu_start_scroll=sidebar_scroll.scroll_vertical;menu_velocity=0;menu_scrolling=false;card_drag=false;card_kind=card_at(event.position);menu_button=null;menu_last_time=Time.get_ticks_msec()/1000.0
+			for child in side.find_children("*","Button",true,false):
+				if child.get_global_rect().has_point(event.position):menu_button=child;break
+			return true
+		if not event.pressed and event.index==menu_touch:
+			if card_drag:drop_build(event.position)
+			elif not menu_scrolling and event.position.distance_to(menu_start)<12 and is_instance_valid(menu_button) and not menu_button.disabled:menu_button.pressed.emit()
+			menu_touch=-1;menu_button=null;card_drag=false;card_kind="";return true
+	if event is InputEventScreenDrag and event.index==menu_touch:
+		var diff=event.position-menu_start
+		var now=Time.get_ticks_msec()/1000.0
+		if not menu_scrolling and not card_drag and not card_kind.is_empty() and absf(diff.x)>18 and absf(diff.x)>absf(diff.y):choose_build(card_kind);card_drag=true
+		if card_drag:update_preview(event.position)
+		elif absf(diff.y)>12 or menu_scrolling:
+			menu_scrolling=true;menu_scroll_value=menu_start_scroll-diff.y;sidebar_scroll.scroll_vertical=roundi(menu_scroll_value)
+			menu_velocity=clampf(-event.relative.y/maxf(now-menu_last_time,0.016),-1400,1400)
+		menu_last_time=now;return true
+	return false
+func _input(event):
+	if state.is_empty() or is_instance_valid(modal):return
+	if menu_input(event):get_viewport().set_input_as_handled();return
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			if fingers.is_empty():
+				card_kind=card_at(event.position);card_origin=event.position;card_drag=false
+			if world_area(event.position) or not card_kind.is_empty():
+				fingers[event.index]=event.position
+				if fingers.size()==1:pan_start=event.position;dragging=false
+				else:pinching=true;clear_preview();card_kind=""
+				if world_area(event.position):get_viewport().set_input_as_handled()
+		elif fingers.has(event.index):
+			if not pinching:
+				if card_drag or placement_drag:drop_build(event.position)
+				elif world_area(event.position) and not dragging:tap_ground(event.position)
+			fingers.erase(event.index)
+			if fingers.is_empty():pinching=false;card_kind="";card_drag=false;placement_drag=false
+			if world_area(event.position):get_viewport().set_input_as_handled()
+	elif event is InputEventScreenDrag and fingers.has(event.index):
+		if fingers.size()>=2:
+			var points=fingers.values();var before=points[0].distance_to(points[1])
+			fingers[event.index]=event.position;points=fingers.values()
+			var after=points[0].distance_to(points[1])
+			if before>1 and after>1:camera.size=clampf(camera.size*before/after,18,80)
+			get_viewport().set_input_as_handled();return
+		fingers[event.index]=event.position
+		if pinching:return
+		if not card_kind.is_empty() and not card_drag:
+			var delta=event.position-card_origin
+			if absf(delta.y)>18 and absf(delta.y)>absf(delta.x):card_kind="";fingers.erase(event.index);return
+			if absf(delta.x)>18 and absf(delta.x)>absf(delta.y):choose_build(card_kind);card_drag=true
+			else:return
+		if card_drag or not chosen_build.is_empty() or moving:
+			placement_drag=true;update_preview(event.position)
+		else:
+			if event.position.distance_to(pan_start)>8:dragging=true
+			if dragging:pan_view(event.relative)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMagnifyGesture and world_area(event.position):
+		camera.size=clampf(camera.size/event.factor,18,80);get_viewport().set_input_as_handled()
 func _unhandled_input(event):
 	if state.is_empty() or is_instance_valid(modal):return
+	if event.device==InputEvent.DEVICE_ID_EMULATION:return
 	if event is InputEventMouseButton:
+		if not world_area(event.position):return
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP:zoom(-3);return
 		if event.button_index==MOUSE_BUTTON_WHEEL_DOWN:zoom(3);return
 		if event.button_index==MOUSE_BUTTON_LEFT:
-			if event.pressed:pan_start=event.position;dragging=false
+			if event.pressed:
+				pan_start=event.position;dragging=false
+				if not chosen_build.is_empty() or moving:placement_drag=true;update_preview(event.position)
+			elif placement_drag:drop_build(event.position);placement_drag=false
 			elif not dragging:tap_ground(event.position)
 	if event is InputEventMouseMotion and event.button_mask&MOUSE_BUTTON_MASK_LEFT:
+		if placement_drag:update_preview(event.position);return
 		if event.position.distance_to(pan_start)>8:dragging=true
-		if dragging:
-			pivot+=Vector3(-event.relative.x-event.relative.y,0,event.relative.x-event.relative.y)*0.035
-			pivot.x=clampf(pivot.x,-20,20);pivot.z=clampf(pivot.z,-20,20);position_camera()
+		if dragging:pan_view(event.relative)
 func tap_ground(screen: Vector2):
 	if not moving and chosen_build.is_empty() and not battle_visual:
 		var origin=camera.project_ray_origin(screen)
@@ -338,16 +480,16 @@ func tap_ground(screen: Vector2):
 	if point==null:return
 	var x=roundi(point.x/3+7.5);var y=roundi(point.z/3+7.5)
 	if x<0 or y<0 or x>15 or y>15:return
-	if moving:
-		moving=false;api.action("move",{"index":selected,"x":x,"y":y});return
-	if not chosen_build.is_empty():
-		api.action("build",{"type":chosen_build,"x":x,"y":y});return
+	if moving or not chosen_build.is_empty():drop_build(screen);return
 	selected=-1
 	for i in range(state.buildings.size()):
 		var b=state.buildings[i]
 		if int(b.x)==x and int(b.y)==y:selected=i;break
 	mode="home";show_side()
 func _process(delta):
+	if menu_touch<0 and absf(menu_velocity)>5 and is_instance_valid(sidebar_scroll):
+		menu_scroll_value=sidebar_scroll.scroll_vertical+menu_velocity*delta
+		sidebar_scroll.scroll_vertical=roundi(menu_scroll_value);menu_velocity*=exp(-7*delta)
 	since_sync+=delta;poll+=delta
 	if poll>12 and not state.is_empty() and not api.busy and mode!="match":poll=0;api.action("sync")
 	var time=Time.get_ticks_msec()/1000.0
