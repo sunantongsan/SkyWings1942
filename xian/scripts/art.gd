@@ -139,6 +139,22 @@ func wall(mask: int=0, rotation: int=0, level: int=1) -> Node3D:
 	box(root,Vector3(0,1.82,0),Vector3(0.76,0.15,0.76),"537c73" if level<5 else "b59753")
 	cone(root,Vector3(0,2.0,0),0.52,0.08,0.24,"d1b970",4).rotation.y=PI/4
 	return root
+func construction_dressing(parent: Node3D, footprint_size: int, progress: float):
+	var span=maxf(2.7,float(footprint_size)*2.75);var h=3.1 if footprint_size<=1 else 4.2
+	# Bamboo scaffold around the footprint: unmistakable construction silhouette.
+	for x in [-span*0.46,span*0.46]:
+		for z in [-span*0.46,span*0.46]:
+			cone(parent,Vector3(x,h*0.5,z),0.045,0.045,h,"765535",6)
+	for y in [0.9,1.8,2.7]:
+		for z in [-span*0.46,span*0.46]:box(parent,Vector3(0,y,z),Vector3(span,0.07,0.07),"8c673d")
+		for x in [-span*0.46,span*0.46]:box(parent,Vector3(x,y,0),Vector3(0.07,0.07,span),"8c673d")
+	# Floating progress bar visible from the isometric camera.
+	var bar=Node3D.new();bar.position=Vector3(0,h+0.65,0);parent.add_child(bar)
+	box(bar,Vector3.ZERO,Vector3(2.5,0.22,0.12),"322f2c")
+	var p=clampf(progress,0.04,1.0);var fill=box(bar,Vector3(-1.2+1.2*p,0,0.07),Vector3(2.4*p,0.16,0.08),"79d77b")
+	fill.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for i in range(3):box(parent,Vector3(-0.7+i*0.65,0.13,span*0.5+0.35),Vector3(0.42,0.26,0.32),"b8a37a")
+
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
 	if kind=="wall":return wall(0,0,level)
 	if kind=="training":return courtyard(level)
