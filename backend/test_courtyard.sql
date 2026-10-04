@@ -7,7 +7,8 @@ select public.xian_action('create','{"name":"ทดสอบลานฝึก",
 update xian_private.players set state=state||jsonb_build_object('buildings',state->'buildings'||'[
 {"id":"training","x":15,"y":15,"level":1,"finish":0},
 {"id":"recruit","x":14,"y":15,"level":1,"finish":0},
-{"id":"dorm","x":13,"y":15,"level":10,"finish":0}
+{"id":"dorm","x":13,"y":15,"level":10,"finish":0},
+{"id":"barracks","x":12,"y":15,"level":1,"finish":0}
 ]'::jsonb,'army','[21,0,0]'::jsonb) where user_id=auth.uid();
 set local role authenticated;
 do $$ declare r jsonb; b jsonb; failed bool:=false; begin

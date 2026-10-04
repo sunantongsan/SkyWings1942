@@ -91,7 +91,7 @@ func _ready():
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
-	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกศิษย์","train"],["บุกสำนัก","raid"],["บอทออฟไลน์","practice"],["Ghost Match3","match"],["หยก / เช็กอิน","jade"]]:
+	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ผลิตนักสู้","train"],["บุกสำนัก","raid"],["บอทออฟไลน์","practice"],["Ghost Match3","match"],["หยก / เช็กอิน","jade"]]:
 		button(row,pair[0],navigate.bind(pair[1]))
 	button(row,"−",zoom.bind(5.0));button(row,"+",zoom.bind(-5.0))
 	toast=Label.new();toast.position=Vector2(28,588);toast.size=Vector2(915,42);toast.add_theme_color_override("font_color",Color("ffe7a5"));toast.add_theme_color_override("font_shadow_color",Color.BLACK);toast.add_theme_constant_override("shadow_offset_x",2);toast.add_theme_constant_override("shadow_offset_y",2);ui.add_child(toast)
@@ -175,7 +175,7 @@ func receive(payload: Dictionary):
 func now_time() -> float:return server_time+since_sync
 func update_top():
 	if state.is_empty():return
-	top.text="%s  |  น้ำ %d/%d   ข้าว %d/%d   หิน %d/%d   หยก %d" % [state.name,int(state.water),int(caps.get("water",1000)),int(state.rice),int(caps.get("rice",1000)),int(state.stone),int(caps.get("stone",100)),int(state.jade)]
+	top.text="%s  |  น้ำ %d/%d   ข้าว %d/%d   โอสถ %d/%d   หยก %d" % [state.name,int(state.water),int(caps.get("water",1000)),int(state.rice),int(caps.get("rice",1000)),int(state.stone),int(caps.get("stone",100)),int(state.jade)]
 func open_practice():
 	if is_instance_valid(practice):return
 	clear_preview();fingers.clear();pinching=false;menu_touch=-1
@@ -204,32 +204,36 @@ func show_side():
 	match mode:
 		"build":
 			label(side,"เลื่อนขึ้นลงเพื่อเลือก\nลากรูปอาคารออกมาวางบนพื้น",20)
-			button(side,"ยกเลิกการวาง",func():chosen_build="";clear_preview())
+			button(side,"เลื่อนจอ / จบการวาง",end_placement)
 			if chosen_build=="wall":
 				label(side,"ลากบนพื้นเพื่อสร้างกำแพงเป็นแนว
 เชื่อมมุมอัตโนมัติ • 5 น้ำ / 5 ข้าวต่อช่อง",16)
 				button(side,"หมุนแนวลาก 90°",func():wall_axis=1 if wall_axis<=0 else 0;clear_preview();message("แนวตั้ง" if wall_axis==1 else "แนวนอน"))
 				button(side,"ลากได้ทั้งสองแนว",func():wall_axis=-1;clear_preview())
 			for c in catalog:
-				var card=button(side,"%s\nน้ำ %d ข้าว %d\nหิน %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds],choose_build.bind(c.id))
+				var card=button(side,"%s\nน้ำ %d ข้าว %d\nโอสถ %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds],choose_build.bind(c.id))
 				card.icon=building_icon(c.id);card.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;card.expand_icon=true;card.add_theme_constant_override("icon_max_width",76);card.custom_minimum_size=Vector2(272,100)
 				build_cards.append({"node":card,"kind":c.id})
 		"train":
-			label(side,"ลานฝึกกระบี่",25)
-			label(side,"จุ 20 หน่วยต่อระดับ • สูงสุด 200
-สร้างลานฝึกและโรงรับศิษย์ก่อน",16)
+			label(side,"หอฝึกนักสู้",25)
+			label(side,"ผลิตที่หอฝึก • เก็บที่ลานฝึกกระบี่
+ลานจุ 20 หน่วยต่อระดับ สูงสุด 200",16)
+			if building_level("barracks")==0:
+				label(side,"สร้างหอฝึกนักสู้เพื่อเริ่มผลิต",17)
+				button(side,"ไปสร้างหอฝึก",func():navigate("build");choose_build("barracks"))
 			var portrait=TextureRect.new();portrait.texture=load("res://assets/buildings/disciple.png");portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(240,125);side.add_child(portrait)
 			var names=["ศิษย์ชั้นต้น","ศิษย์ฝึกปราณ","มังกรเทวะ"]
 			for i in range(3):
 				label(side,"%s: %d คน" % [names[i],int(state.army[i])])
-				button(side,"ฝึก • น้ำ %d ข้าว %d หิน %d" % [20*(i+1),30*(i+1),[0,8,20][i]],send.bind("train",{"type":i}))
-			label(side,"คิวฝึก: %d คน\nขั้นต้น 10 วิ • ฝึกปราณ 20 วิ\nสัตว์เทวะ 30 วิ" % state.jobs.size())
-			label(side,"ฝึกปราณ: สำนัก 2 / ลานฝึกกระบี่ 1\nสัตว์เทวะ: สำนัก 3 / ลานฝึกกระบี่ 2",15)
+				var produce=button(side,"ผลิต • น้ำ %d ข้าว %d โอสถ %d" % [20*(i+1),30*(i+1),[0,8,20][i]],send.bind("train",{"type":i}))
+				produce.disabled=building_level("barracks")<i+1 or building_level("training")<1 or building_level("hall")<i+1 or army_total()+state.jobs.size()>=int(caps.get("army",10))
+			label(side,"คิวผลิต: %d คน\nขั้นต้น 10 วิ • ฝึกปราณ 20 วิ\nสัตว์เทวะ 30 วิ" % state.jobs.size())
+			label(side,"ฝึกปราณ: สำนัก 2 / หอฝึก 2\nสัตว์เทวะ: สำนัก 3 / หอฝึก 3",15)
 		"jade":
 			label(side,"หยกเซียน",26)
 			label(side,"เช็กอิน +5 หยก\nสะสมครบ 7 ครั้ง รับ +20")
 			button(side,"รับรางวัลเช็กอิน",send.bind("checkin",{}))
-			for pair in [["น้ำ 250","water"],["ข้าว 250","rice"],["หินวิญญาณ 25","stone"]]:button(side,"5 หยก → "+pair[0],send.bind("exchange",{"resource":pair[1]}))
+			for pair in [["น้ำ 250","water"],["ข้าว 250","rice"],["โอสถเซียน 25","stone"]]:button(side,"5 หยก → "+pair[0],send.bind("exchange",{"resource":pair[1]}))
 			label(side,"หยกถูกปล้นไม่ได้\nยังไม่เปิดขายเงินจริง",16)
 		"raid":show_raid()
 		_:
@@ -242,12 +246,17 @@ func show_side():
 					label(side,"ลานเปิด 2×2 ช่อง
 ความจุ %d → %d หน่วย" % [int(b.level)*20,mini(200,(int(b.level)+1)*20)])
 					if int(b.get("size",2))==1:label(side,"พื้นที่แน่น: ย้ายลานไปช่องว่าง 2×2 เพื่อขยาย",16)
-					button(side,"ฝึกกองกำลัง",navigate.bind("train"))
+					label(side,"พักและเก็บนักสู้เท่านั้น\nผลิตนักสู้ที่หอฝึกนักสู้",16)
+				if b.id=="barracks":
+					label(side,"ผลิตศิษย์ / นักกระบี่ / มังกร\nปลดล็อกที่ระดับ 1 / 2 / 3",16)
+					button(side,"ผลิตนักสู้",navigate.bind("train"))
+				if b.id=="spring":label(side,"หลอมโอสถเซียน → ถุงโอสถ",16)
+				if b.id=="crystal":label(side,"ผ้าโปร่งมองเห็นโอสถด้านใน\nฝ่ายบุกมองเห็นปริมาณได้",16)
 				clock_label=label(side,remaining(b.finish))
 				if float(b.finish)>now_time():
 					button(side,"เสร็จทันที • %d หยก" % ceili((float(b.finish)-now_time())/300),send.bind("boost",{"index":selected}))
 				else:
-					label(side,"อัปเกรด: น้ำ %d / ข้าว %d / หิน %d" % [int(c.water*pow(2,b.level)),int(c.rice*pow(2,b.level)),int(c.stone*pow(2,b.level))],16)
+					label(side,"อัปเกรด: น้ำ %d / ข้าว %d / โอสถ %d" % [int(c.water*pow(2,b.level)),int(c.rice*pow(2,b.level)),int(c.stone*pow(2,b.level))],16)
 					button(side,"อัปเกรด",send.bind("upgrade",{"index":selected}))
 				if b.id=="wall":
 					button(side,"หมุนแนวกำแพง 90°",send.bind("wall_edit",{"index":selected,"operation":"rotate"}))
@@ -259,7 +268,7 @@ func show_side():
 				label(side,"แตะอาคารเพื่อดู / อัปเกรด\nลากพื้นเพื่อเลื่อนมุมมอง",16)
 			if state.has("last_defense"):
 				var d=state.last_defense
-				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d หิน %d" % [d.attacker,d.water,d.rice,d.stone],16)
+				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d โอสถ %d" % [d.attacker,d.water,d.rice,d.stone],16)
 			button(side,"อัปเดตข้อมูล",send.bind("sync",{}))
 			button(side,"เครดิตภาพ / โมเดล",show_credits)
 func send(action: String,args: Dictionary):api.action(action,args)
@@ -273,6 +282,11 @@ func find_catalog(kind: String) -> Dictionary:
 	for c in catalog:
 		if c.id==kind:return c
 	return {}
+func building_level(kind: String) -> int:
+	var level=0
+	for b in state.get("buildings",[]):
+		if b.id==kind:level=maxi(level,int(b.level))
+	return level
 func army_total() -> int:
 	var total=0
 	for n in state.get("army",[]):total+=int(n)
@@ -291,7 +305,7 @@ func show_raid():
 	elif state.has("scout"):
 		var s=state.scout
 		label(side,s.name,22)
-		label(side,("สำนักผู้เล่น" if s.has("player") else "สำนักบอท")+" • ระดับ %d\nพลังป้องกัน %d\nน้ำ %d ข้าว %d หิน %d" % [s.level,s.defense,s.water,s.rice,s.stone])
+		label(side,("สำนักผู้เล่น" if s.has("player") else "สำนักบอท")+" • ระดับ %d\nพลังป้องกัน %d\nน้ำ %d ข้าว %d โอสถ %d" % [s.level,s.defense,s.water,s.rice,s.stone])
 		label(side,"ส่งกองกำลังทั้งหมด\nหน่วยที่ส่งจะใช้ไปในการบุก",16)
 		button(side,"เริ่มบุก (25 วินาที)",send.bind("raid_start",{}))
 		button(side,"ค้นหาสำนักผู้เล่น",send.bind("scout",{"mode":"player"}))
@@ -420,10 +434,14 @@ func update_preview(pos: Vector2):
 		preview=Node3D.new();add_child(preview)
 		preview_tile=art.box(preview,Vector3(0,0.06,0),Vector3(placement_size()*3-0.05,0.08,placement_size()*3-0.05),"54dd7c")
 		var kind=chosen_build if not moving else str(state.buildings[selected].id)
-		preview_model=art.building(kind,1);preview.add_child(preview_model);preview_model.position.y=0.12
+		preview_model=art.building(kind,int(state.buildings[selected].level) if moving else 1);preview.add_child(preview_model);preview_model.position.y=0.12
 	preview.visible=true;preview.position=cell_pos(preview_cell.x,preview_cell.y)+Vector3(1,0,1)*(placement_size()-1)*1.5
 	preview_tile.material_override=art.material("54dd7c" if preview_ok else "ed5555")
+func end_placement():
+	chosen_build="";moving=false;wall_group.clear();card_drag=false;clear_preview()
+	message("เลื่อนจอได้แล้ว • เลือกกำแพงอีกครั้งเพื่อสร้างแนวใหม่")
 func drop_build(pos: Vector2):
+	if chosen_build.is_empty() and not moving:return
 	update_preview(pos)
 	if not preview_ok or api.busy:
 		message("วางไม่ได้: เลือกช่องว่างภายในสำนัก" if not preview_ok else "กำลังบันทึก กรุณารอสักครู่");return
@@ -435,7 +453,7 @@ func drop_build(pos: Vector2):
 	elif moving:
 		api.action("move",{"index":selected,"x":preview_cell.x,"y":preview_cell.y});moving=false
 	else:api.action("build",{"type":chosen_build,"x":preview_cell.x,"y":preview_cell.y})
-	clear_preview()
+	end_placement()
 func pan_view(relative: Vector2):
 	pivot+=Vector3(-relative.x-relative.y,0,relative.x-relative.y)*camera.size/1400.0
 	pivot.x=clampf(pivot.x,-28,28);pivot.z=clampf(pivot.z,-28,28);position_camera()
@@ -587,7 +605,7 @@ func draw_battle():
 		{"id":"tower","x":9,"y":8,"level":1},{"id":"granary","x":6,"y":6,"level":1},
 		{"id":"crystal","x":9,"y":6,"level":1},{"id":"tank","x":8,"y":6,"level":1}])
 	for b in buildings:
-		var model=base_model(b,enemy.buildings,0.85);model.position=building_position(b);world.add_child(model)
+		var model=base_model(b,buildings,float(enemy.get("pill_fill",0.65)));model.position=building_position(b);world.add_child(model)
 		if b.id=="training" and footprint(b)==1:model.scale=Vector3(0.49,1,0.49)
 	for kind in range(3):
 		for i in range(mini(20,int(state.raid.army[kind]))):

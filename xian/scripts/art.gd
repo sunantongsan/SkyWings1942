@@ -147,6 +147,8 @@ func wall(mask: int=0, rotation: int=0, level: int=1) -> Node3D:
 	box(root,Vector3(0,0.88,0),Vector3(0.6,1.76,0.6),"e4ddc5")
 	box(root,Vector3(0,1.82,0),Vector3(0.76,0.15,0.76),"537c73" if level<5 else "b59753")
 	cone(root,Vector3(0,2.0,0),0.52,0.08,0.24,"d1b970",4).rotation.y=PI/4
+	evolve(root,"wall",level)
+	batch_static(root)
 	return root
 func construction_dressing(parent: Node3D, footprint_size: int, progress: float):
 	var span=maxf(2.7,float(footprint_size)*2.75);var h=3.1 if footprint_size<=1 else 4.2
@@ -166,8 +168,17 @@ func construction_dressing(parent: Node3D, footprint_size: int, progress: float)
 
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
 	if kind=="wall":return wall(0,0,level)
+	var result=building_base(kind,level,fill)
+	evolve(result,kind,level)
+	batch_static(result)
+	return result
+func building_base(kind: String, level: int, fill = 0.5) -> Node3D:
+	if kind=="wall":return wall(0,0,level)
 	if kind=="training":return courtyard(level)
-	if kind in ["tank","crystal","tower"]:return resource_building(kind,level,fill)
+	if kind=="spring":return furnace(maxi(1,level))
+	if kind=="crystal":return pill_pouch(level,fill)
+	if kind=="barracks":return barracks(level)
+	if kind in ["tank","tower"]:return resource_building(kind,level,fill)
 	var mapping={"hall":["hall.gltf",""],"recruit":["gate.gltf",""],"dorm":["hitherton_buildings.glb","House_4"],"servant":["hitherton_buildings.glb","House Player"],"kitchen":["hitherton_buildings.glb","shop"],"granary":["hitherton_buildings.glb","House_2"],"well":["pavilion.gltf",""],"tank":["hitherton_buildings.glb","House_3"],"spring":["moon_gate.gltf",""],"crystal":["moon_gate.gltf",""],"tower":["gate.gltf",""],"ward":["pavilion.gltf",""],"wall":["wall.gltf",""]}
 	var spec=mapping.get(kind,mapping.hall)
 	var root=donor(spec[0],2.7,spec[1],4.2)
@@ -311,8 +322,14 @@ func batch_static(root: Node3D):
 	var groups: Dictionary={}
 	for node in root.find_children("*","MeshInstance3D",true,false):
 		if node.mesh==null:continue
+		# Transparent fabric must retain its separate sorted draw and identity.
+		var transparent=false
 		for surface in range(node.mesh.get_surface_count()):
-			var mat=node.material_override if node.material_override!=null else node.mesh.surface_get_material(surface)
+			var active=node.get_active_material(surface)
+			if active is BaseMaterial3D and active.transparency!=BaseMaterial3D.TRANSPARENCY_DISABLED:transparent=true
+		if transparent:continue
+		for surface in range(node.mesh.get_surface_count()):
+			var mat=node.get_active_material(surface)
 			if mat==null:continue
 			var key=mat.get_instance_id()
 			if not groups.has(key):
@@ -375,3 +392,110 @@ func resource_building(kind: String, level: int, fill: float) -> Node3D:
 		box(root,Vector3(0,2.97,0.2),Vector3(0.12,0.12,1.5),"5d655f")
 		cone(root,Vector3(0,3.2,0),0.26,0.04,0.35,"cc865d",4)
 	return root
+
+func ring(parent: Node3D, pos: Vector3, radius: float, thickness: float, color: String):
+	var node=MeshInstance3D.new();var mesh=TorusMesh.new()
+	mesh.inner_radius=radius-thickness;mesh.outer_radius=radius+thickness;mesh.rings=16;mesh.ring_segments=6
+	node.mesh=mesh;node.material_override=material(color);node.position=pos;parent.add_child(node)
+	return node
+func furnace(level: int) -> Node3D:
+	var root=Node3D.new();root.set_meta("original_building",true)
+	building_trim(root,"spring",level)
+	var bronze=["836047","966949","9b734c","a8814d","b28b4f"][mini(4,(level-1)/2)]
+	cone(root,Vector3(0,0.24,0),1.18,1.18,0.3,"5a676a",8)
+	for i in range(3):
+		var a=i*TAU/3;var p=Vector3(cos(a)*0.68,0.58,sin(a)*0.68)
+		cone(root,p,0.18,0.12,0.7,bronze,7)
+	orb(root,Vector3(0,0.52,0),Vector3(0.75,0.65,0.75),"e99942")
+	orb(root,Vector3(0,1.22,0),Vector3(1.85,1.55,1.85),bronze)
+	ring(root,Vector3(0,1.14,0),0.91,0.055,"d2ad68")
+	cone(root,Vector3(0,2.02,0),0.9,0.2,0.38,"537c73",12)
+	ring(root,Vector3(0,1.85,0),0.82,0.075,"dfbe76")
+	cone(root,Vector3(0,2.29,0),0.19,0.12,0.28,bronze,8)
+	for x in [-1,1]:
+		var handle=ring(root,Vector3(x*0.91,1.6,0),0.29,0.065,"d2ad68");handle.rotation.z=PI/2
+		box(root,Vector3(x*0.3,0.4,1.04),Vector3(0.3,0.35,0.12),"efb654")
+	# White wisps and herbs are bounded decoration, not particle emitters.
+	for i in range(3):orb(root,Vector3(sin(i)*0.12,2.58+i*0.19,0),Vector3(0.21+i*0.04,0.17,0.21),"c0d2b6")
+	return root
+func pill_pouch(level: int, fill: float) -> Node3D:
+	var root=Node3D.new();root.set_meta("original_building",true);root.set_meta("pill_fill",clampf(fill,0,1))
+	building_trim(root,"crystal",level)
+	cone(root,Vector3(0,0.22,0),1.1,1.1,0.22,"857154",12)
+	var count=ceili(clampf(fill,0,1)*24);root.set_meta("pill_count",count)
+	for i in range(count):
+		var layer=i/8;var a=(i%8)*TAU/8+layer*0.45
+		var p=Vector3(cos(a)*0.5,0.56+layer*0.38,sin(a)*0.5)
+		orb(root,p,Vector3(0.39,0.34,0.39),["e5b761","77cda5","c19adc"][i%3])
+	var cloth=orb(root,Vector3(0,1.04,0),Vector3(1.94,1.68,1.94),"d2e1c8")
+	var mat=StandardMaterial3D.new();mat.albedo_color=Color(0.8,0.92,0.83,0.30)
+	mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;mat.cull_mode=BaseMaterial3D.CULL_DISABLED;mat.roughness=1;mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	cloth.material_override=mat;cloth.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;cloth.name="SheerCloth"
+	for y in [0.71,1.08,1.43]:ring(root,Vector3(0,y,0),0.94 if y<1.2 else 0.82,0.012,"a3b69b")
+	# Woven seams remain opaque enough to read the bag silhouette at mobile size.
+	for i in range(6):
+		var a=i*TAU/6
+		for j in range(4):
+			var y=0.43+j*0.36;var radius=0.72+sin(j*PI/3)*0.22
+			cone(root,Vector3(cos(a)*radius,y,sin(a)*radius),0.017,0.017,0.38,"a3b69b",5)
+	cone(root,Vector3(0,1.94,0),0.33,0.48,0.4,"afc2ad",10)
+	ring(root,Vector3(0,1.81,0),0.34,0.045,"dcba74")
+	for x in [-1,1]:
+		var tie=ring(root,Vector3(x*0.24,1.89,0.4),0.2,0.028,"dcba74");tie.rotation.x=PI/2
+		cone(root,Vector3(x*0.32,1.56,0.47),0.025,0.025,0.4,"dcba74",6)
+	return root
+func barracks(level: int) -> Node3D:
+	var root=Node3D.new();root.set_meta("original_building",true)
+	building_trim(root,"barracks",level)
+	box(root,Vector3(0,0.83,-0.18),Vector3(1.9,1.4,1.65),"c7bc99")
+	for x in [-0.98,0.98]:
+		for z in [-1.0,0.65]:box(root,Vector3(x,1.02,z),Vector3(0.15,1.8,0.15),"694e3c")
+	box(root,Vector3(0,0.72,0.68),Vector3(0.7,1.15,0.1),"394d52")
+	roof(root,2.0,1.65,"376d87")
+	box(root,Vector3(0,1.45,0.78),Vector3(0.96,0.26,0.08),"ceab67")
+	for side in [-1,1]:
+		box(root,Vector3(side*0.94,0.54,0.98),Vector3(0.45,0.1,0.3),"7a583b")
+		for j in range(2):
+			var blade=box(root,Vector3(side*(0.79+j*0.24),0.94,0.99),Vector3(0.07,0.94,0.055),"b5d3d6");blade.rotation.z=side*0.16
+			box(root,Vector3(side*(0.79+j*0.24),0.64,1.0),Vector3(0.25,0.06,0.08),"d5ab61")
+		training_banner(root,Vector3(side*1.17,0,-0.67),"476f9e")
+	return root
+func evolve(root: Node3D, kind: String, level: int):
+	# Every level changes silhouette, masonry height and an additive detail;
+	# higher tiers add buttresses, gables, lanterns and a jade/gold crown.
+	var lv=clampi(level,1,10);root.set_meta("visual_level",lv)
+	if lv==1:return
+	var colors=["836d50","9d7956","a58758","547c72","3f898a","447f98","596ea8","896baf","ae814f","d4b269"]
+	var accent=colors[lv-1];var span=5.7 if kind=="training" else 2.68
+	if kind=="wall":
+		# No widened ground pad: adjacency and corners remain exactly on their cells.
+		for y in range(lv-1):box(root,Vector3(0,0.24+y*0.13,0.33),Vector3(0.4,0.055,0.07),accent)
+		if lv>=4:cone(root,Vector3(0,2.2,0),0.33,0.15,0.32,accent,4).rotation.y=PI/4
+		root.scale.y=1.0+(lv-1)*0.025
+		return
+	box(root,Vector3(0,0.08,0),Vector3(span,0.14,span),accent)
+	var frame=Node3D.new();root.add_child(frame)
+	for i in range(lv-1):
+		var x=-span*0.36+i*(span*0.72/8)
+		box(frame,Vector3(x,0.26,span*0.46),Vector3(0.12,0.14+0.015*lv,0.12),"e1c789")
+	if lv>=3:
+		for x in [-1,1]:
+			box(frame,Vector3(x*span*0.44,0.42,-span*0.43),Vector3(0.23,0.65,0.23),"84958d")
+			cone(frame,Vector3(x*span*0.44,0.82,-span*0.43),0.22,0.05,0.2,accent,4)
+	if lv>=5:
+		for x in [-1,1]:lantern(frame,Vector3(x*span*0.43,0,span*0.4),0.5+lv*0.018)
+	if kind in ["hall","recruit","dorm","servant","kitchen","granary","well","ward","barracks"]:
+		if lv>=4:
+			for x in [-1,1]:
+				box(frame,Vector3(x*1.05,0.7,0),Vector3(0.36,1.1,1.1),"acb4a0")
+				roof_node(frame,Vector3(x*1.02,1.44,0),0.66,accent)
+		if lv>=7:
+			var y=minf(model_bounds(root).end.y,3.4)
+			cone(frame,Vector3(0,y+0.12,0),0.18,0.12,0.45,"d4b269",8)
+			orb(frame,Vector3(0,y+0.45,0),Vector3(0.29,0.37,0.29),accent)
+	if lv>=9:
+		for x in [-1,1]:training_banner(frame,Vector3(x*span*0.43,0,0),accent)
+	root.scale.y=1.0+(lv-1)*0.025
+func roof_node(parent: Node3D, pos: Vector3, width: float, color: String):
+	var holder=Node3D.new();holder.position=pos;parent.add_child(holder)
+	roof(holder,0,width,color)

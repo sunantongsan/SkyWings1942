@@ -1,6 +1,6 @@
 extends SceneTree
 const Art=preload("res://scripts/art.gd")
-const KINDS=["hall","well","kitchen","tank","granary","spring","crystal","servant","recruit","training","dorm","tower","ward","wall"]
+const KINDS=["hall","barracks","well","kitchen","tank","granary","spring","crystal","servant","recruit","training","dorm","tower","ward","wall"]
 func _initialize():call_deferred("run")
 func run():
  var viewport=SubViewport.new();viewport.size=Vector2i(192,192);viewport.transparent_bg=true;viewport.own_world_3d=true;root.add_child(viewport)

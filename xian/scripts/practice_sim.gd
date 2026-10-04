@@ -20,7 +20,7 @@ func setup(level: int):
 	if tier>=8:add_building("ward",Vector2i(9,6),280+65*tier)
 	if tier>=10:add_building("tower",Vector2i(8,10),220+50*tier)
 	var resources=[Vector2i(3,7),Vector2i(12,8),Vector2i(7,12),Vector2i(8,3)]
-	for i in range(resources.size()):add_building(["tank","granary","crystal","kitchen"][i],resources[i],140+20*tier)
+	for i in range(resources.size()):add_building(["tank","granary","crystal","spring"][i],resources[i],140+20*tier)
 	# Complete connected perimeter; early bases teach entrances, later bases have compartments.
 	for x in range(4,12):
 		for y in range(4,12):

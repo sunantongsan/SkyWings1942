@@ -14,7 +14,7 @@ func run():
  assert(Walls.run_indices(buildings,3).size()==2)
  assert(Walls.line(Vector2i(2,2),Vector2i(5,3)).size()==4)
  var game=load("res://scenes/main.tscn").instantiate();root.add_child(game);await process_frame
- game.close_modal();game.api.queue_free();game.api=FakeAPI.new();game.add_child(game.api);game.state={"buildings":buildings,"army":[0,0,0],"jobs":[]};game.chosen_build="wall"
+ game.close_modal();game.api.queue_free();game.api=FakeAPI.new();game.add_child(game.api);game.state={"buildings":buildings,"army":[0,0,0],"jobs":[]};game.chosen_build="wall";game.mode="build"
  game.update_preview(game.camera.unproject_position(game.cell_pos(7,7)))
  game.update_preview(game.camera.unproject_position(game.cell_pos(10,7)))
  assert(game.wall_cells.size()==4 and game.preview_ok)
@@ -29,4 +29,13 @@ func run():
  assert(game.api.actions.size()==1)
  assert(game.api.actions[0].kind=="wall_line")
  assert(game.api.actions[0].args.x==7 and game.api.actions[0].args.end_x==10)
+ assert(game.chosen_build.is_empty() and not game.placement_drag and not game.moving)
+ var pivot=game.pivot
+ touch.position=start;touch.pressed=true;game._input(touch)
+ drag.position=start+Vector2(50,0);drag.relative=Vector2(50,0);game._input(drag)
+ touch.position=drag.position;touch.pressed=false;game._input(touch)
+ assert(game.api.actions.size()==1,"Pan after wall placement must not build again")
+ assert(game.pivot!=pivot,"One finger must pan after placing a wall")
+ game.choose_build("wall");game.end_placement()
+ assert(game.chosen_build.is_empty())
  print("XIAN_WALL_CLIENT_PASSED");quit()
