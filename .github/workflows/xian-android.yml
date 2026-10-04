@@ -74,7 +74,7 @@ jobs:
           name: Xian-of-Clans-Android
           path: xian/build/Xian-of-Clans.apk
       - name: Source archive
-        run: zip -qr Xian-of-Clans-Source.zip xian backend -x 'xian/.godot/*' 'xian/build/*'
+        run: zip -qr Xian-of-Clans-Source.zip xian backend native/xian tools/prepare_xian_android.py XIAN_README.md -x 'xian/.godot/*' 'xian/build/*' 'xian/android/*'
       - uses: actions/upload-artifact@v4
         with:
           name: Xian-of-Clans-Source
