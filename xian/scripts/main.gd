@@ -73,10 +73,13 @@ func _ready():
 	api.auth_notice.connect(message)
 	api.auth_working.connect(auth_loading)
 	api.authenticated.connect(func(): message("เชื่อมต่อแล้ว กำลังเปิดสำนัก…"))
-	var light = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-55,-35,0); light.light_energy = 0.85;light.shadow_enabled=true;light.directional_shadow_max_distance=100; add_child(light)
+	var light = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-52,-32,0); light.light_color=Color("fff1d2"); light.light_energy = 1.05;light.shadow_enabled=true;light.shadow_bias=0.06;light.directional_shadow_max_distance=82; add_child(light)
 	var env = WorldEnvironment.new(); var e = Environment.new()
-	e.background_mode = Environment.BG_COLOR; e.background_color = Color("aec7bf")
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color = Color("d9e4dc"); e.ambient_light_energy = 0.55
+	# Warm wuxia daylight + cool atmospheric fill. Kept mobile-friendly: one shadowed sun, no realtime GI.
+	e.background_mode = Environment.BG_COLOR; e.background_color = Color("9fbeb8")
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color = Color("c8ddd8"); e.ambient_light_energy = 0.68
+	e.tonemap_mode=Environment.TONE_MAPPER_FILMIC;e.tonemap_exposure=1.08;e.tonemap_white=1.45
+	e.fog_enabled=true;e.fog_light_color=Color("c9d9d1");e.fog_light_energy=0.55;e.fog_density=0.006;e.fog_height=0.0;e.fog_height_density=0.08
 	env.environment=e; add_child(env)
 	camera = Camera3D.new(); camera.projection = Camera3D.PROJECTION_ORTHOGONAL; camera.size=34; camera.far=300;camera.h_offset=6; add_child(camera)
 	position_camera()
