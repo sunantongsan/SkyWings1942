@@ -9,13 +9,15 @@ s = p.read_text()
 marker = 'org.godotengine.plugin.v2.XianAuth'
 if marker not in s:
     s = s.replace('<profileable', '<meta-data android:name="'+marker+'" android:value="com.xianofclans.auth.XianAuth" />\n        <profileable')
-    s = s.replace('</activity>', '''<intent-filter>
+    s = s.replace('</application>', '''<activity android:name="com.xianofclans.auth.OAuthCallbackActivity" android:exported="true" android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.sunantongsan.thegang" android:host="auth-callback" />
             </intent-filter>
-        </activity>''', 1)
+        </activity>
+    </application>''', 1)
     p.write_text(s)
 p = build / 'config.gradle'
 s = p.read_text().replace("compileSdk         : 34", "compileSdk         : 35").replace("buildTools         : '34.0.0'", "buildTools         : '35.0.1'")

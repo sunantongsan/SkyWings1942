@@ -6,12 +6,13 @@ import org.godotengine.godot.plugin.*;
 import java.util.*;
 /** Browser OAuth transport; PKCE and session exchange stay in the game API. */
 public class XianAuth extends GodotPlugin {
- public XianAuth(Godot godot){super(godot);}
+ static volatile XianAuth instance;
+ public XianAuth(Godot godot){super(godot);instance=this;}
  @Override public String getPluginName(){return "XianAuth";}
  @Override public Set<SignalInfo> getPluginSignals(){return new HashSet<>(Arrays.asList(new SignalInfo("oauth_callback",String.class)));}
- @Override public void onMainNewIntent(Intent intent){
+ public void receive(Intent intent){
   Uri uri=intent.getData();
   if(uri!=null && "com.sunantongsan.thegang".equals(uri.getScheme()) && "auth-callback".equals(uri.getHost()))
-   emitSignal("oauth_callback",uri.toString());
+   runOnRenderThread(() -> emitSignal("oauth_callback",uri.toString()));
  }
 }
