@@ -6,7 +6,8 @@ func run():
 	await process_frame
 	scene.api.refresh_token=""
 	assert(scene.camera != null)
-	assert(scene.terrain.get_child_count()>250)
+	assert(scene.terrain.get_child_count()>0 and scene.terrain.get_child_count()<24)
+	assert(scene.art.model_bounds(scene.terrain).size.x>=48)
 	scene.draw_terrain("mountain")
 	assert(scene.map_drawn=="mountain")
 	for kind in ["hall","well","kitchen","tank","granary","spring","crystal","servant","recruit","training","dorm","tower","ward","wall"]:

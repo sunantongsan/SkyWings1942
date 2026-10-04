@@ -2,6 +2,7 @@ extends Node3D
 signal closed
 const Sim=preload("res://scripts/practice_sim.gd")
 const Walls=preload("res://scripts/wall_layout.gd")
+const VisualStyle=preload("res://scripts/visual_style.gd")
 const Art=preload("res://scripts/art.gd")
 const SAVE="user://practice_stars.json"
 var sim=Sim.new()
@@ -23,7 +24,6 @@ var level_picker: OptionButton
 var models: Array = []
 var unit_models: Array = []
 var projectiles: Array = []
-var last_fx_revision=0
 var records: Dictionary = {}
 var level=1
 var selected_kind=0
@@ -36,15 +36,10 @@ func _ready():
 		if data is Dictionary:records=data
 	camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=42;camera.far=250;camera.h_offset=6
 	add_child(camera);position_camera();camera.make_current()
-	var sun=DirectionalLight3D.new();sun.rotation_degrees=Vector3(-52,-32,0);sun.light_color=Color("fff0d0");sun.light_energy=1.0;sun.shadow_enabled=true;sun.directional_shadow_max_distance=90;add_child(sun)
-	var world_env=WorldEnvironment.new();var env=Environment.new();env.background_mode=Environment.BG_COLOR;env.background_color=Color("9dbab1");env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.ambient_light_color=Color("c7d9d2");env.ambient_light_energy=0.65;env.tonemap_mode=Environment.TONE_MAPPER_FILMIC;env.tonemap_exposure=1.06;env.fog_enabled=true;env.fog_light_color=Color("cbd9d0");env.fog_density=0.005;world_env.environment=env;add_child(world_env)
 	battlefield=Node3D.new();add_child(battlefield)
 	var layer=CanvasLayer.new();layer.layer=10;add_child(layer)
 	hud=Control.new();hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);hud.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(hud)
-	var theme=Theme.new();theme.default_font=preload("res://assets/NotoSansThai.ttf");theme.default_font_size=18;hud.theme=theme
-	for name in ["normal","hover","pressed","disabled"]:
-		var style=StyleBoxFlat.new();style.bg_color=Color("244e49") if name=="normal" else Color("48746b");style.set_corner_radius_all(8);style.set_content_margin_all(10)
-		theme.set_stylebox(name,"Button",style);theme.set_stylebox(name,"OptionButton",style)
+	hud.theme=VisualStyle.theme()
 	var header=panel(Vector2(16,12),Vector2(1248,66));heading=text(header,"ประลองบอทออฟไลน์",24)
 	var right=panel(Vector2(960,92),Vector2(304,530));sidebar=VBoxContainer.new();right.add_child(sidebar)
 	level_picker=OptionButton.new();level_picker.custom_minimum_size.y=48;sidebar.add_child(level_picker)
@@ -64,21 +59,17 @@ func _ready():
 	start_level(1)
 func panel(pos: Vector2, extent: Vector2) -> PanelContainer:
 	var p=PanelContainer.new();p.position=pos;p.size=extent
-	var style=StyleBoxFlat.new();style.bg_color=Color("142c2a");style.set_corner_radius_all(12);style.set_content_margin_all(12);p.add_theme_stylebox_override("panel",style);hud.add_child(p);return p
+	p.add_theme_stylebox_override("panel",VisualStyle.panel());hud.add_child(p);return p
 func text(parent: Node, value: String, size=18) -> Label:
 	var l=Label.new();l.text=value;l.add_theme_font_size_override("font_size",size);l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;parent.add_child(l);return l
 func button(parent: Node, value: String, callback: Callable) -> Button:
 	var b=Button.new();b.text=value;b.custom_minimum_size.y=44;b.pressed.connect(callback);parent.add_child(b);return b
 func world_pos(p: Vector2, height=0.0) -> Vector3:return Vector3((p.x-7.5)*3,height,(p.y-7.5)*3)
 func start_level(value: int):
-	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;last_fx_revision=0;pivot=Vector3.ZERO;position_camera()
+	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;pivot=Vector3.ZERO;position_camera()
 	for child in battlefield.get_children():child.queue_free()
 	models.clear();unit_models.clear();projectiles.clear()
-	art.box(battlefield,Vector3(0,-0.15,0),Vector3(160,0.3,160),"718178" if level%2==0 else "597152")
-	for x in range(16):
-		for y in range(16):
-			var border=x<=1 or y<=1 or x>=14 or y>=14
-			art.box(battlefield,world_pos(Vector2(x,y),0.01),Vector3(2.95,0.025,2.95),"719c75" if border else "a1a999" if level%2==0 else "91a276")
+	art.landscape(battlefield,level%2==0,true)
 	dress_battlefield()
 	for b in sim.buildings:
 		var model=art.wall(Walls.mask(sim.buildings,Vector2i(b.pos)),0,level) if b.kind=="wall" else art.building(b.kind,level);battlefield.add_child(model);model.position=world_pos(b.pos)
@@ -157,15 +148,6 @@ func dress_battlefield():
 	for p in [Vector2(1,3),Vector2(14,4),Vector2(2,12),Vector2(13,12)]:
 		art.bamboo_cluster(battlefield,world_pos(p),0.85)
 	for p in [Vector2(2,5),Vector2(13,6),Vector2(4,13),Vector2(11,2)]:art.rock(battlefield,world_pos(p),0.75)
-	var rng=RandomNumberGenerator.new();rng.seed=3700+level
-	for i in range(30):
-		var angle=i*TAU/30;var pos=Vector3(cos(angle)*34,0,sin(angle)*34)
-		if level%2==0:art.cone(battlefield,pos+Vector3(0,0.7,0),rng.randf_range(1,2.2),0.6,1.4,"88968d",5)
-		else:
-			for j in range(3):
-				var offset=pos+Vector3(j*0.5,0,0)
-				art.cone(battlefield,offset+Vector3(0,2,0),0.11,0.09,4,"416a45",6)
-				art.cone(battlefield,offset+Vector3(0,3.4,0),1.1,0.15,2.2,"567d49",5)
 func _process(delta):
 	if test_mode:return
 	accumulator+=minf(delta,0.25)
