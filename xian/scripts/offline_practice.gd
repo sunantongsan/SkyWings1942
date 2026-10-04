@@ -35,6 +35,8 @@ func _ready():
 		if data is Dictionary:records=data
 	camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=42;camera.far=250;camera.h_offset=6
 	add_child(camera);position_camera();camera.make_current()
+	var sun=DirectionalLight3D.new();sun.rotation_degrees=Vector3(-52,-32,0);sun.light_color=Color("fff0d0");sun.light_energy=1.0;sun.shadow_enabled=true;sun.directional_shadow_max_distance=90;add_child(sun)
+	var world_env=WorldEnvironment.new();var env=Environment.new();env.background_mode=Environment.BG_COLOR;env.background_color=Color("9dbab1");env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.ambient_light_color=Color("c7d9d2");env.ambient_light_energy=0.65;env.tonemap_mode=Environment.TONE_MAPPER_FILMIC;env.tonemap_exposure=1.06;env.fog_enabled=true;env.fog_light_color=Color("cbd9d0");env.fog_density=0.005;world_env.environment=env;add_child(world_env)
 	battlefield=Node3D.new();add_child(battlefield)
 	var layer=CanvasLayer.new();layer.layer=10;add_child(layer)
 	hud=Control.new();hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);hud.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(hud)
@@ -149,10 +151,11 @@ func dress_battlefield():
 		for y in range(5,11):
 			if (x+y)%2==0:art.box(battlefield,world_pos(Vector2(x,y),0.04),Vector3(2.75,0.02,2.75),"a9b091")
 	for p in [Vector2(3,4),Vector2(12,4),Vector2(3,11),Vector2(12,11)]:
-		var at=world_pos(p)
-		art.box(battlefield,at+Vector3(0,0.65,0),Vector3(0.38,1.3,0.38),"756448")
-		art.box(battlefield,at+Vector3(0,1.55,0),Vector3(0.7,0.65,0.7),"e3be78")
-		art.cone(battlefield,at+Vector3(0,1.95,0),0.6,0.05,0.35,"41665d",4).rotation.y=PI/4
+		art.lantern(battlefield,world_pos(p),1.0)
+	# Foreground framing gives each base depth while keeping the deploy border readable.
+	for p in [Vector2(1,3),Vector2(14,4),Vector2(2,12),Vector2(13,12)]:
+		art.bamboo_cluster(battlefield,world_pos(p),0.85)
+	for p in [Vector2(2,5),Vector2(13,6),Vector2(4,13),Vector2(11,2)]:art.rock(battlefield,world_pos(p),0.75)
 	var rng=RandomNumberGenerator.new();rng.seed=3700+level
 	for i in range(30):
 		var angle=i*TAU/30;var pos=Vector3(cos(angle)*34,0,sin(angle)*34)
