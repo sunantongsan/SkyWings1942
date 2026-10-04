@@ -4,7 +4,9 @@ func material(hex: String) -> StandardMaterial3D:
 	if mats.has(hex): return mats[hex]
 	var m = StandardMaterial3D.new()
 	m.albedo_color = Color(hex)
-	m.roughness = 0.95
+	# Stylized PBR: keep the broad readable shapes, but let sun/highlights sell depth.
+	m.roughness = 0.72
+	m.metallic = 0.0
 	mats[hex] = m
 	return m
 func box(parent: Node3D, pos: Vector3, size: Vector3, color: String) -> MeshInstance3D:
@@ -12,6 +14,7 @@ func box(parent: Node3D, pos: Vector3, size: Vector3, color: String) -> MeshInst
 	var mesh = BoxMesh.new()
 	mesh.size = size
 	n.mesh = mesh; n.material_override = material(color); n.position = pos
+	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	parent.add_child(n)
 	return n
 func cone(parent: Node3D, pos: Vector3, r: float, top: float, height: float, color: String, segments = 8) -> MeshInstance3D:
@@ -19,6 +22,7 @@ func cone(parent: Node3D, pos: Vector3, r: float, top: float, height: float, col
 	var mesh = CylinderMesh.new()
 	mesh.bottom_radius = r; mesh.top_radius = top; mesh.height = height; mesh.radial_segments = segments
 	n.mesh = mesh; n.material_override = material(color); n.position = pos
+	n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	parent.add_child(n)
 	return n
 func roof(parent: Node3D, y: float, width: float, color: String):
@@ -28,6 +32,30 @@ func roof(parent: Node3D, y: float, width: float, color: String):
 	box(parent,Vector3(0,y+0.48,0),Vector3(width*1.25,0.14,0.15),"d3b579")
 	for x in [-1,1]:
 		box(parent,Vector3(x*width*0.73,y-0.28,0),Vector3(0.18,0.3,width*1.2),color).rotation_degrees.z = x*20
+
+func lantern(parent: Node3D, pos: Vector3, scale_value: float=1.0):
+	var root=Node3D.new();root.position=pos;root.scale=Vector3.ONE*scale_value;parent.add_child(root)
+	box(root,Vector3(0,0.7,0),Vector3(0.12,1.4,0.12),"513d31")
+	box(root,Vector3(0,1.45,0),Vector3(0.5,0.58,0.5),"d98748")
+	cone(root,Vector3(0,1.82,0),0.42,0.08,0.25,"385b51",4).rotation.y=PI/4
+	return root
+func rock(parent: Node3D, pos: Vector3, scale_value: float=1.0):
+	var r=cone(parent,pos+Vector3(0,0.35*scale_value,0),0.7*scale_value,0.35*scale_value,0.7*scale_value,"747b72",7)
+	r.rotation_degrees=Vector3(-8,17,6);return r
+func bamboo_cluster(parent: Node3D, pos: Vector3, scale_value: float=1.0):
+	var root=Node3D.new();root.position=pos;root.scale=Vector3.ONE*scale_value;parent.add_child(root)
+	for i in range(3):
+		var x=(i-1)*0.34
+		cone(root,Vector3(x,1.45,i*0.12),0.075,0.06,2.9,"426a45",7)
+		for y in [0.85,1.55,2.2]:
+			var leaf=box(root,Vector3(x+0.28,y,i*0.12),Vector3(0.65,0.055,0.18),"5f8751");leaf.rotation_degrees.y=25+i*38
+	return root
+func training_banner(parent: Node3D, pos: Vector3, color="9c4152"):
+	var root=Node3D.new();root.position=pos;parent.add_child(root)
+	cone(root,Vector3(0,1.35,0),0.045,0.045,2.7,"6c4b35",7)
+	var cloth=box(root,Vector3(0.38,1.9,0),Vector3(0.72,0.85,0.035),color);cloth.rotation_degrees.z=-4
+	return root
+
 var scene_cache: Dictionary = {}
 var walk_library: AnimationLibrary
 var combat_library: AnimationLibrary
@@ -86,12 +114,14 @@ func courtyard(level: int) -> Node3D:
 		box(root,Vector3(x,1,-2.1),Vector3(0.9,0.12,0.12),"987452")
 		cone(root,Vector3(x,1.6,-2.1),0.19,0.19,0.28,"c6a679",8)
 	for x in [-2.2,2.2]:
-		cone(root,Vector3(x,1,2.2),0.055,0.055,2,"72573e",6)
-		box(root,Vector3(x+0.28,1.7,2.2),Vector3(0.55,0.6,0.04),"467f99" if level<5 else "9c4152")
+		training_banner(root,Vector3(x,0,2.2),"467f99" if level<5 else "9c4152")
 	for i in range(mini(5,1+level/2)):
 		box(root,Vector3(-1.1+i*0.4,0.65,2.3),Vector3(0.06,0.9,0.05),"becdd1")
 		box(root,Vector3(-1.1+i*0.4,0.35,2.3),Vector3(0.25,0.05,0.08),"bb9a59")
 	box(root,Vector3(0,0.3,2.35),Vector3(2.6,0.12,0.12),"785c43")
+	# Small props at the edges make the yard feel authored without blocking troop readability.
+	lantern(root,Vector3(-2.35,0,-2.35),0.65);lantern(root,Vector3(2.35,0,-2.35),0.65)
+	rock(root,Vector3(-2.25,0,1.45),0.55);rock(root,Vector3(2.2,0,1.5),0.45)
 	cone(root,Vector3(0,0.092,0),1.05,1.05,0.018,"899c96",32)
 	box(root,Vector3(0,0.11,0),Vector3(0.08,0.015,1.5),"ece4c9")
 	box(root,Vector3(0,0.11,0.45),Vector3(0.55,0.015,0.08),"ece4c9")
