@@ -17,3 +17,5 @@ android_ads/build/
 xian/.godot/
 xian/build/
 xian/**/*.import
+
+xian/android/

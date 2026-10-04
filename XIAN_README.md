@@ -35,3 +35,14 @@ Open `xian/project.godot` in Godot 4.4.1. The new standalone entry point exports
 - Buildings, characters, icon and scenery: original procedural geometry / SVG.
 - `disciple-reference.jpg`: supplied by project owner in this conversation.
 - Noto Sans Thai: SIL Open Font License, included alongside font.
+
+
+## Account update 0.33
+
+Email auth reuses the original cultivation game's Supabase project. Existing email/password accounts remain valid; characters and balances are not migrated into the new strategy economy. Signup validates email, password and confirmation locally, disables duplicate submissions, displays status inside the form and offers confirmation resend. Confirmation remains enabled on the shared backend.
+
+Android Google login reuses the original browser OAuth callback `com.sunantongsan.thegang://auth-callback` with per-attempt S256 PKCE, a ten-minute expiry and one-use verifier. Select **Xian of Clans** if Android asks which installed game should open the link. If Android kills the game while the browser is open, restart Google login. No client secret or service-role key is embedded. Actual Google consent and return require a device/account test; automated tests cover callback validation and replay rejection.
+
+Native callback source: `native/xian/src`. Extract Godot 4.4.1 `android_source.zip` into `xian/android/build`, run `python3 tools/prepare_xian_android.py`, then use the Android Gradle export. CI does this automatically.
+
+Google Play Games is NOT enabled yet. It is distinct from Google account login. Required setup: the game's Play Games project ID, Android OAuth credential for `com.xianofclans.strategy` with the installed APK signing SHA-1, a game-server OAuth client, and enabled test accounts in Play Console. Never use an unverified player ID to access a Supabase save. Reuse of the old Google OAuth backend does not automatically register this Android package with Play Games.

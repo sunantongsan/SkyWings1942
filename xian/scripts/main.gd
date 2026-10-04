@@ -32,6 +32,9 @@ var last_buildings = ""
 var map_drawn = ""
 var battle_visual = false
 var battle_nodes: Array = []
+var auth_status: Label
+var auth_controls: Array[Control] = []
+var auth_signup = false
 var font = preload("res://assets/NotoSansThai.ttf")
 
 func _ready():
@@ -39,6 +42,8 @@ func _ready():
 	api = API.new(); add_child(api)
 	api.updated.connect(receive)
 	api.failed.connect(message)
+	api.auth_notice.connect(message)
+	api.auth_working.connect(auth_loading)
 	api.authenticated.connect(func(): message("เชื่อมต่อแล้ว กำลังเปิดสำนัก…"))
 	var light = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-55,-35,0); light.light_energy = 1.2; add_child(light)
 	var env = WorldEnvironment.new(); var e = Environment.new()
@@ -83,23 +88,41 @@ func clear(node: Node):
 	for child in node.get_children():node.remove_child(child);child.queue_free()
 func message(text: String):
 	toast.text=text
+	if mode=="login" and is_instance_valid(auth_status): auth_status.text=text
 func close_modal():
 	if is_instance_valid(modal):modal.queue_free();modal=null
 func modal_box(pos=Vector2(300,112),extent=Vector2(600,475)) -> VBoxContainer:
 	close_modal();modal=panel(pos,extent);var box=VBoxContainer.new();box.add_theme_constant_override("separation",10);modal.add_child(box);return box
-func show_login():
+func auth_loading(active: bool):
+	for control in auth_controls:
+		if not is_instance_valid(control): continue
+		if control is Button: control.disabled=active
+		if control is LineEdit: control.editable=not active
+	if active: message("กำลังติดต่อระบบบัญชี… กรุณารอไม่เกิน 25 วินาที")
+func show_login(saved_email = ""):
 	mode="login"
-	var box=modal_box()
-	label(box,"XIAN OF CLANS",36)
-	label(box,"สร้างสำนัก • ฝึกศิษย์ • ฝึกปราณ",22)
-	label(box,"เข้าสู่ระบบเพื่อเก็บสำนักออนไลน์ข้ามอุปกรณ์")
-	var email=LineEdit.new();email.placeholder_text="อีเมล";email.custom_minimum_size.y=48;box.add_child(email)
-	var password=LineEdit.new();password.placeholder_text="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)";password.secret=true;password.custom_minimum_size.y=48;box.add_child(password)
-	button(box,"เข้าสู่ระบบ",func(): api.login(email.text.strip_edges(),password.text))
-	button(box,"สมัครบัญชี",func():
-		if password.text.length()<8:message("ตั้งรหัสผ่านอย่างน้อย 8 ตัวอักษร")
-		else:api.login(email.text.strip_edges(),password.text,true))
-	label(box,"รุ่นทดลองออนไลน์ • ต้องเชื่อมต่ออินเทอร์เน็ต",15)
+	auth_controls.clear()
+	var box=modal_box(Vector2(270,82),Vector2(740,547))
+	box.add_theme_constant_override("separation",6)
+	label(box,"XIAN OF CLANS",30)
+	label(box,"สมัครบัญชีใหม่" if auth_signup else "เข้าสู่ระบบ • ใช้บัญชีอีเมลเดิมจากวิถีเซียนได้",20)
+	var email=LineEdit.new();email.placeholder_text="อีเมล เช่น name@example.com";email.text=saved_email;email.virtual_keyboard_type=LineEdit.KEYBOARD_TYPE_EMAIL_ADDRESS;email.custom_minimum_size.y=46;box.add_child(email)
+	var password=LineEdit.new();password.placeholder_text="รหัสผ่าน";password.secret=true;password.custom_minimum_size.y=46;box.add_child(password)
+	var confirm=LineEdit.new();confirm.placeholder_text="ยืนยันรหัสผ่าน (อย่างน้อย 8 ตัวอักษร)";confirm.secret=true;confirm.custom_minimum_size.y=46;box.add_child(confirm);confirm.visible=auth_signup
+	auth_controls.append_array([email,password,confirm])
+	auth_status=label(box,"กรอกอีเมลและรหัสผ่านเพื่อเริ่มต้น",17)
+	auth_status.custom_minimum_size.y=62
+	auth_status.add_theme_color_override("font_color",Color("ffe7a5"))
+	var submit=func():
+		if auth_signup and password.text != confirm.text: message("รหัสผ่านทั้งสองช่องไม่ตรงกัน"); return
+		api.login(email.text,password.text,auth_signup)
+	auth_controls.append(button(box,"สมัครบัญชี" if auth_signup else "เข้าสู่ระบบ",submit))
+	password.text_submitted.connect(func(_value): submit.call())
+	confirm.text_submitted.connect(func(_value): submit.call())
+	auth_controls.append(button(box,"มีบัญชีแล้ว • กลับเข้าสู่ระบบ" if auth_signup else "ยังไม่มีบัญชี • สมัครใหม่",func():auth_signup=not auth_signup;show_login(email.text)))
+	auth_controls.append(button(box,"เข้าสู่ระบบด้วย Google",func():api.google_login()))
+	auth_controls.append(button(box,"ส่งอีเมลยืนยันอีกครั้ง",func():api.resend_confirmation(email.text)))
+	label(box,"หลังยืนยันอีเมล ให้กลับมาเข้าสู่ระบบในเกม • ต้องเชื่อมต่ออินเทอร์เน็ต",15)
 func show_create():
 	if mode=="create":return
 	mode="create"

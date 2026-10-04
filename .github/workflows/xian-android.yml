@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main, feature/xian-of-clans]
-    paths: ['xian/**', 'backend/**', '.github/workflows/xian-android.yml']
+    paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'backend/**', '.github/workflows/xian-android.yml']
   pull_request:
-    paths: ['xian/**', 'backend/**', '.github/workflows/xian-android.yml']
+    paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'backend/**', '.github/workflows/xian-android.yml']
 permissions:
   contents: read
 jobs:
@@ -18,6 +18,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install engine and Android templates
         run: |
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -O /tmp/godot.zip
@@ -26,8 +28,11 @@ jobs:
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -O /tmp/templates.zip
           unzip -q /tmp/templates.zip -d /tmp/templates
           mkdir -p ~/.local/share/godot/export_templates/4.4.1.stable
-          cp /tmp/templates/templates/android*.apk ~/.local/share/godot/export_templates/4.4.1.stable/
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.1' 'platform-tools'
+          cp /tmp/templates/templates/android* ~/.local/share/godot/export_templates/4.4.1.stable/
+          mkdir -p xian/android/build
+          unzip -q /tmp/templates/templates/android_source.zip -d xian/android/build
+          python3 tools/prepare_xian_android.py
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.1' 'platform-tools' 'ndk;23.2.8568313'
           mkdir -p ~/.config/godot ~/.android
           cat > ~/.config/godot/editor_settings-4.4.tres <<SETTINGS
           [gd_resource type="EditorSettings" format=3]
@@ -51,6 +56,9 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' import.log; then exit 1; fi
           godot --headless --path xian --script res://tests/smoke.gd 2>&1 | tee smoke.log
           grep XIAN_SMOKE_PASSED smoke.log
+          godot --headless --path xian --script res://tests/auth.gd 2>&1 | tee auth.log
+          grep XIAN_AUTH_PASSED auth.log
+          if grep -E 'SCRIPT ERROR|Parse Error' auth.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' smoke.log; then exit 1; fi
       - name: Export Android
         env:
