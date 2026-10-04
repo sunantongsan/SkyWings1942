@@ -13,21 +13,28 @@ var revision=0
 func setup(level: int):
 	tier=clampi(level,1,12);buildings.clear();units.clear();shots.clear()
 	reserve=[12+int(tier/4)*2,6+int(tier/6),4];elapsed=0;started=false;finished=false;revision=0
-	add_building("hall",Vector2i(8,8),850+90*tier)
-	for p in [Vector2i(6,6),Vector2i(9,9)]:add_building("tower",p,220+50*tier)
-	if tier>=3:add_building("tower",Vector2i(9,6),220+50*tier)
-	if tier>=5:add_building("ward",Vector2i(6,9),280+65*tier)
-	if tier>=8:add_building("ward",Vector2i(8,5),280+65*tier)
-	if tier>=10:add_building("tower",Vector2i(5,8),220+50*tier)
-	for p in [Vector2i(3,7),Vector2i(12,8),Vector2i(7,12),Vector2i(8,3)]:
-		add_building(["tank","granary","crystal","kitchen"][buildings.size()%4],p,140+20*tier)
+	add_building("hall",Vector2i(8,7),850+90*tier)
+	for pos in [Vector2i(5,6),Vector2i(10,9)]:add_building("tower",pos,220+50*tier)
+	if tier>=3:add_building("tower",Vector2i(10,5),220+50*tier)
+	if tier>=5:add_building("ward",Vector2i(5,9),280+65*tier)
+	if tier>=8:add_building("ward",Vector2i(9,6),280+65*tier)
+	if tier>=10:add_building("tower",Vector2i(8,10),220+50*tier)
+	var resources=[Vector2i(3,7),Vector2i(12,8),Vector2i(7,12),Vector2i(8,3)]
+	for i in range(resources.size()):add_building(["tank","granary","crystal","kitchen"][i],resources[i],140+20*tier)
+	# Complete connected perimeter; early bases teach entrances, later bases have compartments.
 	for x in range(4,12):
 		for y in range(4,12):
 			if x in [4,11] or y in [4,11]:
 				if tier<=2 and (x==7 or y==7):continue
 				add_building("wall",Vector2i(x,y),65+18*tier)
-	if tier>=7:
-		for p in [Vector2i(7,6),Vector2i(7,7),Vector2i(7,9),Vector2i(8,7),Vector2i(9,7)]:add_building("wall",p,65+18*tier)
+	if tier>=5:
+		for y in range(5,11):
+			if y!=7:add_building("wall",Vector2i(7,y),65+18*tier)
+	if tier>=9:
+		for x in [5,6,8,9,10]:add_building("wall",Vector2i(x,8),65+18*tier)
+	# Alternate layout orientation without changing deterministic difficulty.
+	for b in buildings:
+		for turn in range((tier-1)%4):b.pos=Vector2(15-b.pos.y,b.pos.x)
 	grid.region=Rect2i(0,0,16,16);grid.cell_size=Vector2.ONE
 	grid.diagonal_mode=AStarGrid2D.DIAGONAL_MODE_NEVER;grid.update();rebuild_grid()
 func add_building(kind: String, p: Vector2i, hp: float):
@@ -43,7 +50,7 @@ func deploy(kind: int, pos: Vector2i) -> bool:
 	if finished or kind<0 or kind>2 or reserve[kind]<=0 or not can_deploy(pos):return false
 	reserve[kind]-=1;started=true
 	var hp=[190.0,140.0,440.0][kind]
-	units.append({"kind":kind,"pos":Vector2(pos),"hp":hp,"max_hp":hp,"cooldown":0.0,"think":0.0,"target":{},"path":PackedVector2Array(),"revision":-1})
+	units.append({"kind":kind,"pos":Vector2(pos),"hp":hp,"max_hp":hp,"cooldown":0.0,"think":0.0,"target":{},"path":PackedVector2Array(),"revision":-1,"windup":0.0,"pending_target":{},"moving":false})
 	return true
 func route_to(unit: Dictionary, target: Dictionary) -> PackedVector2Array:
 	var start=Vector2i(unit.pos.round());start=start.clamp(Vector2i.ZERO,Vector2i(15,15))
@@ -85,8 +92,13 @@ func step(dt: float):
 	if not started or finished:return
 	elapsed+=dt
 	for u in units:
+		u.moving=false
 		if u.hp<=0:continue
 		u.cooldown-=dt;u.think-=dt
+		if u.windup>0:
+			u.windup-=dt
+			if u.windup<=0 and not u.pending_target.is_empty():damage_building(u.pending_target,[30.0,43.0,65.0][u.kind])
+			continue
 		if u.target.is_empty() or u.target.get("hp",0)<=0 or u.revision!=revision or u.think<=0:
 			choose_target(u);u.think=1.5
 		if u.target.is_empty():continue
@@ -95,14 +107,15 @@ func step(dt: float):
 		if distance<=reach:
 			if u.cooldown<=0:
 				u.cooldown=[0.8,1.1,1.2][u.kind]
-				shots.append({"from":u.pos,"to":u.target.pos,"kind":u.kind,"enemy":false})
-				damage_building(u.target,[30.0,43.0,65.0][u.kind])
+				shots.append({"from":u.pos,"to":u.target.pos,"kind":u.kind,"enemy":false,"unit":units.find(u)})
+				u.pending_target=u.target;u.windup=0.3
 		else:
 			var target: Vector2=u.target.pos
 			if u.kind==0:
 				while not u.path.is_empty() and u.pos.distance_to(u.path[0])<0.05:u.path.remove_at(0)
 				if u.path.is_empty():continue
 				target=u.path[0]
+			u.moving=true
 			u.pos=u.pos.move_toward(target,[1.3,1.7,1.4][u.kind]*dt)
 	for b in buildings:
 		if b.hp<=0 or not b.kind in ["tower","ward"]:continue

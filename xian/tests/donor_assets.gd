@@ -15,6 +15,7 @@ func run():
   assert(player.has_animation("movement/walk_fwd"))
   await process_frame;await process_frame
   assert(player.is_playing())
+  assert(model.find_child("SwordHand",true,false)!=null)
   model.queue_free()
  await process_frame
  print("XIAN_DONOR_ASSETS_PASSED");quit()

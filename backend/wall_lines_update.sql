@@ -1,55 +1,4 @@
--- Xian of Clans: isolated, server-authoritative prototype. No changes to other games.
-create schema if not exists xian_private;
-revoke all on schema xian_private from public, anon;
-grant usage on schema xian_private to authenticated;
-create table if not exists xian_private.players (
- user_id uuid primary key references auth.users(id) on delete cascade,
- state jsonb not null, updated_at timestamptz not null default now()
-);
-alter table xian_private.players enable row level security;
-revoke all on xian_private.players from public,anon,authenticated;
-create table if not exists xian_private.receipts (
- user_id uuid not null references auth.users(id) on delete cascade,
- request_id uuid not null, created_at timestamptz not null default now(),
- primary key(user_id, request_id)
-);
-alter table xian_private.receipts enable row level security;
-revoke all on xian_private.receipts from public,anon,authenticated;
-
-create or replace function xian_private.catalog() returns jsonb language sql immutable set search_path='' as $$
-select '[
-{"id":"hall","name":"สำนักหลัก","water":100,"rice":100,"stone":10,"seconds":30,"limit":1},
-{"id":"well","name":"บ่อน้ำ","water":0,"rice":80,"stone":0,"seconds":10,"limit":3},
-{"id":"kitchen","name":"โรงอาหาร","water":80,"rice":0,"stone":0,"seconds":10,"limit":3},
-{"id":"tank","name":"ถังเก็บน้ำ","water":40,"rice":60,"stone":0,"seconds":15,"limit":3},
-{"id":"granary","name":"ยุ้งข้าว","water":60,"rice":40,"stone":0,"seconds":15,"limit":3},
-{"id":"spring","name":"น้ำพุวิญญาณ","water":100,"rice":100,"stone":0,"seconds":30,"limit":2},
-{"id":"crystal","name":"ผลึกกักเก็บ","water":80,"rice":80,"stone":5,"seconds":20,"limit":2},
-{"id":"servant","name":"บ้านศิษย์รับใช้","water":120,"rice":120,"stone":10,"seconds":20,"limit":10},
-{"id":"recruit","name":"โรงรับศิษย์","water":80,"rice":100,"stone":5,"seconds":20,"limit":2},
-{"id":"training","name":"ลานฝึกกระบี่","water":100,"rice":100,"stone":10,"seconds":30,"limit":1},
-{"id":"dorm","name":"บ้านพักศิษย์","water":80,"rice":80,"stone":5,"seconds":15,"limit":4},
-{"id":"tower","name":"หอคอยธนู","water":80,"rice":80,"stone":10,"seconds":20,"limit":8},
-{"id":"ward","name":"หอค่ายกล","water":150,"rice":150,"stone":30,"seconds":60,"limit":4},
-{"id":"wall","name":"กำแพง","water":5,"rice":5,"stone":0,"seconds":0,"limit":80}
-]'::jsonb $$;
-
--- Width is explicit on migrated courtyards. Legacy packed bases keep 1x1
--- until a free 2x2 location exists; no building or army is deleted.
-create or replace function xian_private.free_plot(bs jsonb, px int, py int, width int, excluded int)
-returns boolean language sql immutable set search_path='' as $$
- select px>=0 and py>=0 and px+width<=16 and py+width<=16 and not exists (
- select 1 from jsonb_array_elements(bs) with ordinality q(v,i)
- where i-1<>excluded
- and px < (v->>'x')::int + case when v->>'id'='training' then coalesce((v->>'size')::int,1) else 1 end
- and px+width > (v->>'x')::int
- and py < (v->>'y')::int + case when v->>'id'='training' then coalesce((v->>'size')::int,1) else 1 end
- and py+width > (v->>'y')::int
- )
-$$;
-revoke all on function xian_private.free_plot(jsonb,int,int,int,int) from public,anon,authenticated;
-
--- Contiguous straight wall run, selected through a single owned anchor index.
+-- v37: atomic wall row construction, rotation and movement.
 create or replace function xian_private.wall_run(bs jsonb, anchor int)
 returns int[] language plpgsql immutable set search_path='' as $$
 declare b jsonb:=bs->anchor; result int[]:=array[anchor]; axis int; horizontal bool; vertical bool;
@@ -373,7 +322,3 @@ end; $$;
 revoke all on function xian_private.catalog() from public,anon,authenticated;
 revoke all on function xian_private.act(text,jsonb,uuid) from public,anon;
 grant execute on function xian_private.act(text,jsonb,uuid) to authenticated;
-create or replace function public.xian_action(p_action text,p_args jsonb,p_request uuid)
-returns jsonb language sql security invoker set search_path='' as $$ select xian_private.act(p_action,p_args,p_request) $$;
-revoke all on function public.xian_action(text,jsonb,uuid) from public,anon;
-grant execute on function public.xian_action(text,jsonb,uuid) to authenticated;

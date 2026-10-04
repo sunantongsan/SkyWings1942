@@ -3,3 +3,7 @@ From sunantongsan/the-gang-2, prototypes/adventure-mode. See ADVENTURE_LICENSE.t
 Modifications: removed backpack mesh reference, normalized scale, shared walking/idle animations; recolored Hitherton house meshes for readability.
 Imperial China Palace and Garden: 3dassets.dev, CC0; subsets hall, pavilion, gate, moon_gate, wall from The Gang. glTF generator metadata records provenance.
 GhostMatch3: sunantongsan/GhostMatch3, commit d3b2f0c51a3ea5aefddac81351c30f2a65ae9a1f. Original 120-level Canvas gameplay and image assets. Adapted Activity host, profile-local preferences, back button, disabled ad provider calls. Asset checksums: native/xian/ghost-source.json.
+
+Update 0.37: Quaternius Ultimate Monsters, CC0-1.0, https://quaternius.com/packs/ultimatemonsters.html. Dragon_Evolved and its original Flying_Idle / Fast_Flying / Headbutt animations are the same assets listed in The Gang's monster_assets.json. Mirrored model revision and checksum are recorded in SOURCES.json.
+Godette sword combat animation by Easter Egg Productions: skeleton tracks reused; game callbacks, audio and root translation removed. Sword model attached to the original prop.R grip bone; blade silhouette enlarged and recolored for mobile viewing.
+Wall model from Imperial China Palace and Garden: split into joining half-spans with corner posts for continuous walls.

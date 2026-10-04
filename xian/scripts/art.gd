@@ -30,6 +30,7 @@ func roof(parent: Node3D, y: float, width: float, color: String):
 		box(parent,Vector3(x*width*0.73,y-0.28,0),Vector3(0.18,0.3,width*1.2),color).rotation_degrees.z = x*20
 var scene_cache: Dictionary = {}
 var walk_library: AnimationLibrary
+var combat_library: AnimationLibrary
 var house_meshes: Dictionary = {}
 func source_scene(path: String) -> PackedScene:
 	if not scene_cache.has(path):scene_cache[path]=load("res://assets/donor/"+path)
@@ -95,7 +96,21 @@ func courtyard(level: int) -> Node3D:
 	box(root,Vector3(0,0.11,0),Vector3(0.08,0.015,1.5),"ece4c9")
 	box(root,Vector3(0,0.11,0.45),Vector3(0.55,0.015,0.08),"ece4c9")
 	return root
+func wall(mask: int=0, rotation: int=0, level: int=1) -> Node3D:
+	var root=Node3D.new();root.set_meta("donor_building",true);root.set_meta("wall_mask",mask)
+	if mask==0:mask=5 if rotation%2==0 else 10
+	# Half spans meet exactly on the shared cell boundary, including corners/T junctions.
+	for i in range(4):
+		if not mask & (1<<i):continue
+		var segment=donor("wall.gltf",3.04,"",2.3)
+		segment.scale.x=0.5;segment.rotation.y=i*PI/2
+		segment.position=Vector3.RIGHT.rotated(Vector3.UP,i*PI/2)*0.75;root.add_child(segment)
+	box(root,Vector3(0,0.88,0),Vector3(0.6,1.76,0.6),"e4ddc5")
+	box(root,Vector3(0,1.82,0),Vector3(0.76,0.15,0.76),"537c73" if level<5 else "b59753")
+	cone(root,Vector3(0,2.0,0),0.52,0.08,0.24,"d1b970",4).rotation.y=PI/4
+	return root
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
+	if kind=="wall":return wall(0,0,level)
 	if kind=="training":return courtyard(level)
 	var mapping={"hall":["hall.gltf",""],"recruit":["gate.gltf",""],"dorm":["hitherton_buildings.glb","House_4"],"servant":["hitherton_buildings.glb","House Player"],"kitchen":["hitherton_buildings.glb","shop"],"granary":["hitherton_buildings.glb","House_2"],"well":["pavilion.gltf",""],"tank":["hitherton_buildings.glb","House_3"],"spring":["moon_gate.gltf",""],"crystal":["moon_gate.gltf",""],"tower":["gate.gltf",""],"ward":["pavilion.gltf",""],"wall":["wall.gltf",""]}
 	var spec=mapping.get(kind,mapping.hall)
@@ -113,28 +128,57 @@ func building(kind: String, level: int, fill = 0.5) -> Node3D:
 		for i in range(3):cone(root,Vector3(-0.6+i*0.5,0.27,-1),0.26,0.2,0.5,"d8c58e",8)
 	if kind=="kitchen":cone(root,Vector3(0.8,0.3,-1),0.35,0.4,0.55,"535e64",10)
 	return root
-func person(kind: int) -> Node3D:
-	var root = Node3D.new()
-	var color = "896846" if kind==0 else "74b7d2" if kind==1 else "c4ae70"
+func person(kind: int, armed: bool=true) -> Node3D:
+	var root=Node3D.new()
 	if kind==2:
-		box(root,Vector3(0,0.55,0),Vector3(0.55,0.5,1.1),"e8ddb4")
-		box(root,Vector3(0,0.85,-0.55),Vector3(0.55,0.5,0.45),"e8ddb4")
-		for x in [-0.2,0.2]:
-			for z in [-0.4,0.4]: box(root,Vector3(x,0.22,z),Vector3(0.15,0.45,0.15),"b19b65")
+		var model=source_scene("Dragon_Evolved.gltf").instantiate();root.add_child(model)
+		var bounds=model_bounds(root);var factor=3.5/maxf(bounds.size.x,0.01)
+		model.scale=Vector3.ONE*factor;model.position.y=-bounds.position.y*factor
+		var player=model.find_child("AnimationPlayer",true,false)
+		root.set_meta("anim_player",player);root.set_meta("idle_clip","Flying_Idle");root.set_meta("walk_clip","Fast_Flying");root.set_meta("attack_clip","Headbutt");root.set_meta("donor_beast",true)
+		for name in ["Flying_Idle","Fast_Flying"]:player.get_animation(name).loop_mode=Animation.LOOP_LINEAR
 	else:
 		var model=source_scene("godette.glb").instantiate();root.add_child(model)
-		var bounds=model_bounds(root);var factor=1.6/maxf(bounds.size.y,0.01)
+		var bounds=model_bounds(root);var factor=2.15/maxf(bounds.size.y,0.01)
 		model.scale=Vector3.ONE*factor;model.position.y=-bounds.position.y*factor
 		var player=model.get_node("AnimationPlayer")
 		if walk_library==null:
-			var animations=source_scene("animset_walk_jog_run.glb").instantiate()
-			walk_library=AnimationLibrary.new()
+			var animations=source_scene("animset_walk_jog_run.glb").instantiate();walk_library=AnimationLibrary.new()
 			for name in ["walk_fwd","idle"]:
-				var anim=animations.get_node("AnimationPlayer").get_animation(name).duplicate();anim.loop_mode=Animation.LOOP_LINEAR;walk_library.add_animation(name,anim)
+				var anim=animations.get_node("AnimationPlayer").get_animation(name).duplicate();anim.loop_mode=Animation.LOOP_LINEAR
+				for track in range(anim.get_track_count()-1,-1,-1):
+					if str(anim.track_get_path(track)).ends_with(":Root"):anim.remove_track(track)
+				walk_library.add_animation(name,anim)
 			animations.free()
-		player.add_animation_library("movement",walk_library)
-		player.play("movement/idle" if kind==1 else "movement/walk_fwd")
-		root.set_meta("donor_character",true)
+		if combat_library==null:
+			combat_library=AnimationLibrary.new()
+			for name in ["combat_attack_light_01","combat_idle_sword_1h"]:
+				var anim=load("res://assets/donor/"+name+".tres").duplicate()
+				for i in range(anim.get_track_count()-1,-1,-1):
+					if str(anim.track_get_path(i)).ends_with(":Root"):anim.remove_track(i)
+				anim.loop_mode=Animation.LOOP_NONE if name=="combat_attack_light_01" else Animation.LOOP_LINEAR
+				combat_library.add_animation(name,anim)
+		player.add_animation_library("movement",walk_library);player.add_animation_library("combat",combat_library)
+		root.set_meta("donor_character",true);root.set_meta("anim_player",player)
+		root.set_meta("idle_clip","combat/combat_idle_sword_1h" if armed else "movement/idle")
+		root.set_meta("walk_clip","combat/combat_idle_sword_1h" if kind==1 else "movement/walk_fwd");root.set_meta("attack_clip","combat/combat_attack_light_01")
+		if armed:
+			var skeleton=model.get_node("char/Skeleton3D")
+			var hand=BoneAttachment3D.new();hand.name="SwordHand";hand.bone_name="prop.R";skeleton.add_child(hand)
+			var sword=source_scene("godette_sword.glb").instantiate();sword.name="HeldSword";sword.scale=Vector3(0.62,0.29,0.55);sword.rotation.x=PI/2;sword.position=Vector3.ZERO;hand.add_child(sword)
+			for mesh in sword.find_children("*","MeshInstance3D",true,false):
+				for surface in range(mesh.mesh.get_surface_count()):mesh.set_surface_override_material(surface,material(["738fa9","b99444","4d3a30"][mini(surface,2)]))
 		if kind==1:
-			var sword=donor("godette_sword.glb",1.7,"",0.25);root.add_child(sword);sword.rotation_degrees.z=90;sword.position.y=0.04
+			var sword=source_scene("godette_sword.glb").instantiate();root.add_child(sword);sword.scale=Vector3(1.6,0.48,0.9);sword.rotation.x=PI/2;sword.position=Vector3(0,0.04,-0.8)
+			for mesh in sword.find_children("*","MeshInstance3D",true,false):mesh.material_override=material("8ba9bb")
+	pose(root,"idle")
 	return root
+func pose(root: Node3D, state: String, attack_duration: float=0.8):
+	if not root.has_meta("anim_player"):return
+	var player: AnimationPlayer=root.get_meta("anim_player")
+	if state!="attack" and root.get_meta("attacking",false) and player.is_playing():return
+	var clip: String=root.get_meta(state+"_clip",root.get_meta("idle_clip"))
+	if state=="attack":
+		root.set_meta("attacking",true);player.play(clip,0.08,player.get_animation(clip).length/maxf(0.1,attack_duration));player.seek(0,true)
+	elif player.current_animation!=clip or not player.is_playing():
+		root.set_meta("attacking",false);player.play(clip,0.15,1.0)

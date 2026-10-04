@@ -1,5 +1,6 @@
 extends Node3D
 const Art = preload("res://scripts/art.gd")
+const Walls=preload("res://scripts/wall_layout.gd")
 const API = preload("res://scripts/api.gd")
 var practice: Node3D
 var art = Art.new()
@@ -21,6 +22,11 @@ var chosen_map = "bamboo"
 var chosen_build = ""
 var selected = -1
 var moving = false
+var wall_group: Array=[]
+var wall_start=Vector2i(-1,-1)
+var wall_cells: Array=[]
+var wall_axis=-1
+var wall_preview_key=""
 var match_pick = -1
 var server_time = 0.0
 var since_sync = 0.0
@@ -67,12 +73,12 @@ func _ready():
 	api.auth_notice.connect(message)
 	api.auth_working.connect(auth_loading)
 	api.authenticated.connect(func(): message("เชื่อมต่อแล้ว กำลังเปิดสำนัก…"))
-	var light = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-55,-35,0); light.light_energy = 1.2; add_child(light)
+	var light = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-55,-35,0); light.light_energy = 0.85;light.shadow_enabled=true;light.directional_shadow_max_distance=100; add_child(light)
 	var env = WorldEnvironment.new(); var e = Environment.new()
 	e.background_mode = Environment.BG_COLOR; e.background_color = Color("aec7bf")
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color = Color("d9e4dc"); e.ambient_light_energy = 0.75
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color = Color("d9e4dc"); e.ambient_light_energy = 0.55
 	env.environment=e; add_child(env)
-	camera = Camera3D.new(); camera.projection = Camera3D.PROJECTION_ORTHOGONAL; camera.size=48; camera.far=300; add_child(camera)
+	camera = Camera3D.new(); camera.projection = Camera3D.PROJECTION_ORTHOGONAL; camera.size=34; camera.far=300;camera.h_offset=6; add_child(camera)
 	position_camera()
 	terrain=Node3D.new(); add_child(terrain)
 	world=Node3D.new(); add_child(world)
@@ -189,7 +195,7 @@ func navigate(target: String):
 	if state.is_empty():message("กรุณาเข้าสู่ระบบและตั้งสำนักก่อน");return
 	if api.busy:return
 	if battle_visual and target!="raid":battle_visual=false;draw_base()
-	mode=target;chosen_build="";moving=false;clear_preview();close_modal()
+	mode=target;chosen_build="";moving=false;wall_group.clear();clear_preview();close_modal()
 	if target=="match":show_match()
 	elif target=="raid" and not state.has("raid"):api.action("scout")
 	elif target=="raid" and state.has("raid"):draw_battle();show_side()
@@ -204,6 +210,11 @@ func show_side():
 		"build":
 			label(side,"เลื่อนขึ้นลงเพื่อเลือก\nลากรูปอาคารออกมาวางบนพื้น",20)
 			button(side,"ยกเลิกการวาง",func():chosen_build="";clear_preview())
+			if chosen_build=="wall":
+				label(side,"ลากบนพื้นเพื่อสร้างกำแพงเป็นแนว
+เชื่อมมุมอัตโนมัติ • 5 น้ำ / 5 ข้าวต่อช่อง",16)
+				button(side,"หมุนแนวลาก 90°",func():wall_axis=1 if wall_axis<=0 else 0;clear_preview();message("แนวตั้ง" if wall_axis==1 else "แนวนอน"))
+				button(side,"ลากได้ทั้งสองแนว",func():wall_axis=-1;clear_preview())
 			for c in catalog:
 				var card=button(side,"%s\nน้ำ %d ข้าว %d\nหิน %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds],choose_build.bind(c.id))
 				card.icon=building_icon(c.id);card.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;card.expand_icon=true;card.add_theme_constant_override("icon_max_width",76);card.custom_minimum_size=Vector2(272,100)
@@ -213,7 +224,7 @@ func show_side():
 			label(side,"จุ 20 หน่วยต่อระดับ • สูงสุด 200
 สร้างลานฝึกและโรงรับศิษย์ก่อน",16)
 			var portrait=TextureRect.new();portrait.texture=load("res://assets/buildings/disciple.png");portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(240,125);side.add_child(portrait)
-			var names=["ศิษย์ชั้นต้น","ศิษย์ฝึกปราณ","พยัคฆ์วิญญาณ"]
+			var names=["ศิษย์ชั้นต้น","ศิษย์ฝึกปราณ","มังกรเทวะ"]
 			for i in range(3):
 				label(side,"%s: %d คน" % [names[i],int(state.army[i])])
 				button(side,"ฝึก • น้ำ %d ข้าว %d หิน %d" % [20*(i+1),30*(i+1),[0,8,20][i]],send.bind("train",{"type":i}))
@@ -243,7 +254,10 @@ func show_side():
 				else:
 					label(side,"อัปเกรด: น้ำ %d / ข้าว %d / หิน %d" % [int(c.water*pow(2,b.level)),int(c.rice*pow(2,b.level)),int(c.stone*pow(2,b.level))],16)
 					button(side,"อัปเกรด",send.bind("upgrade",{"index":selected}))
-				button(side,"ย้ายอาคาร",func():moving=true;message("ลากบนพื้นไปยังช่องสีเขียว แล้วปล่อยเพื่อย้าย"))
+				if b.id=="wall":
+					button(side,"หมุนแนวกำแพง 90°",send.bind("wall_edit",{"index":selected,"operation":"rotate"}))
+					button(side,"ย้ายทั้งแนวกำแพง",func():moving=true;wall_group=Walls.run_indices(state.buildings,selected);clear_preview();message("ลากแนวกำแพงไปยังพื้นที่สีเขียว"))
+				button(side,"ย้ายอาคาร",func():moving=true;wall_group.clear();clear_preview();message("ลากบนพื้นไปยังช่องสีเขียว แล้วปล่อยเพื่อย้าย"))
 			else:
 				label(side,"สำนักของคุณ",27)
 				label(side,"1. สร้างบ่อน้ำและโรงอาหาร\n2. สร้างโกดังเพิ่มความจุ\n3. รับศิษย์และบุกสำนัก\n4. เล่นจับคู่ระหว่างรอ",20)
@@ -257,7 +271,8 @@ func send(action: String,args: Dictionary):api.action(action,args)
 func building_icon(kind: String) -> Texture2D:
 	return load("res://assets/buildings/"+kind+".png")
 func choose_build(kind: String):
-	chosen_build=kind;moving=false;clear_preview()
+	chosen_build=kind;moving=false;wall_group.clear();clear_preview()
+	if kind=="wall":show_side()
 	message("ลากบนพื้นเพื่อวาง "+find_catalog(kind).get("name",kind)+" • เขียว: วางได้ / แดง: วางไม่ได้")
 func find_catalog(kind: String) -> Dictionary:
 	for c in catalog:
@@ -303,8 +318,13 @@ func show_credits():
 	label(box,"เครดิตทรัพยากร",28)
 	var logo=TextureRect.new();logo.texture=load("res://assets/donor/eep_logo.png");logo.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;logo.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;logo.custom_minimum_size=Vector2(280,110);box.add_child(logo)
 	label(box,"Godette / Adventure Mode / Dress Up\nEaster Egg Productions — CC BY 4.0 และเงื่อนไข Dress Up\nดัดแปลง: ถอดเป้ ปรับขนาด และใช้แอนิเมชันเดิน",17)
+	label(box,"Quaternius Ultimate Monsters — CC0
+มังกรและแอนิเมชันจาก The Gang",17)
 	label(box,"Imperial China Palace and Garden — 3dassets.dev (CC0)\nโมเดลนำมาจาก The Gang\nGhostMatch3 — sunantongsan",17)
 	button(box,"กลับสำนัก",close_modal)
+func base_model(b: Dictionary, buildings: Array, fill=0.5) -> Node3D:
+	if b.id=="wall":return art.wall(Walls.mask(buildings,Walls.cell(b)),int(b.get("rotation",0)),int(b.level))
+	return art.building(b.id,int(b.level),fill)
 func cell_pos(x: float,y: float) -> Vector3:return Vector3((x-7.5)*3,0,(y-7.5)*3)
 func draw_terrain(kind: String):
 	map_drawn=kind;clear(terrain)
@@ -332,18 +352,18 @@ func draw_base():
 	for b in state.get("buildings",[]):
 		var resource={"tank":"water","granary":"rice","crystal":"stone"}.get(b.id,"")
 		var fill=float(state.get(resource,0))/maxf(1,float(caps.get(resource,1000)))
-		var model=art.building(b.id,int(b.level),fill);model.position=building_position(b);world.add_child(model)
+		var model=base_model(b,state.buildings,fill);model.position=building_position(b);world.add_child(model)
 		if b.id=="training" and footprint(b)==1:model.scale=Vector3(0.49,1,0.49)
 		var body=StaticBody3D.new();body.set_meta("index",state.buildings.find(b));model.add_child(body)
 		var collision=CollisionShape3D.new();var shape=BoxShape3D.new();shape.size=Vector3(footprint(b)*3-0.2,3.4,footprint(b)*3-0.2);collision.shape=shape;collision.position.y=1.7;body.add_child(collision)
 		if float(b.finish)>now_time():
 			art.box(model,Vector3(0,0.4,1.25),Vector3(2.5,0.2,0.12),"deb264")
-			var worker=art.person(0);world.add_child(worker);actors.append({"node":worker,"from":cell_pos(5,7),"to":model.position+Vector3(1.1,0,1.1),"phase":actors.size(),"kind":0})
+			var worker=art.person(0,false);world.add_child(worker);actors.append({"node":worker,"from":cell_pos(5,7),"to":model.position+Vector3(1.1,0,1.1),"phase":actors.size(),"kind":0})
 		if b.id in ["well","kitchen","spring"] and int(b.level)>0:
 			var target={"well":"tank","kitchen":"granary","spring":"crystal"}[b.id]
 			for storage in state.buildings:
 				if storage.id==target and int(storage.level)>0:
-					var person=art.person(0);world.add_child(person)
+					var person=art.person(0,false);world.add_child(person)
 					art.box(person,Vector3(0.4,0.65,0),Vector3(0.35,0.4,0.35),"62b4c1" if b.id=="well" else "d2bb79")
 					actors.append({"node":person,"from":model.position+Vector3(1,0,0),"to":cell_pos(storage.x,storage.y)+Vector3(1,0,0),"phase":actors.size(),"kind":0});break
 	var yard: Dictionary={}
@@ -364,7 +384,7 @@ func world_area(pos: Vector2) -> bool:
 	return Rect2(0,82,950,500).has_point(pos)
 func clear_preview():
 	if is_instance_valid(preview):preview.queue_free()
-	preview=null;preview_ok=false;placement_drag=false
+	preview=null;preview_ok=false;placement_drag=false;wall_start=Vector2i(-1,-1);wall_cells.clear();wall_preview_key=""
 func footprint(b: Dictionary) -> int:
 	return int(b.get("size",2)) if b.id=="training" else 1
 func building_position(b: Dictionary) -> Vector3:
@@ -380,9 +400,30 @@ func valid_cell(cell: Vector2i) -> bool:
 	var rect=Rect2i(cell,Vector2i(size,size))
 	for i in range(state.get("buildings",[]).size()):
 		var b=state.buildings[i]
-		if moving and i==selected:continue
+		if moving and (i==selected or i in wall_group):continue
 		if rect.intersects(Rect2i(Vector2i(int(b.x),int(b.y)),Vector2i.ONE*footprint(b))):return false
 	return true
+func update_wall_preview():
+	if wall_start.x<0:wall_start=preview_cell
+	if not wall_group.is_empty():
+		wall_cells=[]
+		var delta=preview_cell-Walls.cell(state.buildings[selected])
+		for i in wall_group:wall_cells.append(Walls.cell(state.buildings[i])+delta)
+	else:wall_cells=Walls.line(wall_start,preview_cell,wall_axis)
+	preview_ok=true
+	for cell in wall_cells:
+		if not valid_cell(cell):preview_ok=false
+	var key=str(wall_cells)+str(preview_ok)
+	if key==wall_preview_key and is_instance_valid(preview):preview.show();return
+	wall_preview_key=key
+	if is_instance_valid(preview):preview.queue_free()
+	preview=Node3D.new();add_child(preview)
+	var proposed=state.buildings.duplicate(true)
+	for cell in wall_cells:proposed.append({"id":"wall","x":cell.x,"y":cell.y})
+	for cell in wall_cells:
+		art.box(preview,cell_pos(cell.x,cell.y)+Vector3(0,0.05,0),Vector3(2.98,0.1,2.98),"54dd7c" if preview_ok else "ed5555")
+		var model=art.wall(Walls.mask(proposed,cell),maxi(0,wall_axis));preview.add_child(model);model.position=cell_pos(cell.x,cell.y)
+	if wall_group.is_empty():message("กำแพง %d ช่อง • น้ำ %d / ข้าว %d • ปล่อยเพื่อสร้าง" % [wall_cells.size(),wall_cells.size()*5,wall_cells.size()*5])
 func update_preview(pos: Vector2):
 	if not world_area(pos):
 		preview_ok=false
@@ -391,6 +432,7 @@ func update_preview(pos: Vector2):
 	var hit=Plane(Vector3.UP,0).intersects_ray(camera.project_ray_origin(pos),camera.project_ray_normal(pos))
 	if hit==null:return
 	preview_cell=Vector2i(roundi(hit.x/3+7.5),roundi(hit.z/3+7.5))
+	if chosen_build=="wall" or not wall_group.is_empty():update_wall_preview();return
 	preview_ok=valid_cell(preview_cell)
 	if not is_instance_valid(preview):
 		preview=Node3D.new();add_child(preview)
@@ -403,7 +445,12 @@ func drop_build(pos: Vector2):
 	update_preview(pos)
 	if not preview_ok or api.busy:
 		message("วางไม่ได้: เลือกช่องว่างภายในสำนัก" if not preview_ok else "กำลังบันทึก กรุณารอสักครู่");return
-	if moving:
+	if not wall_group.is_empty():
+		api.action("wall_edit",{"index":selected,"operation":"move","x":preview_cell.x,"y":preview_cell.y});moving=false;wall_group.clear()
+	elif chosen_build=="wall":
+		var end: Vector2i=wall_cells[-1]
+		api.action("wall_line",{"x":wall_start.x,"y":wall_start.y,"end_x":end.x,"end_y":end.y,"rotation":maxi(0,wall_axis)})
+	elif moving:
 		api.action("move",{"index":selected,"x":preview_cell.x,"y":preview_cell.y});moving=false
 	else:api.action("build",{"type":chosen_build,"x":preview_cell.x,"y":preview_cell.y})
 	clear_preview()
@@ -448,7 +495,9 @@ func _input(event):
 				card_kind=card_at(event.position);card_origin=event.position;card_drag=false
 			if world_area(event.position) or not card_kind.is_empty():
 				fingers[event.index]=event.position
-				if fingers.size()==1:pan_start=event.position;dragging=false
+				if fingers.size()==1:
+					pan_start=event.position;dragging=false
+					if chosen_build=="wall" and world_area(event.position):update_preview(event.position);placement_drag=true
 				else:pinching=true;clear_preview();card_kind=""
 				if world_area(event.position):get_viewport().set_input_as_handled()
 		elif fingers.has(event.index):
@@ -529,11 +578,17 @@ func _process(delta):
 			var node=unit.node
 			node.position=unit.start.lerp(unit.target,clampf(progress*3,0,1))
 			node.position.y=(2.1 if unit.kind==1 else abs(sin(time*4+unit.phase))*0.25)
-			node.rotation.y=sin(time*9+unit.phase)*0.18 if progress>0.33 else 0
+			var direction=unit.target-unit.start
+			node.rotation.y=atan2(direction.x,direction.z)
+			if progress>0.33:
+				if not node.get_meta("next_strike",0.0)>time:
+					art.pose(node,"attack",0.85);node.set_meta("next_strike",time+1.0)
+			else:art.pose(node,"walk")
 	for actor in actors:
 		var f=(sin(time*0.5+actor.phase)+1)/2
 		var direction=(actor.to-actor.from)*(1.0 if cos(time*0.5+actor.phase)>=0 else -1.0)
 		if direction.length()>0.01:actor.node.rotation.y=atan2(direction.x,direction.z)
+		art.pose(actor.node,"walk" if actor.from.distance_to(actor.to)>1 else "idle")
 		actor.node.position=actor.from.lerp(actor.to,f)
 		actor.node.position.y=abs(sin(time*6+actor.phase))*0.08+(1.7 if actor.kind==1 else 0)
 	if is_instance_valid(clock_label) and not state.is_empty():
@@ -549,7 +604,7 @@ func draw_battle():
 		{"id":"tower","x":9,"y":8,"level":1},{"id":"granary","x":6,"y":6,"level":1},
 		{"id":"crystal","x":9,"y":6,"level":1},{"id":"tank","x":8,"y":6,"level":1}])
 	for b in buildings:
-		var model=art.building(b.id,int(b.level),0.85);model.position=building_position(b);world.add_child(model)
+		var model=base_model(b,enemy.buildings,0.85);model.position=building_position(b);world.add_child(model)
 		if b.id=="training" and footprint(b)==1:model.scale=Vector3(0.49,1,0.49)
 	for kind in range(3):
 		for i in range(mini(20,int(state.raid.army[kind]))):

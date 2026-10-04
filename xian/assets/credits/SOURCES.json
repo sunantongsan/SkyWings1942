@@ -2,5 +2,20 @@
   "the_gang_repository": "sunantongsan/the-gang-2",
   "godette_modification": "Removed backpack mesh reference; shared walk/idle animation library",
   "buildings": "Original Chinese hall/pavilion/gate/wall and Hitherton house geometry, recolored house surfaces",
-  "ghost_match3_commit": "d3b2f0c51a3ea5aefddac81351c30f2a65ae9a1f"
+  "ghost_match3_commit": "d3b2f0c51a3ea5aefddac81351c30f2a65ae9a1f",
+  "combat_donor_commit": "8b3a8aaff3eea57f0a209561b4e3781af004a57f",
+  "combat_modifications": "Skeleton-only sword attack/idle clips; removed game callbacks/audio and root motion; sword attached to prop.R grip bone; enlarged silhouettes",
+  "monster": {
+    "model": "Dragon_Evolved",
+    "source": "https://quaternius.com/packs/ultimatemonsters.html",
+    "license": "CC0-1.0",
+    "used_by": "the-gang-2/gang/monster_assets.json",
+    "mirror_revision": "87051774343f2a0df215639e8674178437228b71",
+    "sha256": "39ba6ea24b5f27acf68bbf4c19fe80ba070dbec167ff14bbe933453303426f5c",
+    "animations": [
+      "Flying_Idle",
+      "Fast_Flying",
+      "Headbutt"
+    ]
+  }
 }

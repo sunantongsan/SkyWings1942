@@ -11,10 +11,11 @@ func run():
  DirAccess.make_dir_recursive_absolute("res://build/review")
  await RenderingServer.frame_post_draw
  root.get_texture().get_image().save_png("res://build/review/practice.png")
- practice.start_level(8)
+ practice.start_level(8);practice.camera.size=64
  for kind in range(3):
   practice.selected_kind=kind
   for i in range(3):practice.place_at(practice.camera.unproject_position(practice.world_pos(Vector2(1,6+i))))
+ practice.camera.size=38
  for i in range(90):await process_frame
  await RenderingServer.frame_post_draw
  root.get_texture().get_image().save_png("res://build/review/practice-battle.png")
