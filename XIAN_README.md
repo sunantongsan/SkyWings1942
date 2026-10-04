@@ -1,4 +1,4 @@
-# Xian of Clans — playable online prototype v0.32
+# Xian of Clans — playable online prototype v0.36
 
 Open `xian/project.godot` in Godot 4.4.1. The new standalone entry point exports only Xian assets; Galaxy models/scripts remain in git history/workspace for reference and are not part of this APK. Package `com.xianofclans.strategy` installs separately from Galaxy to preserve the old save.
 
@@ -7,13 +7,13 @@ Open `xian/project.godot` in Godot 4.4.1. The new standalone entry point exports
 - Name your sect; choose bamboo forest or mountain plateau. Orthographic low-poly 3D, touch placement/moving, camera pan and zoom.
 - 14 building types, construction/upgrades with server timestamps and limited builders, builder houses unlock from 2 to 10 with hall level.
 - Water/rice/spirit stones with capacities and up to 8 hours of offline production, cosmetic porters, cloud persistence.
-- Three troop types and serial training queue, dorm capacity, higher-unit unlock requirements.
+- Three troop types and serial training queue, Sword Training Courtyard capacity, higher-unit unlock requirements.
 - Server-resolved automatic 25-second raids against bots and eligible player bases. Preview enemy resources, capped percentage loot, four-hour defense shield, 24-hour starter shield, shield removed on attack, defense report. Troops committed to a raid are consumed. Jade is never looted.
-- Server-owned 8x8 match-3 board, adjacent swaps, matching, gravity/cascades, 20 moves, 300-point goal; reshuffle costs one move. First 10 wins per Bangkok calendar day award 100 water, 100 rice, 2 jade, subject to storage limits.
+- Original GhostMatch3 Android minigame, local account-scoped progress; ads and sect rewards are not connected.
 - Daily check-in: 5 jade; every seventh cumulative check-in 20. Exchange jade for resources; finish construction for 1 jade per 5 minutes remaining.
 
 ## Explicit prototype limitations
-- Combat is a server-side power/defense simulation with cosmetic animation, not spatial troop AI or manual per-unit deployment. Air/wall/ward interactions affect server defense calculations. Beasts and disciples currently use simple original procedural models, not a finished animated reproduction of the provided portrait. The user's image is shown in recruitment UI as reference.
+- Online raids retain the server-side power/defense simulation. Offline practice has local spatial troop AI and per-unit deployment, with no online rewards. Human troops use animated Godette without a backpack; beasts use procedural animal geometry.
 - No live ad inventory, ad payouts, cash purchase or monetization is enabled. The ad button explicitly says unavailable. A verified provider callback and the owner's production IDs must be integrated before rewarded jade can be enabled.
 - No claim of production-scale/load validation. Backend uses player-row locks and per-account serialization. Public signup rate limits remain Supabase defaults. Profile and receipt retention/abuse monitoring need production review.
 - Email signup requires confirmation in the existing Supabase project. Existing authenticated accounts can sign in. New accounts are not auto-confirmed.
@@ -32,7 +32,7 @@ Open `xian/project.godot` in Godot 4.4.1. The new standalone entry point exports
 - Build pipeline: `.github/workflows/xian-android.yml`. Android SDK tools 35; prebuilt Godot template targets Android 34 (not a Play Store submission), Godot 4.4.1, JDK 17, arm64, Internet permission. Uses a debug signature; not a Play Store release signature.
 
 ## Asset provenance
-- Buildings, characters, icon and scenery: original procedural geometry / SVG.
+- Donor building/character provenance is in the 0.35 section and bundled credits. Courtyard, beast, icon and scenery use original procedural geometry / SVG.
 - `disciple-reference.jpg`: supplied by project owner in this conversation.
 - Noto Sans Thai: SIL Open Font License, included alongside font.
 
@@ -64,3 +64,14 @@ The old Godot match-3 screen is removed. Android opens the original GhostMatch3 
 Godette from The Gang replaces human disciples and carriers, with the backpack removed and the original walk/idle animations. Human flying units use the same character on a donor sword; divine-beast units retain their animal form. Buildings now use The Gang's Chinese palace/pavilion/gate/wall assets and Hitherton houses, with normalized footprints and purpose markers. House surfaces are recolored for small-screen contrast. Menus use freshly rendered model thumbnails.
 
 Credits/licenses are included in the APK and accessible from the sect panel. `native/xian/ghost-source.json` pins original Ghost art with SHA-256 hashes. `tools/prepare_xian_android.py` invokes `fetch_ghost_assets.py` before copying native sources/resources into the Android template. Native Ghost code compiles with the Android SDK and does not include an ad SDK.
+
+## Sword courtyard and offline practice 0.36
+
+- `training` keeps its stable database ID and becomes **ลานฝึกกระบี่** (Sword Training Courtyard). The old Arena mesh and thumbnail are replaced by an open stone 2×2 courtyard with dummies, sword rack, flags and visible garrison. Higher levels add rack swords; level 5 changes flag/border colors.
+- Level 1–10 capacity is 20, 40, 60, 80, 100, 120, 140, 160, 180, 200 units. Each troop occupies one slot; queued troops count toward the limit. Completed courtyard and recruitment gate are required. Dorms are residential buildings and no longer add combat slots. Existing troops/queues are never discarded if over capacity.
+- Client and server reject overlapping footprints and courtyard positions beyond cell 14. On sync, a legacy yard expands in place or moves to the nearest free 2×2 plot. If an old base has no free plot, it temporarily retains a compact 1×1 footprint and shows a relocation prompt; all buildings, levels, jobs and troops survive. Moving it requires a full 2×2 plot.
+- **บอทออฟไลน์** is available even at login. Twelve progressively defended bases, 180-second battles, tap green perimeter to deploy a selected unit. Ground units route around obstacles and breach walls; flying swords bypass walls and attack at range; divine beasts cross walls and prioritize defenses. Towers target ground/air; wards inflict splash damage with an air bonus.
+- Practice armies are supplied per base (22–30 units). The simulation runs locally at a fixed step, separate from online troops/economy. One star each for hall destruction, 50%, and 100% non-wall destruction. At least one star unlocks the next base. Best stars are saved on this device only. No Supabase login/network/reward call is needed.
+- `backend/courtyard_update.sql` is the deployed function-only migration. `backend/test_courtyard.sql` rolls back all fixtures and covers migration, collision, boundaries, 20/40 capacity, over-cap preservation, recruitment and full-board fallback. `tests/practice.gd` covers path obstruction, wall breach, air/beast targeting, combat damage and all 12 battle endings. `tests/capture_practice.gd` verifies login access, deployment, return and screenshots.
+- Android v36 remains a signed debug/sideload build, not a Play Store release. Desktop rendering and automated simulation pass; final touch feel and performance on the owner's physical phone remain to be tried.
+- Database advisory review: Xian tables intentionally deny direct access with RLS and no policies; only the authenticated dispatcher has access. Existing shared-project GraphQL notices on unrelated games and leaked-password protection remain outside this change. References: https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy and https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection

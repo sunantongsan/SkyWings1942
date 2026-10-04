@@ -70,8 +70,34 @@ func donor(path: String, width: float, part="", height_limit=5.0) -> Node3D:
 	scene.scale*=size
 	scene.position-=Vector3(bounds.get_center().x,bounds.position.y,bounds.get_center().z)*size
 	return out
+func courtyard(level: int) -> Node3D:
+	var root=Node3D.new();root.set_meta("courtyard",true)
+	# Open, ground-level 2x2 courtyard. No roof obscures the training floor.
+	box(root,Vector3(0,0.025,0),Vector3(5.85,0.05,5.85),"aba591")
+	for x in range(6):
+		for z in range(6):
+			box(root,Vector3(-2.42+x*0.97,0.065,-2.42+z*0.97),Vector3(0.91,0.03,0.91),"d0cbb7" if (x+z)%2==0 else "c1bea9")
+	for z in [-2.72,2.72]:box(root,Vector3(0,0.09,z),Vector3(5.7,0.08,0.12),"b59a53" if level<5 else "e0b94d")
+	for x in [-2.72,2.72]:box(root,Vector3(x,0.09,0),Vector3(0.12,0.08,5.7),"b59a53")
+	# Wooden practice dummies and a sword rack keep the central arena clear.
+	for x in [-1.9,0.0,1.9]:
+		cone(root,Vector3(x,0.75,-2.1),0.12,0.12,1.4,"856044",8)
+		box(root,Vector3(x,1,-2.1),Vector3(0.9,0.12,0.12),"987452")
+		cone(root,Vector3(x,1.6,-2.1),0.19,0.19,0.28,"c6a679",8)
+	for x in [-2.2,2.2]:
+		cone(root,Vector3(x,1,2.2),0.055,0.055,2,"72573e",6)
+		box(root,Vector3(x+0.28,1.7,2.2),Vector3(0.55,0.6,0.04),"467f99" if level<5 else "9c4152")
+	for i in range(mini(5,1+level/2)):
+		box(root,Vector3(-1.1+i*0.4,0.65,2.3),Vector3(0.06,0.9,0.05),"becdd1")
+		box(root,Vector3(-1.1+i*0.4,0.35,2.3),Vector3(0.25,0.05,0.08),"bb9a59")
+	box(root,Vector3(0,0.3,2.35),Vector3(2.6,0.12,0.12),"785c43")
+	cone(root,Vector3(0,0.092,0),1.05,1.05,0.018,"899c96",32)
+	box(root,Vector3(0,0.11,0),Vector3(0.08,0.015,1.5),"ece4c9")
+	box(root,Vector3(0,0.11,0.45),Vector3(0.55,0.015,0.08),"ece4c9")
+	return root
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
-	var mapping={"hall":["hall.gltf",""],"recruit":["gate.gltf",""],"dorm":["hitherton_buildings.glb","House_4"],"servant":["hitherton_buildings.glb","House Player"],"kitchen":["hitherton_buildings.glb","shop"],"granary":["hitherton_buildings.glb","House_2"],"training":["hitherton_buildings.glb","Arena"],"well":["pavilion.gltf",""],"tank":["hitherton_buildings.glb","House_3"],"spring":["moon_gate.gltf",""],"crystal":["moon_gate.gltf",""],"tower":["gate.gltf",""],"ward":["pavilion.gltf",""],"wall":["wall.gltf",""]}
+	if kind=="training":return courtyard(level)
+	var mapping={"hall":["hall.gltf",""],"recruit":["gate.gltf",""],"dorm":["hitherton_buildings.glb","House_4"],"servant":["hitherton_buildings.glb","House Player"],"kitchen":["hitherton_buildings.glb","shop"],"granary":["hitherton_buildings.glb","House_2"],"well":["pavilion.gltf",""],"tank":["hitherton_buildings.glb","House_3"],"spring":["moon_gate.gltf",""],"crystal":["moon_gate.gltf",""],"tower":["gate.gltf",""],"ward":["pavilion.gltf",""],"wall":["wall.gltf",""]}
 	var spec=mapping.get(kind,mapping.hall)
 	var root=donor(spec[0],2.7,spec[1],4.2)
 	root.set_meta("donor_building",true)

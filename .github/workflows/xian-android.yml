@@ -60,8 +60,11 @@ jobs:
           grep XIAN_AUTH_PASSED auth.log
           godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log
           grep XIAN_TOUCH_BUILD_PASSED touch.log
+          godot --headless --path xian --script res://tests/practice.gd 2>&1 | tee practice.log
+          grep -q XIAN_OFFLINE_PRACTICE_PASSED practice.log
           godot --headless --path xian --script res://tests/donor_assets.gd 2>&1 | tee donor.log
           grep XIAN_DONOR_ASSETS_PASSED donor.log
+          if grep -E 'SCRIPT ERROR|Parse Error' practice.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' donor.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' touch.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' auth.log; then exit 1; fi

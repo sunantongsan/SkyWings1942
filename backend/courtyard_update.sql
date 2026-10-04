@@ -1,21 +1,4 @@
--- Xian of Clans: isolated, server-authoritative prototype. No changes to other games.
-create schema if not exists xian_private;
-revoke all on schema xian_private from public, anon;
-grant usage on schema xian_private to authenticated;
-create table if not exists xian_private.players (
- user_id uuid primary key references auth.users(id) on delete cascade,
- state jsonb not null, updated_at timestamptz not null default now()
-);
-alter table xian_private.players enable row level security;
-revoke all on xian_private.players from public,anon,authenticated;
-create table if not exists xian_private.receipts (
- user_id uuid not null references auth.users(id) on delete cascade,
- request_id uuid not null, created_at timestamptz not null default now(),
- primary key(user_id, request_id)
-);
-alter table xian_private.receipts enable row level security;
-revoke all on xian_private.receipts from public,anon,authenticated;
-
+-- v36: courtyard footprint, capacity and safe legacy relocation.
 create or replace function xian_private.catalog() returns jsonb language sql immutable set search_path='' as $$
 select '[
 {"id":"hall","name":"สำนักหลัก","water":100,"rice":100,"stone":10,"seconds":30,"limit":1},
@@ -313,7 +296,3 @@ end; $$;
 revoke all on function xian_private.catalog() from public,anon,authenticated;
 revoke all on function xian_private.act(text,jsonb,uuid) from public,anon;
 grant execute on function xian_private.act(text,jsonb,uuid) to authenticated;
-create or replace function public.xian_action(p_action text,p_args jsonb,p_request uuid)
-returns jsonb language sql security invoker set search_path='' as $$ select xian_private.act(p_action,p_args,p_request) $$;
-revoke all on function public.xian_action(text,jsonb,uuid) from public,anon;
-grant execute on function public.xian_action(text,jsonb,uuid) to authenticated;

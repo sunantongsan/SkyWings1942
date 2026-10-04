@@ -10,6 +10,7 @@ func run():
  var environment=WorldEnvironment.new();var env=Environment.new();env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.ambient_light_color=Color.WHITE;env.ambient_light_energy=0.6;environment.environment=env;viewport.add_child(environment)
  var art=Art.new()
  for kind in KINDS:
+  camera.size=8.5 if kind=="training" else 5.8
   var model=art.building(kind,1,0.7);viewport.add_child(model)
   await process_frame;await process_frame;await RenderingServer.frame_post_draw
   viewport.get_texture().get_image().save_png("res://assets/buildings/"+kind+".png")

@@ -1,6 +1,7 @@
 extends Node3D
 const Art = preload("res://scripts/art.gd")
 const API = preload("res://scripts/api.gd")
+var practice: Node3D
 var art = Art.new()
 var api: Node
 var state: Dictionary = {}
@@ -89,7 +90,7 @@ func _ready():
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
-	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกศิษย์","train"],["บุกสำนัก","raid"],["Ghost Match3","match"],["หยก / เช็กอิน","jade"]]:
+	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกศิษย์","train"],["บุกสำนัก","raid"],["บอทออฟไลน์","practice"],["Ghost Match3","match"],["หยก / เช็กอิน","jade"]]:
 		button(row,pair[0],navigate.bind(pair[1]))
 	button(row,"−",zoom.bind(5.0));button(row,"+",zoom.bind(-5.0))
 	toast=Label.new();toast.position=Vector2(28,588);toast.size=Vector2(915,42);toast.add_theme_color_override("font_color",Color("ffe7a5"));toast.add_theme_color_override("font_shadow_color",Color.BLACK);toast.add_theme_constant_override("shadow_offset_x",2);toast.add_theme_constant_override("shadow_offset_y",2);ui.add_child(toast)
@@ -174,7 +175,17 @@ func now_time() -> float:return server_time+since_sync
 func update_top():
 	if state.is_empty():return
 	top.text="%s  |  น้ำ %d/%d   ข้าว %d/%d   หิน %d/%d   หยก %d" % [state.name,int(state.water),int(caps.get("water",1000)),int(state.rice),int(caps.get("rice",1000)),int(state.stone),int(caps.get("stone",100)),int(state.jade)]
+func open_practice():
+	if is_instance_valid(practice):return
+	clear_preview();fingers.clear();pinching=false;menu_touch=-1
+	ui.hide();world.hide();terrain.hide()
+	practice=load("res://scripts/offline_practice.gd").new();add_child(practice)
+	practice.closed.connect(func():
+		practice.queue_free();practice=null;ui.show();world.show();terrain.show();camera.make_current()
+		if not state.is_empty() and not api.busy:api.action("sync")
+	)
 func navigate(target: String):
+	if target=="practice":open_practice();return
 	if state.is_empty():message("กรุณาเข้าสู่ระบบและตั้งสำนักก่อน");return
 	if api.busy:return
 	if battle_visual and target!="raid":battle_visual=false;draw_base()
@@ -198,14 +209,16 @@ func show_side():
 				card.icon=building_icon(c.id);card.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;card.expand_icon=true;card.add_theme_constant_override("icon_max_width",76);card.custom_minimum_size=Vector2(272,100)
 				build_cards.append({"node":card,"kind":c.id})
 		"train":
-			label(side,"ฝึกกองกำลัง",25)
+			label(side,"ลานฝึกกระบี่",25)
+			label(side,"จุ 20 หน่วยต่อระดับ • สูงสุด 200
+สร้างลานฝึกและโรงรับศิษย์ก่อน",16)
 			var portrait=TextureRect.new();portrait.texture=load("res://assets/buildings/disciple.png");portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(240,125);side.add_child(portrait)
 			var names=["ศิษย์ชั้นต้น","ศิษย์ฝึกปราณ","พยัคฆ์วิญญาณ"]
 			for i in range(3):
 				label(side,"%s: %d คน" % [names[i],int(state.army[i])])
 				button(side,"ฝึก • น้ำ %d ข้าว %d หิน %d" % [20*(i+1),30*(i+1),[0,8,20][i]],send.bind("train",{"type":i}))
 			label(side,"คิวฝึก: %d คน\nขั้นต้น 10 วิ • ฝึกปราณ 20 วิ\nสัตว์เทวะ 30 วิ" % state.jobs.size())
-			label(side,"ฝึกปราณ: สำนัก 2 / โรงฝึก 1\nสัตว์เทวะ: สำนัก 3 / โรงฝึก 2",15)
+			label(side,"ฝึกปราณ: สำนัก 2 / ลานฝึกกระบี่ 1\nสัตว์เทวะ: สำนัก 3 / ลานฝึกกระบี่ 2",15)
 		"jade":
 			label(side,"หยกเซียน",26)
 			label(side,"เช็กอิน +5 หยก\nสะสมครบ 7 ครั้ง รับ +20")
@@ -219,6 +232,11 @@ func show_side():
 				var portrait=TextureRect.new();portrait.texture=building_icon(b.id);portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(180,140);side.add_child(portrait)
 				label(side,c.get("name",b.id),26)
 				label(side,"ระดับ %d" % int(b.level))
+				if b.id=="training":
+					label(side,"ลานเปิด 2×2 ช่อง
+ความจุ %d → %d หน่วย" % [int(b.level)*20,mini(200,(int(b.level)+1)*20)])
+					if int(b.get("size",2))==1:label(side,"พื้นที่แน่น: ย้ายลานไปช่องว่าง 2×2 เพื่อขยาย",16)
+					button(side,"ฝึกกองกำลัง",navigate.bind("train"))
 				clock_label=label(side,remaining(b.finish))
 				if float(b.finish)>now_time():
 					button(side,"เสร็จทันที • %d หยก" % ceili((float(b.finish)-now_time())/300),send.bind("boost",{"index":selected}))
@@ -314,9 +332,10 @@ func draw_base():
 	for b in state.get("buildings",[]):
 		var resource={"tank":"water","granary":"rice","crystal":"stone"}.get(b.id,"")
 		var fill=float(state.get(resource,0))/maxf(1,float(caps.get(resource,1000)))
-		var model=art.building(b.id,int(b.level),fill);model.position=cell_pos(b.x,b.y);world.add_child(model)
+		var model=art.building(b.id,int(b.level),fill);model.position=building_position(b);world.add_child(model)
+		if b.id=="training" and footprint(b)==1:model.scale=Vector3(0.49,1,0.49)
 		var body=StaticBody3D.new();body.set_meta("index",state.buildings.find(b));model.add_child(body)
-		var collision=CollisionShape3D.new();var shape=BoxShape3D.new();shape.size=Vector3(2.6,3.4,2.6);collision.shape=shape;collision.position.y=1.7;body.add_child(collision)
+		var collision=CollisionShape3D.new();var shape=BoxShape3D.new();shape.size=Vector3(footprint(b)*3-0.2,3.4,footprint(b)*3-0.2);collision.shape=shape;collision.position.y=1.7;body.add_child(collision)
 		if float(b.finish)>now_time():
 			art.box(model,Vector3(0,0.4,1.25),Vector3(2.5,0.2,0.12),"deb264")
 			var worker=art.person(0);world.add_child(worker);actors.append({"node":worker,"from":cell_pos(5,7),"to":model.position+Vector3(1.1,0,1.1),"phase":actors.size(),"kind":0})
@@ -327,10 +346,17 @@ func draw_base():
 					var person=art.person(0);world.add_child(person)
 					art.box(person,Vector3(0.4,0.65,0),Vector3(0.35,0.4,0.35),"62b4c1" if b.id=="well" else "d2bb79")
 					actors.append({"node":person,"from":model.position+Vector3(1,0,0),"to":cell_pos(storage.x,storage.y)+Vector3(1,0,0),"phase":actors.size(),"kind":0});break
+	var yard: Dictionary={}
+	for b in state.buildings:
+		if b.id=="training" and int(b.level)>0:yard=b;break
+	var visible_unit=0
 	for kind in range(3):
 		for i in range(mini(8,int(state.army[kind]))):
 			var person=art.person(kind);world.add_child(person)
-			actors.append({"node":person,"from":cell_pos(6+i*0.4,9+kind),"to":cell_pos(7+i*0.4,10+kind),"phase":i,"kind":kind})
+			var origin=cell_pos(6+i*0.4,9+kind)
+			if not yard.is_empty():origin=building_position(yard)+Vector3(-1.65+(visible_unit%6)*0.66,0,-1.0+int(visible_unit/6)*0.65)
+			actors.append({"node":person,"from":origin,"to":origin+Vector3(0.15,0,0.25),"phase":i,"kind":kind})
+			visible_unit+=1
 func position_camera():
 	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
 func zoom(amount: float):camera.size=clampf(camera.size+amount,18,80)
@@ -339,12 +365,23 @@ func world_area(pos: Vector2) -> bool:
 func clear_preview():
 	if is_instance_valid(preview):preview.queue_free()
 	preview=null;preview_ok=false;placement_drag=false
+func footprint(b: Dictionary) -> int:
+	return int(b.get("size",2)) if b.id=="training" else 1
+func building_position(b: Dictionary) -> Vector3:
+	var offset=(footprint(b)-1)*1.5
+	return cell_pos(b.x,b.y)+Vector3(offset,0,offset)
+func placement_size() -> int:
+	var kind=chosen_build
+	if moving and selected>=0:kind=state.buildings[selected].id
+	return 2 if kind=="training" else 1
 func valid_cell(cell: Vector2i) -> bool:
-	if cell.x<0 or cell.y<0 or cell.x>15 or cell.y>15:return false
+	var size=placement_size()
+	if cell.x<0 or cell.y<0 or cell.x+size>16 or cell.y+size>16:return false
+	var rect=Rect2i(cell,Vector2i(size,size))
 	for i in range(state.get("buildings",[]).size()):
 		var b=state.buildings[i]
 		if moving and i==selected:continue
-		if int(b.x)==cell.x and int(b.y)==cell.y:return false
+		if rect.intersects(Rect2i(Vector2i(int(b.x),int(b.y)),Vector2i.ONE*footprint(b))):return false
 	return true
 func update_preview(pos: Vector2):
 	if not world_area(pos):
@@ -357,10 +394,10 @@ func update_preview(pos: Vector2):
 	preview_ok=valid_cell(preview_cell)
 	if not is_instance_valid(preview):
 		preview=Node3D.new();add_child(preview)
-		preview_tile=art.box(preview,Vector3(0,0.06,0),Vector3(2.95,0.08,2.95),"54dd7c")
+		preview_tile=art.box(preview,Vector3(0,0.06,0),Vector3(placement_size()*3-0.05,0.08,placement_size()*3-0.05),"54dd7c")
 		var kind=chosen_build if not moving else str(state.buildings[selected].id)
 		preview_model=art.building(kind,1);preview.add_child(preview_model);preview_model.position.y=0.12
-	preview.visible=true;preview.position=cell_pos(preview_cell.x,preview_cell.y)
+	preview.visible=true;preview.position=cell_pos(preview_cell.x,preview_cell.y)+Vector3(1,0,1)*(placement_size()-1)*1.5
 	preview_tile.material_override=art.material("54dd7c" if preview_ok else "ed5555")
 func drop_build(pos: Vector2):
 	update_preview(pos)
@@ -402,6 +439,7 @@ func menu_input(event) -> bool:
 		menu_last_time=now;return true
 	return false
 func _input(event):
+	if is_instance_valid(practice):return
 	if state.is_empty() or is_instance_valid(modal):return
 	if menu_input(event):get_viewport().set_input_as_handled();return
 	if event is InputEventScreenTouch:
@@ -443,6 +481,7 @@ func _input(event):
 	elif event is InputEventMagnifyGesture and world_area(event.position):
 		camera.size=clampf(camera.size/event.factor,18,80);get_viewport().set_input_as_handled()
 func _unhandled_input(event):
+	if is_instance_valid(practice):return
 	if state.is_empty() or is_instance_valid(modal):return
 	if event.device==InputEvent.DEVICE_ID_EMULATION:return
 	if event is InputEventMouseButton:
@@ -474,9 +513,10 @@ func tap_ground(screen: Vector2):
 	selected=-1
 	for i in range(state.buildings.size()):
 		var b=state.buildings[i]
-		if int(b.x)==x and int(b.y)==y:selected=i;break
+		if Rect2i(Vector2i(int(b.x),int(b.y)),Vector2i.ONE*footprint(b)).has_point(Vector2i(x,y)):selected=i;break
 	mode="home";show_side()
 func _process(delta):
+	if is_instance_valid(practice):return
 	if menu_touch<0 and absf(menu_velocity)>5 and is_instance_valid(sidebar_scroll):
 		menu_scroll_value=sidebar_scroll.scroll_vertical+menu_velocity*delta
 		sidebar_scroll.scroll_vertical=roundi(menu_scroll_value);menu_velocity*=exp(-7*delta)
@@ -509,7 +549,8 @@ func draw_battle():
 		{"id":"tower","x":9,"y":8,"level":1},{"id":"granary","x":6,"y":6,"level":1},
 		{"id":"crystal","x":9,"y":6,"level":1},{"id":"tank","x":8,"y":6,"level":1}])
 	for b in buildings:
-		var model=art.building(b.id,int(b.level),0.85);model.position=cell_pos(b.x,b.y);world.add_child(model)
+		var model=art.building(b.id,int(b.level),0.85);model.position=building_position(b);world.add_child(model)
+		if b.id=="training" and footprint(b)==1:model.scale=Vector3(0.49,1,0.49)
 	for kind in range(3):
 		for i in range(mini(20,int(state.raid.army[kind]))):
 			var node=art.person(kind);world.add_child(node)
@@ -519,4 +560,5 @@ func draw_battle():
 	message("กำลังบุก "+str(enemy.name)+" • การต่อสู้อัตโนมัติรุ่นทดลอง")
 
 func _notification(what):
+	if is_instance_valid(practice):return
 	if what==NOTIFICATION_APPLICATION_RESUMED and is_instance_valid(api) and not state.is_empty() and not api.busy:api.action("sync")

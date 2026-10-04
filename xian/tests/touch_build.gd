@@ -43,4 +43,11 @@ func run():
  touch(game,0,Vector2(1100,450),true);drag(game,0,Vector2(1100,320),Vector2(0,-130));touch(game,0,Vector2(1100,320),false)
  assert(game.sidebar_scroll.scroll_vertical>old_scroll)
  assert(game.api.actions.size()==2)
+ game.chosen_build="training"
+ assert(not game.valid_cell(Vector2i(6,6)))
+ assert(not game.valid_cell(Vector2i(15,14)))
+ assert(game.valid_cell(Vector2i(8,8)))
+ game.state.buildings.append({"id":"training","x":8,"y":8,"size":2,"level":1,"finish":0})
+ game.chosen_build="well"
+ for cell in [Vector2i(8,8),Vector2i(9,8),Vector2i(8,9),Vector2i(9,9)]:assert(not game.valid_cell(cell))
  print("XIAN_TOUCH_BUILD_PASSED");quit()
