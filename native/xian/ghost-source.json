@@ -1,0 +1,34 @@
+{
+  "repository": "sunantongsan/GhostMatch3",
+  "commit": "d3b2f0c51a3ea5aefddac81351c30f2a65ae9a1f",
+  "assets": [
+    {
+      "name": "booster_sprites.png",
+      "sha256": "d7cf6da08bb1f52edfa83f44ded45cf538cf6098ee5df3a7904de8eaae27f179"
+    },
+    {
+      "name": "ghost_reactions.png",
+      "sha256": "a54f6b24e05df9c19b6b3c7336b546888f9c475101f4866995e416db50793a2b"
+    },
+    {
+      "name": "haunted_background.png",
+      "sha256": "85af38a1eda46f16a9a367469e73599357412cefb0e5a04b487fd100a9559a97"
+    },
+    {
+      "name": "laughing_skull_v2.png",
+      "sha256": "167de420d2ef4cae50a618ce5ded01d0f9d7ecb5217586e7443573245ec9e10c"
+    },
+    {
+      "name": "magic_items.png",
+      "sha256": "f4df82210a3a978c71ab0fcd70dc59b5fb6d2e1103ff4895d872a12ebcb188dc"
+    },
+    {
+      "name": "skeleton_dance_v2.png",
+      "sha256": "a113ddd8a35f5824d0c48316c4d4168ccd8a029a2e396360096515bfbddc5a83"
+    },
+    {
+      "name": "skeleton_dance_v4.png",
+      "sha256": "0f4a5dacdb6192dce20beca126e1f39e83eab902be998c87a7ddb91ad1d161e3"
+    }
+  ]
+}

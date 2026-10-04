@@ -6,6 +6,7 @@ signal auth_working(active: bool)
 signal authenticated
 const URL = "https://uzinxxeadejmzxqmqqtx.supabase.co"
 const KEY = "sb_publishable_4R8VSfnmuFq6hAgWRtDX6Q_IcSVh82m"
+var user_id = ""
 var token = ""
 var refresh_token = ""
 var expires = 0.0
@@ -51,6 +52,7 @@ func request(path: String, body: Dictionary, auth = false) -> Dictionary:
 	return data if data is Dictionary else {"error": "ข้อมูลไม่ถูกต้อง"}
 
 func save_session(data: Dictionary):
+	user_id = str(data.get("user",{}).get("id",user_id))
 	token = data.get("access_token", "")
 	refresh_token = data.get("refresh_token", "")
 	expires = Time.get_unix_time_from_system() + float(data.get("expires_in", 3600))

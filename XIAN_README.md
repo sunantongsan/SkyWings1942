@@ -56,3 +56,11 @@ Google Play Games is NOT enabled yet. It is distinct from Google account login. 
 - Fourteen building types have distinct silhouettes/details and matching rendered thumbnails. Run `res://tests/render_buildings.gd` with a display to regenerate the icons after model changes.
 - Ground extends continuously under the base and scenery; the base no longer sits on a raised slab.
 - `res://tests/touch_build.gd` covers pinch without accidental builds, occupied/out-of-bounds rejection, drag from cards and vertical menu scrolling. Real-device feel remains a device test.
+
+## Original game/assets integration 0.35
+
+The old Godot match-3 screen is removed. Android opens the original GhostMatch3 Java Canvas game (120 levels, specials, level map, skeleton/skull art) inside the same APK, with an explicit Return to Sect button. Godot resumes and syncs the sect on return. Ghost progress is local to this APK and namespaced by the authenticated account ID; it does not import saves from a separate installed GhostMatch3 app or sync level progress across devices. Ads and sect-currency rewards are not connected in this integration. No client-reported score is trusted for online rewards. The old server match RPCs remain for old clients but this app no longer calls them.
+
+Godette from The Gang replaces human disciples and carriers, with the backpack removed and the original walk/idle animations. Human flying units use the same character on a donor sword; divine-beast units retain their animal form. Buildings now use The Gang's Chinese palace/pavilion/gate/wall assets and Hitherton houses, with normalized footprints and purpose markers. House surfaces are recolored for small-screen contrast. Menus use freshly rendered model thumbnails.
+
+Credits/licenses are included in the APK and accessible from the sect panel. `native/xian/ghost-source.json` pins original Ghost art with SHA-256 hashes. `tools/prepare_xian_android.py` invokes `fetch_ghost_assets.py` before copying native sources/resources into the Android template. Native Ghost code compiles with the Android SDK and does not include an ad SDK.

@@ -14,4 +14,8 @@ func run():
   await process_frame;await process_frame;await RenderingServer.frame_post_draw
   viewport.get_texture().get_image().save_png("res://assets/buildings/"+kind+".png")
   viewport.remove_child(model);model.queue_free()
+ var person=art.person(0);viewport.add_child(person)
+ camera.size=2.4;camera.position=Vector3(2,1.8,3);camera.look_at(Vector3(0,0.8,0))
+ await process_frame;await process_frame;await RenderingServer.frame_post_draw
+ viewport.get_texture().get_image().save_png("res://assets/buildings/disciple.png")
  print("BUILDING_ICONS_RENDERED");quit()

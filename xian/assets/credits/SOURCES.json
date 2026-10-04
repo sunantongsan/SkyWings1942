@@ -1,0 +1,6 @@
+{
+  "the_gang_repository": "sunantongsan/the-gang-2",
+  "godette_modification": "Removed backpack mesh reference; shared walk/idle animation library",
+  "buildings": "Original Chinese hall/pavilion/gate/wall and Hitherton house geometry, recolored house surfaces",
+  "ghost_match3_commit": "d3b2f0c51a3ea5aefddac81351c30f2a65ae9a1f"
+}

@@ -19,3 +19,5 @@ xian/build/
 xian/**/*.import
 
 xian/android/
+
+native/xian/res/

@@ -89,7 +89,7 @@ func _ready():
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
-	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกศิษย์","train"],["บุกสำนัก","raid"],["จับคู่ฝึกปราณ","match"],["หยก / เช็กอิน","jade"]]:
+	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกศิษย์","train"],["บุกสำนัก","raid"],["Ghost Match3","match"],["หยก / เช็กอิน","jade"]]:
 		button(row,pair[0],navigate.bind(pair[1]))
 	button(row,"−",zoom.bind(5.0));button(row,"+",zoom.bind(-5.0))
 	toast=Label.new();toast.position=Vector2(28,588);toast.size=Vector2(915,42);toast.add_theme_color_override("font_color",Color("ffe7a5"));toast.add_theme_color_override("font_shadow_color",Color.BLACK);toast.add_theme_constant_override("shadow_offset_x",2);toast.add_theme_constant_override("shadow_offset_y",2);ui.add_child(toast)
@@ -179,7 +179,7 @@ func navigate(target: String):
 	if api.busy:return
 	if battle_visual and target!="raid":battle_visual=false;draw_base()
 	mode=target;chosen_build="";moving=false;clear_preview();close_modal()
-	if target=="match":api.action("match_start")
+	if target=="match":show_match()
 	elif target=="raid" and not state.has("raid"):api.action("scout")
 	elif target=="raid" and state.has("raid"):draw_battle();show_side()
 	else:show_side()
@@ -199,7 +199,7 @@ func show_side():
 				build_cards.append({"node":card,"kind":c.id})
 		"train":
 			label(side,"ฝึกกองกำลัง",25)
-			var portrait=TextureRect.new();portrait.texture=load("res://assets/disciple-reference.jpg");portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(240,125);side.add_child(portrait)
+			var portrait=TextureRect.new();portrait.texture=load("res://assets/buildings/disciple.png");portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(240,125);side.add_child(portrait)
 			var names=["ศิษย์ชั้นต้น","ศิษย์ฝึกปราณ","พยัคฆ์วิญญาณ"]
 			for i in range(3):
 				label(side,"%s: %d คน" % [names[i],int(state.army[i])])
@@ -234,6 +234,7 @@ func show_side():
 				var d=state.last_defense
 				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d หิน %d" % [d.attacker,d.water,d.rice,d.stone],16)
 			button(side,"อัปเดตข้อมูล",send.bind("sync",{}))
+			button(side,"เครดิตภาพ / โมเดล",show_credits)
 func send(action: String,args: Dictionary):api.action(action,args)
 func building_icon(kind: String) -> Texture2D:
 	return load("res://assets/buildings/"+kind+".png")
@@ -271,32 +272,21 @@ func show_raid():
 	if state.has("last_raid"):
 		label(side,"ผลล่าสุด: %d ดาว" % state.last_raid.stars,22)
 func show_match():
-	if not state.has("match"):return
-	var m=state.match
-	var box=modal_box(Vector2(260,88),Vector2(660,532))
-	label(box,"ค่ายกลฝึกปราณ • ด่าน %d" % int(state.match_level),24)
-	label(box,"คะแนน %d / %d    เหลือ %d เดิน" % [m.score,m.goal,m.moves],20)
-	var grid=GridContainer.new();grid.columns=8;grid.add_theme_constant_override("h_separation",5);grid.add_theme_constant_override("v_separation",4);box.add_child(grid)
-	var colors=["418d9b","aa8251","9971a6","488e62","b95d57"]
-	var symbols=["น้ำ","ตำรา","หิน","หยก","ยา"]
-	for i in range(64):
-		var v=int(m.board[i]);var tile=button(grid,symbols[v],pick_match.bind(i));tile.custom_minimum_size=Vector2(72,36);tile.add_theme_font_size_override("font_size",16)
-		var st=StyleBoxFlat.new();st.bg_color=Color(colors[v]);st.set_content_margin_all(4);st.set_corner_radius_all(8);st.set_border_width_all(3 if i==match_pick else 1);st.border_color=Color("fff0ab");tile.add_theme_stylebox_override("normal",st)
-		if int(m.moves)<=0:tile.disabled=true
-	if int(m.moves)<=0:
-		label(box,("ผ่านด่าน! รับน้ำ 100 ข้าว 100 และหยก 2" if m.get("paid",false) else "ผ่านด่าน! วันนี้รับรางวัลครบ 10 ด่านแล้ว") if m.get("rewarded",false) else "หมดจำนวนเดิน ลองใหม่ได้ครับ",18)
-		button(box,"ด่านต่อไป / ลองอีกครั้ง",send.bind("match_start",{}))
-	else:label(box,"แตะ 2 ช่องติดกันเพื่อสลับให้เรียง 3 ชิ้น • รางวัลสูงสุด 10 ด่านต่อวัน",15)
-	var row=HBoxContainer.new();box.add_child(row)
-	button(row,"กลับสำนัก",navigate.bind("home"))
-	if int(m.moves)>0:button(row,"สับกระดาน −1 เดิน",send.bind("match_shuffle",{}))
-	var ad=button(row,"โฆษณารับหยก • ยังไม่เปิด",func():pass);ad.disabled=true
-func pick_match(i: int):
-	if api.busy:return
-	if match_pick<0:match_pick=i;show_match();return
-	var a=match_pick;match_pick=-1
-	if a==i:show_match();return
-	api.action("match_swap",{"a":a,"b":i})
+	mode="home"
+	if Engine.has_singleton("XianAuth"):
+		Engine.get_singleton("XianAuth").open_ghost_match(api.user_id)
+	else:
+		var box=modal_box()
+		label(box,"Ghost Match3",30)
+		label(box,"เกมต้นฉบับ 120 ด่านรวมอยู่ใน APK Android\nกดปุ่มกลับสำนักเมื่อเล่นเสร็จ\nความคืบหน้าเกมจับคู่บันทึกในเครื่องแยกตามบัญชี")
+		button(box,"กลับสำนัก",close_modal)
+func show_credits():
+	var box=modal_box()
+	label(box,"เครดิตทรัพยากร",28)
+	var logo=TextureRect.new();logo.texture=load("res://assets/donor/eep_logo.png");logo.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;logo.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;logo.custom_minimum_size=Vector2(280,110);box.add_child(logo)
+	label(box,"Godette / Adventure Mode / Dress Up\nEaster Egg Productions — CC BY 4.0 และเงื่อนไข Dress Up\nดัดแปลง: ถอดเป้ ปรับขนาด และใช้แอนิเมชันเดิน",17)
+	label(box,"Imperial China Palace and Garden — 3dassets.dev (CC0)\nโมเดลนำมาจาก The Gang\nGhostMatch3 — sunantongsan",17)
+	button(box,"กลับสำนัก",close_modal)
 func cell_pos(x: float,y: float) -> Vector3:return Vector3((x-7.5)*3,0,(y-7.5)*3)
 func draw_terrain(kind: String):
 	map_drawn=kind;clear(terrain)
@@ -502,6 +492,8 @@ func _process(delta):
 			node.rotation.y=sin(time*9+unit.phase)*0.18 if progress>0.33 else 0
 	for actor in actors:
 		var f=(sin(time*0.5+actor.phase)+1)/2
+		var direction=(actor.to-actor.from)*(1.0 if cos(time*0.5+actor.phase)>=0 else -1.0)
+		if direction.length()>0.01:actor.node.rotation.y=atan2(direction.x,direction.z)
 		actor.node.position=actor.from.lerp(actor.to,f)
 		actor.node.position.y=abs(sin(time*6+actor.phase))*0.08+(1.7 if actor.kind==1 else 0)
 	if is_instance_valid(clock_label) and not state.is_empty():
@@ -525,3 +517,6 @@ func draw_battle():
 			var target=cell_pos(5+i%5,8 if kind==2 else 7)
 			battle_nodes.append({"node":node,"start":start,"target":target,"kind":kind,"phase":i})
 	message("กำลังบุก "+str(enemy.name)+" • การต่อสู้อัตโนมัติรุ่นทดลอง")
+
+func _notification(what):
+	if what==NOTIFICATION_APPLICATION_RESUMED and is_instance_valid(api) and not state.is_empty() and not api.busy:api.action("sync")

@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main, feature/xian-of-clans]
-    paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'backend/**', '.github/workflows/xian-android.yml']
+    paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'tools/fetch_ghost_assets.py', 'backend/**', '.github/workflows/xian-android.yml']
   pull_request:
-    paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'backend/**', '.github/workflows/xian-android.yml']
+    paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'tools/fetch_ghost_assets.py', 'backend/**', '.github/workflows/xian-android.yml']
 permissions:
   contents: read
 jobs:
@@ -60,6 +60,9 @@ jobs:
           grep XIAN_AUTH_PASSED auth.log
           godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log
           grep XIAN_TOUCH_BUILD_PASSED touch.log
+          godot --headless --path xian --script res://tests/donor_assets.gd 2>&1 | tee donor.log
+          grep XIAN_DONOR_ASSETS_PASSED donor.log
+          if grep -E 'SCRIPT ERROR|Parse Error' donor.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' touch.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' auth.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' smoke.log; then exit 1; fi
@@ -77,7 +80,7 @@ jobs:
           name: Xian-of-Clans-Android
           path: xian/build/Xian-of-Clans.apk
       - name: Source archive
-        run: zip -qr Xian-of-Clans-Source.zip xian backend native/xian tools/prepare_xian_android.py XIAN_README.md -x 'xian/.godot/*' 'xian/build/*' 'xian/android/*'
+        run: zip -qr Xian-of-Clans-Source.zip xian backend native/xian tools/prepare_xian_android.py tools/fetch_ghost_assets.py XIAN_README.md -x 'xian/.godot/*' 'xian/build/*' 'xian/android/*'
       - uses: actions/upload-artifact@v4
         with:
           name: Xian-of-Clans-Source

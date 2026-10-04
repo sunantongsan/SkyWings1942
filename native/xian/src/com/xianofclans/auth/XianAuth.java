@@ -10,6 +10,9 @@ public class XianAuth extends GodotPlugin {
  public XianAuth(Godot godot){super(godot);instance=this;}
  @Override public String getPluginName(){return "XianAuth";}
  @Override public Set<SignalInfo> getPluginSignals(){return new HashSet<>(Arrays.asList(new SignalInfo("oauth_callback",String.class)));}
+ @UsedByGodot public void open_ghost_match(String profile){
+  runOnUiThread(()->{Intent intent=new Intent(getActivity(),com.xianofclans.ghost.GhostMatchActivity.class);intent.putExtra("profile",profile);getActivity().startActivity(intent);});
+ }
  public void receive(Intent intent){
   Uri uri=intent.getData();
   if(uri!=null && "com.sunantongsan.thegang".equals(uri.getScheme()) && "auth-callback".equals(uri.getHost()))
