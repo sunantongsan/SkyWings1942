@@ -66,6 +66,9 @@ jobs:
           grep -q XIAN_PRACTICE_TOUCH_PASSED practice-touch.log
           godot --headless --path xian --script res://tests/practice.gd 2>&1 | tee practice.log
           grep -q XIAN_OFFLINE_PRACTICE_PASSED practice.log
+          godot --headless --path xian --script res://tests/building_levels.gd 2>&1 | tee levels.log
+          grep -q XIAN_BUILDING_LEVELS_PASSED levels.log
+          if grep -E 'SCRIPT ERROR|Parse Error' levels.log walls.log; then exit 1; fi
           godot --headless --path xian --script res://tests/donor_assets.gd 2>&1 | tee donor.log
           grep XIAN_DONOR_ASSETS_PASSED donor.log
           if grep -E 'SCRIPT ERROR|Parse Error' practice.log; then exit 1; fi

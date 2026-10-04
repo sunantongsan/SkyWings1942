@@ -73,7 +73,7 @@ func start_level(value: int):
 	dress_battlefield()
 	for b in sim.buildings:
 		var model=art.wall(Walls.mask(sim.buildings,Vector2i(b.pos)),0,level) if b.kind=="wall" else art.building(b.kind,level);battlefield.add_child(model);model.position=world_pos(b.pos)
-		var bar=health_bar(model,2.5 if b.kind=="wall" else 4.3);models.append({"node":model,"bar":bar})
+		var bar=health_bar(model,art.model_bounds(model).end.y+0.35);models.append({"node":model,"bar":bar})
 	level_picker.clear()
 	for i in range(1,13):
 		level_picker.add_item("ฐาน %02d  %s" % [i,"★".repeat(int(records.get(str(i),0)))])

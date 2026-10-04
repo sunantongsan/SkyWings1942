@@ -1,20 +1,4 @@
--- Xian of Clans: isolated, server-authoritative prototype. No changes to other games.
-create schema if not exists xian_private;
-revoke all on schema xian_private from public, anon;
-grant usage on schema xian_private to authenticated;
-create table if not exists xian_private.players (
- user_id uuid primary key references auth.users(id) on delete cascade,
- state jsonb not null, updated_at timestamptz not null default now()
-);
-alter table xian_private.players enable row level security;
-revoke all on xian_private.players from public,anon,authenticated;
-create table if not exists xian_private.receipts (
- user_id uuid not null references auth.users(id) on delete cascade,
- request_id uuid not null, created_at timestamptz not null default now(),
- primary key(user_id, request_id)
-);
-alter table xian_private.receipts enable row level security;
-revoke all on xian_private.receipts from public,anon,authenticated;
+-- Function-only update. No player rows, balances or existing jobs are rewritten.
 
 create or replace function xian_private.catalog() returns jsonb language sql immutable set search_path='' as $$
 select '[
@@ -35,54 +19,12 @@ select '[
 {"id":"wall","name":"กำแพง","water":5,"rice":5,"stone":0,"seconds":0,"limit":80}
 ]'::jsonb $$;
 
--- Visual fullness of the shared pill store; stable stone key preserves saves/old clients.
 create or replace function xian_private.pill_fill(s jsonb) returns numeric
 language sql immutable set search_path='' as $$
  select least(1::numeric,greatest(0::numeric,coalesce((s->>'stone')::numeric,0)) /
  greatest(1::numeric,100+coalesce((select sum(greatest(0,(b->>'level')::int)*500) from jsonb_array_elements(s->'buildings') b where b->>'id'='crystal'),0)))
 $$;
-revoke all on function xian_private.pill_fill(jsonb) from public,anon,authenticated;
 
--- Width is explicit on migrated courtyards. Legacy packed bases keep 1x1
--- until a free 2x2 location exists; no building or army is deleted.
-create or replace function xian_private.free_plot(bs jsonb, px int, py int, width int, excluded int)
-returns boolean language sql immutable set search_path='' as $$
- select px>=0 and py>=0 and px+width<=16 and py+width<=16 and not exists (
- select 1 from jsonb_array_elements(bs) with ordinality q(v,i)
- where i-1<>excluded
- and px < (v->>'x')::int + case when v->>'id'='training' then coalesce((v->>'size')::int,1) else 1 end
- and px+width > (v->>'x')::int
- and py < (v->>'y')::int + case when v->>'id'='training' then coalesce((v->>'size')::int,1) else 1 end
- and py+width > (v->>'y')::int
- )
-$$;
-revoke all on function xian_private.free_plot(jsonb,int,int,int,int) from public,anon,authenticated;
-
--- Contiguous straight wall run, selected through a single owned anchor index.
-create or replace function xian_private.wall_run(bs jsonb, anchor int)
-returns int[] language plpgsql immutable set search_path='' as $$
-declare b jsonb:=bs->anchor; result int[]:=array[anchor]; axis int; horizontal bool; vertical bool;
- dx int;dy int;direction int;distance int;found int;
-begin
- if anchor is null or anchor<0 or b is null or b->>'id'<>'wall' then raise exception 'เลือกกำแพงก่อน';end if;
- axis:=coalesce((b->>'rotation')::int,0)%2;
- select exists(select 1 from jsonb_array_elements(bs) v where v->>'id'='wall' and (v->>'y')::int=(b->>'y')::int and abs((v->>'x')::int-(b->>'x')::int)=1),
- exists(select 1 from jsonb_array_elements(bs) v where v->>'id'='wall' and (v->>'x')::int=(b->>'x')::int and abs((v->>'y')::int-(b->>'y')::int)=1) into horizontal,vertical;
- if vertical and not horizontal then axis:=1;elsif horizontal and not vertical then axis:=0;end if;
- dx:=case when axis=0 then 1 else 0 end;dy:=1-dx;
- foreach direction in array array[-1,1] loop
-  for distance in 1..15 loop
-   select i-1 into found from jsonb_array_elements(bs) with ordinality q(v,i)
-   where v->>'id'='wall' and (v->>'x')::int=(b->>'x')::int+dx*direction*distance and (v->>'y')::int=(b->>'y')::int+dy*direction*distance;
-   exit when found is null;result:=array_append(result,found);
-  end loop;
- end loop;
- return result;
-end $$;
-revoke all on function xian_private.wall_run(jsonb,int) from public,anon,authenticated;
-
--- The privileged dispatcher is in a non-exposed schema, authenticates ownership,
--- serializes each player's actions and never accepts balances or victory from clients.
 create or replace function xian_private.act(p_action text,p_args jsonb,p_request uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare
@@ -379,10 +321,11 @@ begin
  update xian_private.players set state=s,updated_at=now() where user_id=uid;
  return jsonb_build_object('state',s,'catalog',xian_private.catalog(),'server_time',t,'capacity',jsonb_build_object('water',wc,'rice',rc,'stone',sc,'army',cap,'workers',workers,'busy',busy,'worker_max',worker_max));
 end; $$;
+
+revoke all on function xian_private.pill_fill(jsonb) from public,anon,authenticated;
+
 revoke all on function xian_private.catalog() from public,anon,authenticated;
+
 revoke all on function xian_private.act(text,jsonb,uuid) from public,anon;
+
 grant execute on function xian_private.act(text,jsonb,uuid) to authenticated;
-create or replace function public.xian_action(p_action text,p_args jsonb,p_request uuid)
-returns jsonb language sql security invoker set search_path='' as $$ select xian_private.act(p_action,p_args,p_request) $$;
-revoke all on function public.xian_action(text,jsonb,uuid) from public,anon;
-grant execute on function public.xian_action(text,jsonb,uuid) to authenticated;

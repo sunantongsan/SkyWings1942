@@ -3,7 +3,7 @@ const Art=preload("res://scripts/art.gd")
 func _initialize():call_deferred("run")
 func run():
  var art=Art.new()
- for kind in ["hall","well","kitchen","tank","granary","spring","crystal","servant","recruit","training","dorm","tower","ward","wall"]:
+ for kind in ["hall","barracks","well","kitchen","tank","granary","spring","crystal","servant","recruit","training","dorm","tower","ward","wall"]:
   var model=art.building(kind,1);root.add_child(model)
   assert(model.get_meta("donor_building",false) or model.get_meta("courtyard",false) or model.get_meta("original_building",false));assert(art.model_bounds(model).size.length()>0.1)
   model.queue_free()
