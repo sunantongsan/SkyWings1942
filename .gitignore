@@ -13,3 +13,7 @@ godot_override/assets/audio/*.wav
 android_ads/.gradle/
 android_ads/build/
 *.aar
+
+xian/.godot/
+xian/build/
+xian/**/*.import

@@ -1,0 +1,73 @@
+name: Xian of Clans Android
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/xian-of-clans]
+    paths: ['xian/**', 'backend/**', '.github/workflows/xian-android.yml']
+  pull_request:
+    paths: ['xian/**', 'backend/**', '.github/workflows/xian-android.yml']
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install engine and Android templates
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot* /usr/local/bin/godot
+          wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz -O /tmp/templates.zip
+          unzip -q /tmp/templates.zip -d /tmp/templates
+          mkdir -p ~/.local/share/godot/export_templates/4.4.1.stable
+          cp /tmp/templates/templates/android*.apk ~/.local/share/godot/export_templates/4.4.1.stable/
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.1' 'platform-tools'
+          mkdir -p ~/.config/godot ~/.android
+          cat > ~/.config/godot/editor_settings-4.4.tres <<SETTINGS
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          SETTINGS
+      - uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: galaxy1942-android-test-keystore-v1
+      - name: Signing key
+        run: |
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Android Debug,O=Android,C=US'
+          fi
+      - name: Import and verify game
+        run: |
+          set -o pipefail
+          godot --headless --path xian --editor --import --quit 2>&1 | tee import.log
+          if grep -E 'SCRIPT ERROR|Parse Error' import.log; then exit 1; fi
+          godot --headless --path xian --script res://tests/smoke.gd 2>&1 | tee smoke.log
+          grep XIAN_SMOKE_PASSED smoke.log
+          if grep -E 'SCRIPT ERROR|Parse Error' smoke.log; then exit 1; fi
+      - name: Export Android
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          mkdir -p xian/build
+          godot --headless --path xian --export-debug Android build/Xian-of-Clans.apk
+          test -s xian/build/Xian-of-Clans.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Xian-of-Clans-Android
+          path: xian/build/Xian-of-Clans.apk
+      - name: Source archive
+        run: zip -qr Xian-of-Clans-Source.zip xian backend -x 'xian/.godot/*' 'xian/build/*'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Xian-of-Clans-Source
+          path: Xian-of-Clans-Source.zip
