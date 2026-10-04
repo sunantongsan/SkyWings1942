@@ -1,4 +1,5 @@
 extends Node3D
+const VisualStyle=preload("res://scripts/visual_style.gd")
 const Art = preload("res://scripts/art.gd")
 const Walls=preload("res://scripts/wall_layout.gd")
 const API = preload("res://scripts/api.gd")
@@ -73,10 +74,10 @@ func _ready():
 	api.auth_notice.connect(message)
 	api.auth_working.connect(auth_loading)
 	api.authenticated.connect(func(): message("เชื่อมต่อแล้ว กำลังเปิดสำนัก…"))
-	var light = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-55,-35,0); light.light_energy = 0.85;light.shadow_enabled=true;light.directional_shadow_max_distance=100; add_child(light)
+	var light = DirectionalLight3D.new(); light.rotation_degrees = Vector3(-55,-35,0); light.light_energy = 0.78;light.light_color=Color("fff0d5");light.shadow_enabled=true;light.directional_shadow_max_distance=75; add_child(light)
 	var env = WorldEnvironment.new(); var e = Environment.new()
 	e.background_mode = Environment.BG_COLOR; e.background_color = Color("aec7bf")
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color = Color("d9e4dc"); e.ambient_light_energy = 0.55
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color = Color("c5dce4"); e.ambient_light_energy = 0.38
 	env.environment=e; add_child(env)
 	camera = Camera3D.new(); camera.projection = Camera3D.PROJECTION_ORTHOGONAL; camera.size=34; camera.far=300;camera.h_offset=6; add_child(camera)
 	position_camera()
@@ -84,13 +85,7 @@ func _ready():
 	world=Node3D.new(); add_child(world)
 	var layer=CanvasLayer.new(); add_child(layer)
 	ui=Control.new();ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);ui.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(ui)
-	var theme=Theme.new();theme.default_font=font;theme.default_font_size=18
-	for name in ["normal","hover","pressed","disabled"]:
-		var st=StyleBoxFlat.new(); st.bg_color=Color("214c45") if name=="normal" else Color("376b5e")
-		if name=="disabled":st.bg_color=Color("3d4844")
-		st.set_corner_radius_all(9); st.set_content_margin_all(10)
-		st.border_color=Color("b49a62");st.set_border_width_all(1);theme.set_stylebox(name,"Button",st)
-	theme.set_color("font_color","Label",Color("f3e7c8"));ui.theme=theme
+	ui.theme=VisualStyle.theme()
 	var header=panel(Vector2(16,12),Vector2(1248,66));top=label(header,"XIAN OF CLANS   •   เซียน ออฟ แคลน",24)
 	var sidebar=panel(Vector2(960,92),Vector2(304,530))
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
@@ -106,7 +101,7 @@ func _ready():
 
 func panel(pos: Vector2, extent: Vector2) -> PanelContainer:
 	var p=PanelContainer.new();p.position=pos;p.size=extent
-	var st=StyleBoxFlat.new();st.bg_color=Color(0.055,0.12,0.115,0.96);st.set_corner_radius_all(12);st.border_color=Color("9c8c59");st.set_border_width_all(1);st.set_content_margin_all(14)
+	var st=VisualStyle.panel()
 	p.add_theme_stylebox_override("panel",st);ui.add_child(p);return p
 func label(parent: Node, text: String, size=18) -> Label:
 	var l=Label.new();l.text=text;l.add_theme_font_size_override("font_size",size);l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;l.size_flags_horizontal=Control.SIZE_EXPAND_FILL;parent.add_child(l);return l
@@ -328,25 +323,8 @@ func base_model(b: Dictionary, buildings: Array, fill=0.5) -> Node3D:
 func cell_pos(x: float,y: float) -> Vector3:return Vector3((x-7.5)*3,0,(y-7.5)*3)
 func draw_terrain(kind: String):
 	map_drawn=kind;clear(terrain)
-	var mountain=kind=="mountain"
-	art.box(terrain,Vector3(0,-0.15,0),Vector3(160,0.3,160),"a4aaa0" if mountain else "728854")
-	for x in range(16):
-		for y in range(16):
-			art.box(terrain,cell_pos(x,y)+Vector3(0,0.002,0),Vector3(3,0.004,3),("a3a99e" if (x+y)%2==0 else "9da598") if mountain else ("8b9c68" if (x+y)%2==0 else "859862"))
-	var rng=RandomNumberGenerator.new();rng.seed=421
-	for i in range(70):
-		var angle=rng.randf()*TAU;var radius=rng.randf_range(34,43);var p=Vector3(cos(angle)*radius,0,sin(angle)*radius)
-		if mountain:
-			art.cone(terrain,p-Vector3(0,5,0),rng.randf_range(4,9),0,rng.randf_range(8,22),"718c87",5)
-		else:
-			for j in range(3):
-				var at=p+Vector3(j*0.6,0,j*0.3)
-				art.cone(terrain,at+Vector3(0,3,0),0.1,0.08,6,"426b39",5)
-				for h in [2.0,3.4,4.7]:
-					art.cone(terrain,at+Vector3(0,h,0),0.12,0.12,0.07,"98ad6a",5)
-					for leaf_i in range(3):
-						var leaf=art.cone(terrain,at+Vector3(cos(leaf_i*2.1)*0.55,h+0.3,sin(leaf_i*2.1)*0.55),0.26,0,1.6,"48794a",4)
-						leaf.rotation_degrees=Vector3(50,leaf_i*120,35)
+	art.landscape(terrain,kind=="mountain")
+
 func draw_base():
 	clear(world);actors=[]
 	for b in state.get("buildings",[]):
@@ -357,7 +335,10 @@ func draw_base():
 		var body=StaticBody3D.new();body.set_meta("index",state.buildings.find(b));model.add_child(body)
 		var collision=CollisionShape3D.new();var shape=BoxShape3D.new();shape.size=Vector3(footprint(b)*3-0.2,3.4,footprint(b)*3-0.2);collision.shape=shape;collision.position.y=1.7;body.add_child(collision)
 		if float(b.finish)>now_time():
-			art.box(model,Vector3(0,0.4,1.25),Vector3(2.5,0.2,0.12),"deb264")
+			var remaining_seconds=float(b.finish)-now_time();var spec=find_catalog(b.id)
+			var total=minf(28800.0,float(spec.get("seconds",30))*pow(3.0,int(b.level)))
+			var progress=clampf(1.0-remaining_seconds/maxf(1.0,total),0.0,1.0)
+			art.construction_dressing(model,footprint(b),progress)
 			var worker=art.person(0,false);world.add_child(worker);actors.append({"node":worker,"from":cell_pos(5,7),"to":model.position+Vector3(1.1,0,1.1),"phase":actors.size(),"kind":0})
 		if b.id in ["well","kitchen","spring"] and int(b.level)>0:
 			var target={"well":"tank","kitchen":"granary","spring":"crystal"}[b.id]
@@ -371,10 +352,11 @@ func draw_base():
 		if b.id=="training" and int(b.level)>0:yard=b;break
 	var visible_unit=0
 	for kind in range(3):
-		for i in range(mini(8,int(state.army[kind]))):
+		for i in range(mini(2 if kind==2 else 6,int(state.army[kind]))):
 			var person=art.person(kind);world.add_child(person)
 			var origin=cell_pos(6+i*0.4,9+kind)
-			if not yard.is_empty():origin=building_position(yard)+Vector3(-1.65+(visible_unit%6)*0.66,0,-1.0+int(visible_unit/6)*0.65)
+			if not yard.is_empty():origin=building_position(yard)+Vector3(-1.7+(visible_unit%4)*1.1,0,-1.0+int(visible_unit/4)*1.15)
+			if kind==2 and not yard.is_empty():origin=building_position(yard)+Vector3(-4.0-i*3.8,0,0)
 			actors.append({"node":person,"from":origin,"to":origin+Vector3(0.15,0,0.25),"phase":i,"kind":kind})
 			visible_unit+=1
 func position_camera():
@@ -590,6 +572,7 @@ func _process(delta):
 		if direction.length()>0.01:actor.node.rotation.y=atan2(direction.x,direction.z)
 		art.pose(actor.node,"walk" if actor.from.distance_to(actor.to)>1 else "idle")
 		actor.node.position=actor.from.lerp(actor.to,f)
+		if actor.from.distance_to(actor.to)<1:art.idle_flair(actor.node,time,float(actor.phase),int(actor.kind))
 		actor.node.position.y=abs(sin(time*6+actor.phase))*0.08+(1.7 if actor.kind==1 else 0)
 	if is_instance_valid(clock_label) and not state.is_empty():
 		if mode=="raid" and state.has("raid"):clock_label.text="การต่อสู้อัตโนมัติ • %d วิ" % maxi(0,int(state.raid.finish-now_time()))

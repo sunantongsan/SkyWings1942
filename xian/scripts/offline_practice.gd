@@ -2,6 +2,7 @@ extends Node3D
 signal closed
 const Sim=preload("res://scripts/practice_sim.gd")
 const Walls=preload("res://scripts/wall_layout.gd")
+const VisualStyle=preload("res://scripts/visual_style.gd")
 const Art=preload("res://scripts/art.gd")
 const SAVE="user://practice_stars.json"
 var sim=Sim.new()
@@ -38,10 +39,7 @@ func _ready():
 	battlefield=Node3D.new();add_child(battlefield)
 	var layer=CanvasLayer.new();layer.layer=10;add_child(layer)
 	hud=Control.new();hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);hud.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(hud)
-	var theme=Theme.new();theme.default_font=preload("res://assets/NotoSansThai.ttf");theme.default_font_size=18;hud.theme=theme
-	for name in ["normal","hover","pressed","disabled"]:
-		var style=StyleBoxFlat.new();style.bg_color=Color("244e49") if name=="normal" else Color("48746b");style.set_corner_radius_all(8);style.set_content_margin_all(10)
-		theme.set_stylebox(name,"Button",style);theme.set_stylebox(name,"OptionButton",style)
+	hud.theme=VisualStyle.theme()
 	var header=panel(Vector2(16,12),Vector2(1248,66));heading=text(header,"ประลองบอทออฟไลน์",24)
 	var right=panel(Vector2(960,92),Vector2(304,530));sidebar=VBoxContainer.new();right.add_child(sidebar)
 	level_picker=OptionButton.new();level_picker.custom_minimum_size.y=48;sidebar.add_child(level_picker)
@@ -61,7 +59,7 @@ func _ready():
 	start_level(1)
 func panel(pos: Vector2, extent: Vector2) -> PanelContainer:
 	var p=PanelContainer.new();p.position=pos;p.size=extent
-	var style=StyleBoxFlat.new();style.bg_color=Color("142c2a");style.set_corner_radius_all(12);style.set_content_margin_all(12);p.add_theme_stylebox_override("panel",style);hud.add_child(p);return p
+	p.add_theme_stylebox_override("panel",VisualStyle.panel());hud.add_child(p);return p
 func text(parent: Node, value: String, size=18) -> Label:
 	var l=Label.new();l.text=value;l.add_theme_font_size_override("font_size",size);l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;parent.add_child(l);return l
 func button(parent: Node, value: String, callback: Callable) -> Button:
@@ -71,11 +69,7 @@ func start_level(value: int):
 	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;pivot=Vector3.ZERO;position_camera()
 	for child in battlefield.get_children():child.queue_free()
 	models.clear();unit_models.clear();projectiles.clear()
-	art.box(battlefield,Vector3(0,-0.15,0),Vector3(160,0.3,160),"718178" if level%2==0 else "597152")
-	for x in range(16):
-		for y in range(16):
-			var border=x<=1 or y<=1 or x>=14 or y>=14
-			art.box(battlefield,world_pos(Vector2(x,y),0.01),Vector3(2.95,0.025,2.95),"719c75" if border else "a1a999" if level%2==0 else "91a276")
+	art.landscape(battlefield,level%2==0,true)
 	dress_battlefield()
 	for b in sim.buildings:
 		var model=art.wall(Walls.mask(sim.buildings,Vector2i(b.pos)),0,level) if b.kind=="wall" else art.building(b.kind,level);battlefield.add_child(model);model.position=world_pos(b.pos)
@@ -149,19 +143,11 @@ func dress_battlefield():
 		for y in range(5,11):
 			if (x+y)%2==0:art.box(battlefield,world_pos(Vector2(x,y),0.04),Vector3(2.75,0.02,2.75),"a9b091")
 	for p in [Vector2(3,4),Vector2(12,4),Vector2(3,11),Vector2(12,11)]:
-		var at=world_pos(p)
-		art.box(battlefield,at+Vector3(0,0.65,0),Vector3(0.38,1.3,0.38),"756448")
-		art.box(battlefield,at+Vector3(0,1.55,0),Vector3(0.7,0.65,0.7),"e3be78")
-		art.cone(battlefield,at+Vector3(0,1.95,0),0.6,0.05,0.35,"41665d",4).rotation.y=PI/4
-	var rng=RandomNumberGenerator.new();rng.seed=3700+level
-	for i in range(30):
-		var angle=i*TAU/30;var pos=Vector3(cos(angle)*34,0,sin(angle)*34)
-		if level%2==0:art.cone(battlefield,pos+Vector3(0,0.7,0),rng.randf_range(1,2.2),0.6,1.4,"88968d",5)
-		else:
-			for j in range(3):
-				var offset=pos+Vector3(j*0.5,0,0)
-				art.cone(battlefield,offset+Vector3(0,2,0),0.11,0.09,4,"416a45",6)
-				art.cone(battlefield,offset+Vector3(0,3.4,0),1.1,0.15,2.2,"567d49",5)
+		art.lantern(battlefield,world_pos(p),1.0)
+	# Foreground framing gives each base depth while keeping the deploy border readable.
+	for p in [Vector2(1,3),Vector2(14,4),Vector2(2,12),Vector2(13,12)]:
+		art.bamboo_cluster(battlefield,world_pos(p),0.85)
+	for p in [Vector2(2,5),Vector2(13,6),Vector2(4,13),Vector2(11,2)]:art.rock(battlefield,world_pos(p),0.75)
 func _process(delta):
 	if test_mode:return
 	accumulator+=minf(delta,0.25)
@@ -171,6 +157,7 @@ func _process(delta):
 			if shot.has("unit"):
 				var actor=unit_models[shot.unit].node;var direction: Vector2=shot.to-shot.from
 				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",[0.7,1.0,1.1][shot.kind])
+			if shot.has("to"):art.impact_fx(battlefield,world_pos(shot.to,1.0),int(shot.kind))
 			if not shot.enemy and shot.kind!=1:continue
 			var node=art.box(battlefield,world_pos(shot.from,2),Vector3(0.16,0.12,1.1),"ee8868" if shot.enemy else "adf0ff")
 			projectiles.append({"node":node,"start":world_pos(shot.from,2),"end":world_pos(shot.to,1),"age":0.0})
@@ -187,7 +174,7 @@ func _process(delta):
 	for i in range(sim.buildings.size()):
 		var b=sim.buildings[i];models[i].bar.scale.x=maxf(0.001,b.hp/b.max_hp)
 		if b.hp<=0 and models[i].node.visible:
-			models[i].node.hide();art.box(battlefield,world_pos(b.pos,0.12),Vector3(2.1,0.24,2.1),"6c695c")
+			models[i].node.hide();art.box(battlefield,world_pos(b.pos,0.12),Vector3(2.1,0.24,2.1),"6c695c");art.rubble(battlefield,world_pos(b.pos,0.15));art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
 	for i in range(sim.units.size()):
 		var u=sim.units[i];var node=unit_models[i].node
 		node.visible=u.hp>0;unit_models[i].bar.scale.x=maxf(0.001,u.hp/u.max_hp)
