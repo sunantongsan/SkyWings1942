@@ -23,4 +23,30 @@ func run():
   assert(pouch.get_meta("pill_count")==ceili(fill*24))
   assert(pouch.find_child("SheerCloth",true,false).material_override.albedo_color.a<0.4)
   pouch.free()
+ for kind in ["granary","tank"]:
+  for fill in [0.0,0.5,1.0]:
+   var model=art.building(kind,10,fill)
+   assert(is_equal_approx(model.get_meta("storage_fill"),fill))
+   if kind=="granary":assert(model.get_meta("food_count")==ceili(fill*24))
+   else:assert((model.find_child("StoredWater",true,false)!=null)==(fill>0))
+   model.free()
+ for kind in ["kitchen","spring"]:
+  for level in range(1,11):
+   var model=art.building(kind,level)
+   assert(model.get_meta("floors" if kind=="kitchen" else "tiers")==level)
+   model.free()
+ var pump=art.building("well",5);root.add_child(pump)
+ var moving=pump.find_child("PumpMotion",true,false)
+ assert(moving!=null and moving.get_node("Handle").get_child_count()>0)
+ moving.animate(0.0);var before=moving.get_node("Handle").rotation.z
+ moving.animate(0.4);assert(not is_equal_approx(before,moving.get_node("Handle").rotation.z))
+ var scaffold=Node3D.new();root.add_child(scaffold);art.construction_dressing(scaffold,1,0.5)
+ var saw=scaffold.find_child("SawMotion",true,false)
+ saw.animate(0);saw.animate(0.2);assert(abs(saw.get_node("Saw").position.x)>0.05)
+ var burner=art.building("spring",10);root.add_child(burner)
+ var smoke=burner.find_child("SmokeMotion",true,false)
+ smoke.animate(0);var first=smoke.get_child(0).position
+ smoke.animate(0.5);assert(first.distance_to(smoke.get_child(0).position)>0.1)
+ pump.queue_free();scaffold.queue_free();burner.queue_free()
+ await process_frame
  print("XIAN_BUILDING_LEVELS_PASSED");quit()

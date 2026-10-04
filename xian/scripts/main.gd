@@ -159,12 +159,14 @@ func show_create():
 func receive(payload: Dictionary):
 	server_time=float(payload.get("server_time",0));since_sync=0
 	catalog=payload.get("catalog",[])
+	for item in catalog:
+		if item.id=="kitchen":item.name="โรงเตี๊ยม"
 	if payload.get("needs_create",false):show_create();return
 	state=payload.get("state",{});caps=payload.get("capacity",{})
 	if mode in ["login","create"]:close_modal();mode="home"
 	if state.has("raid"):mode="raid"
 	if map_drawn!=state.get("map","bamboo"):draw_terrain(state.get("map","bamboo"))
-	var encoded=JSON.stringify(state.get("buildings",[]))+str(int(float(state.get("water",0))/maxf(1,float(caps.get("water",1000)))*10))+str(int(float(state.get("rice",0))/maxf(1,float(caps.get("rice",1000)))*10))+str(int(float(state.get("stone",0))/maxf(1,float(caps.get("stone",100)))*10))
+	var encoded=JSON.stringify(state.get("buildings",[]))+str(int(float(state.get("water",0))/maxf(1,float(caps.get("water",1000)))*100))+str(int(float(state.get("rice",0))/maxf(1,float(caps.get("rice",1000)))*100))+str(int(float(state.get("stone",0))/maxf(1,float(caps.get("stone",100)))*10))
 	if encoded!=last_buildings and not battle_visual:
 		last_buildings=encoded;draw_base()
 	if mode=="raid" and state.has("raid") and not battle_visual:draw_battle()
@@ -353,12 +355,12 @@ func draw_base():
 			var total=minf(28800.0,float(spec.get("seconds",30))*pow(3.0,int(b.level)))
 			var progress=clampf(1.0-remaining_seconds/maxf(1.0,total),0.0,1.0)
 			art.construction_dressing(model,footprint(b),progress)
-			var worker=art.person(0,false);world.add_child(worker);actors.append({"node":worker,"from":cell_pos(5,7),"to":model.position+Vector3(1.1,0,1.1),"phase":actors.size(),"kind":0})
+
 		if b.id in ["well","kitchen","spring"] and int(b.level)>0:
 			var target={"well":"tank","kitchen":"granary","spring":"crystal"}[b.id]
 			for storage in state.buildings:
 				if storage.id==target and int(storage.level)>0:
-					var person=art.person(0,false);world.add_child(person)
+					var person=art.person(0,false);person.scale=Vector3.ONE*0.5;world.add_child(person)
 					art.box(person,Vector3(0.4,0.65,0),Vector3(0.35,0.4,0.35),"62b4c1" if b.id=="well" else "d2bb79")
 					actors.append({"node":person,"from":model.position+Vector3(1,0,0),"to":cell_pos(storage.x,storage.y)+Vector3(1,0,0),"phase":actors.size(),"kind":0});break
 	var yard: Dictionary={}
