@@ -1,3 +1,12 @@
+## v0.40 living resource buildings
+
+- Gatherers now render at 50% scale; combat disciples retain their original size. Compact builders sit on a scaffold platform and saw a plank while construction is active.
+- Kitchen is a Chinese inn, adding one compact floor per level (1–10). The food store is a tinted clear shopping bag with two handles and up to 24 pieces of food based on capacity utilization.
+- The well is a hand pump with a synchronized operator, bucket and water stream. Pipe diameter and platform decoration increase each level.
+- The elixir furnace is a tiered Chinese incense burner (one tier per level) with continuously rising/fading smoke. The water store is a clear capped bottle with a visible fill level, increasing size, ribbing and ornament.
+- Local visual animation is isolated from static mesh batching and works in home, raids and practice without affecting simulation or save keys. Home food/water fill refreshes at 1% steps on server sync; raid models retain the existing approximate storage visualization (only elixir fill is supplied by raid snapshots).
+- Verified all level silhouettes/footprints, empty/half/full storage, surviving animated meshes, pump/saw/smoke movement, and the existing Godot regression suite. OpenGL screenshots and regenerated menu icons reviewed. Physical Android device performance still needs a phone check.
+
 # Xian of Clans — playable online prototype v0.37
 
 Open `xian/project.godot` in Godot 4.4.1. The new standalone entry point exports only Xian assets; Galaxy models/scripts remain in git history/workspace for reference and are not part of this APK. Package `com.xianofclans.strategy` installs separately from Galaxy to preserve the old save.
