@@ -360,7 +360,8 @@ func draw_base():
 		var body=StaticBody3D.new();body.set_meta("index",state.buildings.find(b));model.add_child(body)
 		var collision=CollisionShape3D.new();var shape=BoxShape3D.new();shape.size=Vector3(footprint(b)*3-0.2,3.4,footprint(b)*3-0.2);collision.shape=shape;collision.position.y=1.7;body.add_child(collision)
 		if float(b.finish)>now_time():
-			art.box(model,Vector3(0,0.4,1.25),Vector3(2.5,0.2,0.12),"deb264")
+			var remaining_seconds=float(b.finish)-now_time();var estimated_total=maxf(300.0,remaining_seconds+300.0);var progress=1.0-remaining_seconds/estimated_total
+			art.construction_dressing(model,footprint(b),progress)
 			var worker=art.person(0,false);world.add_child(worker);actors.append({"node":worker,"from":cell_pos(5,7),"to":model.position+Vector3(1.1,0,1.1),"phase":actors.size(),"kind":0})
 		if b.id in ["well","kitchen","spring"] and int(b.level)>0:
 			var target={"well":"tank","kitchen":"granary","spring":"crystal"}[b.id]
