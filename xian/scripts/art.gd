@@ -157,6 +157,14 @@ func building(kind: String, level: int, fill = 0.5) -> Node3D:
 	if kind=="granary":
 		for i in range(3):cone(root,Vector3(-0.6+i*0.5,0.27,-1),0.26,0.2,0.5,"d8c58e",8)
 	if kind=="kitchen":cone(root,Vector3(0.8,0.3,-1),0.35,0.4,0.55,"535e64",10)
+	# Shared visual language: stone plinth, paired lanterns and banners make mixed donor assets feel like one sect.
+	var plinth=box(root,Vector3(0,-0.055,0),Vector3(3.15,0.11,3.15),"8f8b79");plinth.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if kind in ["hall","recruit","tower","ward"]:
+		lantern(root,Vector3(-1.15,0,-1.15),0.48);lantern(root,Vector3(1.15,0,-1.15),0.48)
+	if kind in ["hall","recruit"]:
+		training_banner(root,Vector3(-1.35,0,0.7),"a94438");training_banner(root,Vector3(1.35,0,0.7),"a94438")
+	if level>=5:
+		for p in [Vector3(-1.3,0,1.15),Vector3(1.3,0,1.15)]:rock(root,p,0.32)
 	return root
 func person(kind: int, armed: bool=true) -> Node3D:
 	var root=Node3D.new()
@@ -203,6 +211,21 @@ func person(kind: int, armed: bool=true) -> Node3D:
 			for mesh in sword.find_children("*","MeshInstance3D",true,false):mesh.material_override=material("8ba9bb")
 	pose(root,"idle")
 	return root
+
+func impact_fx(parent: Node3D, pos: Vector3, kind: int=0):
+	var root=Node3D.new();root.position=pos;parent.add_child(root)
+	var flash=cone(root,Vector3.ZERO,0.5,0.08,0.08,"ffd47b" if kind!=1 else "82ddff",12)
+	flash.rotation.x=PI/2
+	for i in range(5):
+		var shard=box(root,Vector3.ZERO,Vector3(0.05,0.05,0.7),"fff0b0" if kind==0 else "9beaff")
+		shard.rotation.y=i*TAU/5.0
+		shard.position=Vector3(sin(i*TAU/5.0)*0.55,0.12,cos(i*TAU/5.0)*0.55)
+	var tween=root.create_tween();tween.set_parallel(true);tween.tween_property(root,"scale",Vector3.ONE*1.8,0.16);tween.tween_property(root,"position:y",root.position.y+0.2,0.18)
+	tween.chain().tween_callback(root.queue_free)
+func rubble(parent: Node3D, pos: Vector3):
+	for i in range(5):
+		var angle=i*TAU/5.0;var r=rock(parent,pos+Vector3(cos(angle)*0.65,0,sin(angle)*0.65),0.22+0.04*(i%2));r.rotation.y=angle
+
 func pose(root: Node3D, state: String, attack_duration: float=0.8):
 	if not root.has_meta("anim_player"):return
 	var player: AnimationPlayer=root.get_meta("anim_player")
