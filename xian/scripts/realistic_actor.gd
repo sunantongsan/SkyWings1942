@@ -15,6 +15,11 @@ func action_frame(index: int, sleeping: bool):
 	var region=AtlasTexture.new();region.atlas=actions
 	region.region=Rect2(index*actions.get_width()/4.0,550 if sleeping else 0,actions.get_width()/4.0,actions.get_height()-550 if sleeping else 550);region.filter_clip=true
 	hframes=1;vframes=1;texture=region;pixel_size=1.8/550.0;offset=Vector2(0,region.get_height()*0.5-(65 if sleeping else 15))
+func isolated_attack():
+	var cell=Vector2(normal_texture.get_width()/4.0,normal_texture.get_height()/2.0)
+	var cut=0.895 if troop_kind==7 else 0.86
+	var region=AtlasTexture.new();region.atlas=normal_texture;region.region=Rect2(0,cell.y,cell.x*cut,cell.y);region.margin=Rect2(0,0,cell.x*(1-cut),0);region.filter_clip=true
+	hframes=1;vframes=1;texture=region;pixel_size=normal_pixel;offset=normal_offset
 func restore_walk():
 	if normal_texture!=null:texture=normal_texture;hframes=4;vframes=2;pixel_size=normal_pixel;offset=normal_offset
 
@@ -33,7 +38,8 @@ func _process(delta: float):
 	if attack_time>0:
 		attack_time=maxf(0,attack_time-delta)
 		if troop_kind==0:action_frame(mini(3,int((1.0-attack_time/attack_duration)*4)),false)
-		elif troop_kind>=3:restore_walk();frame=4 # Dedicated wind-up pose; procedural lunge/impact avoids cross-cell weapon trails.
+		elif troop_kind in [7,8]:isolated_attack()
+		elif troop_kind>=3:restore_walk();frame=4 # Dedicated wind-up pose, with procedural lunge/impact.
 		position.y=sin((1.0-attack_time/attack_duration)*PI)*0.09
 	elif flying:
 		restore_walk()
