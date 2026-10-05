@@ -59,6 +59,8 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' import.log; then exit 1; fi
           godot --headless --path xian --script res://tests/smoke.gd 2>&1 | tee smoke.log
           grep XIAN_SMOKE_PASSED smoke.log
+          godot --headless --path xian --script res://tests/ten_troops.gd 2>&1 | tee ten_troops.log
+          grep XIAN_TEN_TROOPS_PASSED ten_troops.log
           godot --headless --path xian --script res://tests/auth.gd 2>&1 | tee auth.log
           grep XIAN_AUTH_PASSED auth.log
           godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log

@@ -37,5 +37,13 @@
   "pump_operator": "92aaf177-9a9e-4ae8-9a5b-34d691e0fad6",
   "materials": "5a686333-a64d-43d1-9166-4bc1ca0291eb",
   "fighter_actions": "f0dee034-ddf7-4c4d-8759-858194e49b07",
-  "pump_materials": "64d97a51-90fb-4fb2-b7c9-3e5f8255bb11"
+  "pump_materials": "64d97a51-90fb-4fb2-b7c9-3e5f8255bb11",
+  "glass_tiffin": "fed66e94-9608-4cd4-a498-38f5e6a86ff1",
+  "thief": "110b8feb-74c4-4683-b194-82935cc4097c",
+  "turtle": "828c8d90-f160-4da6-9af0-707f632f68fc",
+  "sword_sage": "bbb808a5-9b56-4aee-b9c3-95ad7b80a83c",
+  "tiger": "082637aa-5956-4b00-ba43-da4fb9dfd6fe",
+  "stone_warrior": "39b7d363-1a84-4a43-beda-8fdef60082a2",
+  "phoenix": "75a91219-0d07-49ce-8b4b-1a24fa3f99a3",
+  "deity": "4e2552f7-1737-4c31-83a3-33dc1d010f1a"
 }

@@ -1,4 +1,5 @@
 extends Node3D
+const Troops=preload("res://scripts/troops.gd")
 signal closed
 const Sim=preload("res://scripts/practice_sim.gd")
 const Walls=preload("res://scripts/wall_layout.gd")
@@ -41,11 +42,11 @@ func _ready():
 	hud=Control.new();hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);hud.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(hud)
 	hud.theme=VisualStyle.theme()
 	var header=panel(Vector2(16,12),Vector2(1248,66));heading=text(header,"ประลองบอทออฟไลน์",24)
-	var right=panel(Vector2(960,92),Vector2(304,530));sidebar=VBoxContainer.new();right.add_child(sidebar)
+	var right=panel(Vector2(960,92),Vector2(304,530));var scroll=ScrollContainer.new();right.add_child(scroll);sidebar=VBoxContainer.new();sidebar.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(sidebar)
 	level_picker=OptionButton.new();level_picker.custom_minimum_size.y=48;sidebar.add_child(level_picker)
 	level_picker.item_selected.connect(func(i):start_level(i+1))
 	text(sidebar,"แตะขอบเขียวเพื่อปล่อยศิษย์\nลากพื้นเลื่อน / จีบสองนิ้วซูม",17)
-	for i in range(3):
+	for i in range(10):
 		var b=button(sidebar,"",func():selected_kind=i;refresh_hud());unit_buttons.append(b)
 	text(sidebar,"ขั้นต้น: เดิน / เจาะกำแพง\nฝึกปราณ: บิน / กระบี่ระยะไกล\nมังกร: ข้ามกำแพง / ตีป้อม",16)
 	var zoom_row=HBoxContainer.new();sidebar.add_child(zoom_row)
@@ -87,8 +88,8 @@ func health_bar(parent: Node3D, height: float) -> MeshInstance3D:
 	return art.box(parent,Vector3(0,height,0.08),Vector3(1.65,0.14,0.14),"86df8b")
 func refresh_hud():
 	heading.text="ฐานบอท %02d  •  ทำลาย %d%%  •  %s  •  เวลา %d:%02d" % [level,sim.percent(),"★".repeat(sim.stars())+"☆".repeat(3-sim.stars()),int(maxf(0,180-sim.elapsed))/60,int(maxf(0,180-sim.elapsed))%60]
-	for i in range(3):
-		unit_buttons[i].text=("▶ " if i==selected_kind else "")+["ศิษย์ชั้นต้น","ศิษย์ฝึกปราณ","มังกรเทวะ"][i]+" × %d" % sim.reserve[i]
+	for i in range(10):
+		unit_buttons[i].text=("▶ " if i==selected_kind else "")+Troops.NAMES[i]+" × %d" % sim.reserve[i]
 		unit_buttons[i].disabled=sim.reserve[i]<=0 or sim.finished
 func place_at(screen: Vector2):
 	if not Rect2(0,82,950,540).has_point(screen) or sim.finished:return
@@ -156,10 +157,10 @@ func _process(delta):
 		for shot in sim.shots:
 			if shot.has("unit"):
 				var actor=unit_models[shot.unit].node;var direction: Vector2=shot.to-shot.from
-				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",[0.7,1.0,1.1][shot.kind])
+				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",0.8)
 			if shot.get("weapon","")=="ward":
 				art.sound_wave(battlefield,world_pos(shot.from),4.2*3);continue
-			if shot.has("to"):art.impact_fx(battlefield,world_pos(shot.to,1.0),int(shot.kind))
+			if shot.has("to"):art.strike_fx(battlefield,world_pos(shot.from,0.6),world_pos(shot.to,0.6),int(shot.kind))
 			if not shot.enemy and shot.kind!=1:continue
 			var node=art.orb(battlefield,world_pos(shot.from,2.8),Vector3.ONE*0.2,"9d8d71") if shot.enemy else art.box(battlefield,world_pos(shot.from,2),Vector3(0.16,0.12,1.1),"adf0ff")
 			projectiles.append({"node":node,"start":world_pos(shot.from,2.8 if shot.enemy else 2),"end":world_pos(shot.to,1),"age":0.0})
@@ -176,7 +177,9 @@ func _process(delta):
 	for i in range(sim.buildings.size()):
 		var b=sim.buildings[i];models[i].bar.scale.x=maxf(0.001,b.hp/b.max_hp)
 		if b.hp<=0 and models[i].node.visible:
-			models[i].node.hide();art.ruins(battlefield,world_pos(b.pos),b.kind);art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
+			models[i].node.hide()
+			if b.kind!="wall":art.ruins(battlefield,world_pos(b.pos),b.kind)
+			art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
 	for i in range(sim.units.size()):
 		var u=sim.units[i];var node=unit_models[i].node
 		node.visible=u.hp>0;unit_models[i].bar.scale.x=maxf(0.001,u.hp/u.max_hp)

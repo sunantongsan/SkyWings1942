@@ -9,7 +9,7 @@ func run():
 		for level in range(1,2 if kind=="servant" else 11):
 			var model=art.building(kind,level,0.25);root.add_child(model)
 			assert(model.get_meta("realistic_art",false),kind)
-			if kind in ["well","ward"]:
+			if kind in ["well","ward","granary","training"]:
 				assert(model.get_meta("visual_level")==level)
 				model.free();continue
 			var visual=model.get_node("RealisticVisual")
@@ -21,7 +21,7 @@ func run():
 				previous=visual.texture.region
 			if kind in ["tank","granary","crystal"]:assert(model.get_node("StorageAmount").text=="25%")
 			model.free()
-	for kind in range(3):
+	for kind in range(10):
 		var unit=art.person(kind);root.add_child(unit);art.pose(unit,"walk")
 		var sprite=unit.get_node("CharacterSprite");sprite._process(0.15)
 		assert(sprite.frame>0);assert(sprite.hframes*sprite.vframes==8)

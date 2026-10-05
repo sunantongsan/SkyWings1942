@@ -19,7 +19,7 @@ func _process(delta: float):
 		var target=defense_target
 		position=position.move_toward(target,delta*5.2)
 		if position.distance_to(target)>0.2:art.pose(self,"walk")
-		elif pause<=0:art.pose(self,"attack",0.75);pause=0.95
+		elif pause<=0:art.pose(self,"attack",0.75);art.strike_fx(get_parent(),position,position+Vector3(0,0,0.8),unit_kind);pause=0.95
 		pause-=delta;return
 	if activity=="sleep":
 		art.pose(self,"sleep");return

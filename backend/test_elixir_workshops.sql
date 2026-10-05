@@ -15,7 +15,7 @@ where user_id=auth.uid();
 set local role authenticated;
 do $$ declare r jsonb;failed bool:=false;begin
  r:=public.xian_action('sync','{}',gen_random_uuid());
- assert r->'state'->'army'='[2,1,0]'::jsonb,'Existing troops changed';
+ assert r->'state'->'army'='[2,1,0,0,0,0,0,0,0,0]'::jsonb,'Existing troops changed';
  assert jsonb_array_length(r->'state'->'jobs')=1,'Existing queue lost';
  assert (r->'state'->>'stone')::numeric=108,'Furnace production changed';
  assert (r->'capacity'->>'stone')::int=1100,'Pouch capacity changed';

@@ -184,6 +184,13 @@ func construction_dressing(parent: Node3D, footprint_size: int, progress: float)
 	for i in range(3):box(parent,Vector3(-0.7+i*0.65,0.13,span*0.5+0.35),Vector3(0.42,0.26,0.32),"b8a37a")
 
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
+	if realistic_enabled and kind=="granary":return glass_tiffin(level,fill)
+	if realistic_enabled and kind=="training":
+		var yard=courtyard(level);yard.set_meta("realistic_art",true);yard.set_meta("visual_level",level)
+		for mesh in yard.find_children("*","MeshInstance3D",true,false):
+			if mesh.position.y<0.3:
+				var floor_mat=StandardMaterial3D.new();floor_mat.albedo_color=Color("aaa695");floor_mat.roughness=0.9;mesh.material_override=floor_mat
+		batch_static(yard);return yard
 	if realistic_enabled and kind in ["well","ward"]:return upgrades().building(kind,level)
 	if realistic_enabled and realistic.WIDTHS.has(kind):
 		var model=realistic.building(kind,level,fill)
@@ -276,16 +283,26 @@ func person(kind: int, armed: bool=true) -> Node3D:
 	pose(root,"idle")
 	return root
 
+var fx_count=0
 func impact_fx(parent: Node3D, pos: Vector3, kind: int=0):
-	var root=Node3D.new();root.position=pos;parent.add_child(root)
-	var flash=cone(root,Vector3.ZERO,0.5,0.08,0.08,"ffd47b" if kind!=1 else "82ddff",12)
-	flash.rotation.x=PI/2
-	for i in range(5):
-		var shard=box(root,Vector3.ZERO,Vector3(0.05,0.05,0.7),"fff0b0" if kind==0 else "9beaff")
-		shard.rotation.y=i*TAU/5.0
-		shard.position=Vector3(sin(i*TAU/5.0)*0.55,0.12,cos(i*TAU/5.0)*0.55)
-	var tween=root.create_tween();tween.set_parallel(true);tween.tween_property(root,"scale",Vector3.ONE*1.8,0.16);tween.tween_property(root,"position:y",root.position.y+0.2,0.18)
-	tween.chain().tween_callback(root.queue_free)
+	if fx_count>=28:return
+	fx_count+=1
+	var root=Node3D.new();root.set_script(preload("res://scripts/combat_fx.gd"));root.position=pos;parent.add_child(root);root.tree_exited.connect(func():fx_count=maxi(0,fx_count-1))
+	var tint=Color("ffe1a0") if kind in [0,3,6,7] else Color("a6e8ff") if kind in [1,4,5] else Color("ff994c")
+	root.glow=realistic.puff(root,Color(tint,0.55))
+	var mesh=ImmediateMesh.new();mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(16):
+		var a=-1.1+i*2.2/16;var b=-1.1+(i+1)*2.2/16
+		for v in [Vector3(cos(a)*0.75,0,sin(a)*0.75),Vector3(cos(a)*0.86,0,sin(a)*0.86),Vector3(cos(b)*0.86,0,sin(b)*0.86),Vector3(cos(a)*0.75,0,sin(a)*0.75),Vector3(cos(b)*0.86,0,sin(b)*0.86),Vector3(cos(b)*0.75,0,sin(b)*0.75)]:mesh.surface_add_vertex(v)
+	mesh.surface_end();var arc=MeshInstance3D.new();arc.mesh=mesh;arc.material_override=clear_material(tint.to_html(false),0.75);arc.rotation=Vector3(0.55,randf()*TAU,0.4);root.add_child(arc);root.arc=arc
+	for i in range(7):
+		var spark=orb(root,Vector3.ZERO,Vector3(0.035,0.07,0.035),tint.to_html(false));root.sparks.append(spark)
+func strike_fx(parent: Node3D, start: Vector3, target: Vector3, kind: int):
+	if kind in [1,2,5,8,9]:
+		if fx_count>=24:return
+		var trail=realistic.puff(parent,Color("8ddcfa") if kind in [1,5] else Color("ffad54"));trail.position=start+Vector3(0,0.8,0);trail.scale=Vector3.ONE*0.10
+		var tween=trail.create_tween();tween.tween_property(trail,"position",target+Vector3(0,0.6,0),0.24);tween.tween_callback(func():impact_fx(parent,target+Vector3(0,0.6,0),kind);trail.queue_free())
+	else:impact_fx(parent,target+Vector3(0,0.6,0),kind)
 func rubble(parent: Node3D, pos: Vector3):
 	for i in range(5):
 		var angle=i*TAU/5.0;var r=rock(parent,pos+Vector3(cos(angle)*0.65,0,sin(angle)*0.65),0.22+0.04*(i%2));r.rotation.y=angle
@@ -833,3 +850,10 @@ func slingshot_fx(parent: Node3D, start: Vector3, end: Vector3):
 
 func upgrades():
 	var maker=preload("res://scripts/sect_art.gd").new();maker.art=self;return maker
+
+func glass_tiffin(level: int,fill: float) -> Node3D:
+	var root=Node3D.new();root.set_meta("realistic_art",true);root.set_meta("visual_level",clampi(level,1,10));root.set_meta("storage_fill",fill);root.set_meta("tiers",clampi(level,1,10));realistic.shadow(root,2.0)
+	for i in range(clampi(level,1,10)):
+		var layer=realistic.sprite("glass_tiffin",2.0,0.18);layer.name="GlassTier"+str(i);layer.position.y=i*0.24;root.add_child(layer)
+	var label=Label3D.new();label.name="StorageAmount";label.text=str(roundi(fill*100))+"%";label.font_size=36;label.pixel_size=0.01;label.outline_size=8;label.position=Vector3(0,0.18,0.2);label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;root.add_child(label)
+	return root

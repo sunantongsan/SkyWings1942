@@ -1,7 +1,7 @@
 begin;
 do $$ begin
- assert xian_private.garrison('{"army":[0,1,3],"jobs":[]}',100)='[0,0,1]'::jsonb;
- assert xian_private.garrison('{"army":[10,4,2],"jobs":[{"type":0,"finish":100},{"type":1,"finish":100},{"type":2,"finish":100},{"type":2,"finish":101}]}',100)='[5,2,1]'::jsonb;
+ assert xian_private.garrison('{"army":[0,1,3],"jobs":[]}',100)='[0,0,1,0,0,0,0,0,0,0]'::jsonb;
+ assert xian_private.garrison('{"army":[10,4,2],"jobs":[{"type":0,"finish":100},{"type":1,"finish":100},{"type":2,"finish":100},{"type":2,"finish":101}]}',100)='[5,2,1,0,0,0,0,0,0,0]'::jsonb;
  assert xian_private.army_power('[5,2,1]')=505;
  assert not has_function_privilege('authenticated','xian_private.ready_army(jsonb,bigint)','EXECUTE');
 end $$;
@@ -19,7 +19,7 @@ update xian_private.players set state=state||'{"army":[2,0,0],"scout":{"name":"D
 set local role authenticated;
 do $$ declare r jsonb; req uuid:=gen_random_uuid(); saved jsonb; begin
  r:=public.xian_action('raid_start','{}',req);
- assert r->'state'->'raid'->'enemy'->'garrison'='[5,2,1]'::jsonb;
+ assert r->'state'->'raid'->'enemy'->'garrison'='[5,2,1,0,0,0,0,0,0,0]'::jsonb;
  assert (r->'state'->'raid'->'enemy'->>'garrison_power')::int=505;
  assert (r->'state'->'raid'->>'ratio')::numeric<0.2,'Defenders did not affect combat';
  saved:=r->'state'->'raid';r:=public.xian_action('raid_start','{}',req);
@@ -28,17 +28,17 @@ end $$;
 reset role;
 do $$ declare s jsonb; begin
  select state into s from xian_private.players where user_id='ef440000-0000-4000-8000-000000000002';
- assert s->'army'='[11,5,3]'::jsonb,'Defending units must remain in roster';
+ assert s->'army'='[11,5,3,0,0,0,0,0,0,0]'::jsonb,'Defending units must remain in roster';
  assert s->'jobs'='[]'::jsonb,'Completed jobs must be removed once';
- assert s->'last_defense'->'garrison'='[5,2,1]'::jsonb;
- assert s->'last_defense'->'army'='[2,0,0]'::jsonb;
+ assert s->'last_defense'->'garrison'='[5,2,1,0,0,0,0,0,0,0]'::jsonb;
+ assert s->'last_defense'->'army'='[2,0,0,0,0,0,0,0,0,0]'::jsonb;
  assert (s->'last_defense'->>'finish')::bigint-(s->'last_defense'->>'time')::bigint=25;
 end $$;
 select set_config('request.jwt.claim.sub','ef440000-0000-4000-8000-000000000002',true);
 set local role authenticated;
 do $$ declare r jsonb; begin
  r:=public.xian_action('sync','{}',gen_random_uuid());
- assert r->'state'->'army'='[11,5,3]'::jsonb,'Jobs counted twice';
+ assert r->'state'->'army'='[11,5,3,0,0,0,0,0,0,0]'::jsonb,'Jobs counted twice';
 end $$;
 reset role;
 select 'XIAN_GARRISON_PASSED' as result;

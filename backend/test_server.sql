@@ -54,7 +54,7 @@ do $$ declare r jsonb; failed bool:=false; begin
  r:=public.xian_action('scout','{"mode":"player"}',gen_random_uuid());
  assert r->'state'->'scout'->>'player'='ef110000-0000-4000-8000-000000000002';
  r:=public.xian_action('raid_start','{}',gen_random_uuid());
- assert r->'state'->'army'='[0,0,0]'::jsonb;
+ assert r->'state'->'army'='[0,0,0,0,0,0,0,0,0,0]'::jsonb;
  begin perform public.xian_action('raid_claim','{}',gen_random_uuid());exception when others then failed:=true;end;
  assert failed,'Early raid payout';
 end $$;

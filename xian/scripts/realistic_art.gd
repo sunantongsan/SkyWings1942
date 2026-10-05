@@ -1,4 +1,5 @@
 extends RefCounted
+const Troops=preload("res://scripts/troops.gd")
 # Prerendered artwork uses the game's fixed isometric view. Gameplay, collision,
 # storage amounts and targeting remain independent of these visual nodes.
 const ROOT = "res://assets/realistic/"
@@ -32,15 +33,15 @@ func sprite(kind: String, width: float, ground_inset: float=0.12) -> Sprite3D:
 	return s
 func building(kind: String, level: int, fill: float=0.5) -> Node3D:
 	var root=Node3D.new();root.set_meta("realistic_art",true)
-	var width=float(WIDTHS[kind])
-	if kind!="servant":width*=1.0+(0.006 if kind=="training" else 0.018)*(clampi(level,1,10)-1)
+	var width=minf(2.45,float(WIDTHS[kind])) if kind!="training" else 5.5
+	if kind!="servant":width*=1.0
 	shadow(root,width*0.9)
 	var visual=sprite(kind+"_levels" if regions.has(kind+"_levels") else kind,width,0.16 if kind in ["training","well","granary"] else 0.1)
 	if regions.has(kind+"_levels"):
 		var region=regions[kind+"_levels"][clampi(level,1,10)-1]
 		var frame=AtlasTexture.new();frame.atlas=texture(kind+"_levels");frame.region=Rect2(region[0],region[1],region[2],region[3]);frame.filter_clip=true
-		visual.texture=frame;visual.pixel_size=minf(width/frame.get_width(),7.2/frame.get_height());visual.offset.y=frame.get_height()*0.40
-	if kind=="training":visual.alpha_cut=SpriteBase3D.ALPHA_CUT_DISABLED;visual.render_priority=-2
+		visual.texture=frame;visual.pixel_size=minf(width/frame.get_width(),4.2/frame.get_height());visual.offset.y=frame.get_height()*0.40
+
 	root.add_child(visual)
 	if kind in ["tank","granary","crystal"]:
 		var label=Label3D.new();label.name="StorageAmount";label.text=str(roundi(clampf(fill,0,1)*100))+"%";label.font_size=40;label.pixel_size=0.012;label.outline_size=8;label.font=load("res://assets/NotoSansThai.ttf");label.position.y=0.4;label.render_priority=10;label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;label.no_depth_test=true;root.add_child(label)
@@ -49,12 +50,12 @@ func building(kind: String, level: int, fill: float=0.5) -> Node3D:
 
 func character(kind: int, armed: bool) -> Node3D:
 	var root=Node3D.new();root.set_meta("realistic_art",true)
-	shadow(root,0.8 if not armed or kind<2 else 2.5)
-	var id="collector" if not armed else ["fighter","flying","dragon"][clampi(kind,0,2)]
+	shadow(root,1.4 if armed and kind in [2,4,6,7,8] else 0.7)
+	var id="collector" if not armed else Troops.ASSETS[clampi(kind,0,9)]
 	var s=sprite(id,1.0,0.02);s.name="CharacterSprite";s.hframes=4;s.vframes=2
 	# Sheet cells retain their generated transparent padding; never crop each frame
 	# independently, which would make the feet jump between animation frames.
-	s.pixel_size=(3.7 if kind==2 and armed else 2.5)/(s.texture.get_height()/2.0)
+	s.pixel_size=(2.6 if kind in [2,4,6,7,8] and armed else 1.8)/(s.texture.get_height()/2.0)
 	s.offset.y=(s.texture.get_height()/2.0)*0.48
-	s.set_script(preload("res://scripts/realistic_actor.gd"));s.flying=armed and kind>0
+	s.set_script(preload("res://scripts/realistic_actor.gd"));s.flying=armed and Troops.air(kind);s.troop_kind=kind if armed else -1
 	root.add_child(s);return root

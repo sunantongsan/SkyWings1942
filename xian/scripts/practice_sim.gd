@@ -1,4 +1,5 @@
 extends RefCounted
+const Troops=preload("res://scripts/troops.gd")
 # Pure local simulation. No API, account state, currency or online army access.
 var buildings: Array = []
 var units: Array = []
@@ -12,7 +13,9 @@ var grid=AStarGrid2D.new()
 var revision=0
 func setup(level: int):
 	tier=clampi(level,1,12);buildings.clear();units.clear();shots.clear()
-	reserve=[12+int(tier/4)*2,6+int(tier/6),4];elapsed=0;started=false;finished=false;revision=0
+	reserve=[12+int(tier/4)*2,6+int(tier/6),4,0,0,0,0,0,0,0];
+	for i in range(3,10):reserve[i]=2 if tier>=i+1 else 0
+	elapsed=0;started=false;finished=false;revision=0
 	add_building("hall",Vector2i(8,7),850+90*tier)
 	for pos in [Vector2i(5,6),Vector2i(10,9)]:add_building("tower",pos,220+50*tier)
 	if tier>=3:add_building("tower",Vector2i(10,5),220+50*tier)
@@ -47,9 +50,9 @@ func rebuild_grid():
 func can_deploy(pos: Vector2i) -> bool:
 	return grid.region.has_point(pos) and (pos.x<=1 or pos.y<=1 or pos.x>=14 or pos.y>=14) and not grid.is_point_solid(pos)
 func deploy(kind: int, pos: Vector2i) -> bool:
-	if finished or kind<0 or kind>2 or reserve[kind]<=0 or not can_deploy(pos):return false
+	if finished or kind<0 or kind>9 or reserve[kind]<=0 or not can_deploy(pos):return false
 	reserve[kind]-=1;started=true
-	var hp=[190.0,140.0,440.0][kind]
+	var hp=float(Troops.HP[kind])
 	units.append({"kind":kind,"pos":Vector2(pos),"hp":hp,"max_hp":hp,"cooldown":0.0,"think":0.0,"target":{},"path":PackedVector2Array(),"revision":-1,"windup":0.0,"pending_target":{},"moving":false})
 	return true
 func route_to(unit: Dictionary, target: Dictionary) -> PackedVector2Array:
@@ -71,7 +74,7 @@ func choose_target(unit: Dictionary):
 	candidates.sort_custom(func(a,b):return unit.pos.distance_squared_to(a.pos)<unit.pos.distance_squared_to(b.pos))
 	unit.target={};unit.path=PackedVector2Array();unit.revision=revision
 	if candidates.is_empty():return
-	if unit.kind>0:unit.target=candidates[0];return
+	if Troops.air(unit.kind):unit.target=candidates[0];return
 	var best=PackedVector2Array()
 	for b in candidates:
 		var path=route_to(unit,b)
@@ -97,26 +100,26 @@ func step(dt: float):
 		u.cooldown-=dt;u.think-=dt
 		if u.windup>0:
 			u.windup-=dt
-			if u.windup<=0 and not u.pending_target.is_empty():damage_building(u.pending_target,[30.0,43.0,65.0][u.kind])
+			if u.windup<=0 and not u.pending_target.is_empty():damage_building(u.pending_target,float(Troops.DAMAGE[u.kind]))
 			continue
 		if u.target.is_empty() or u.target.get("hp",0)<=0 or u.revision!=revision or u.think<=0:
 			choose_target(u);u.think=1.5
 		if u.target.is_empty():continue
 		var distance=u.pos.distance_to(u.target.pos)
-		var reach=3.0 if u.kind==1 else 1.05
+		var reach=Troops.reach(u.kind)
 		if distance<=reach:
 			if u.cooldown<=0:
-				u.cooldown=[0.8,1.1,1.2][u.kind]
+				u.cooldown=1.1 if u.kind>2 else [0.8,1.1,1.2][u.kind]
 				shots.append({"from":u.pos,"to":u.target.pos,"kind":u.kind,"enemy":false,"unit":units.find(u)})
 				u.pending_target=u.target;u.windup=0.3
 		else:
 			var target: Vector2=u.target.pos
-			if u.kind==0:
+			if not Troops.air(u.kind):
 				while not u.path.is_empty() and u.pos.distance_to(u.path[0])<0.05:u.path.remove_at(0)
 				if u.path.is_empty():continue
 				target=u.path[0]
 			u.moving=true
-			u.pos=u.pos.move_toward(target,[1.3,1.7,1.4][u.kind]*dt)
+			u.pos=u.pos.move_toward(target,float(Troops.SPEED[u.kind])*dt)
 	for b in buildings:
 		if b.hp<=0 or not b.kind in ["tower","ward"]:continue
 		b.cooldown-=dt
@@ -134,7 +137,7 @@ func step(dt: float):
 			for u in units:
 				if u.hp>0 and u.pos.distance_to(b.pos)<=4.2:u.hp=maxf(0,u.hp-damage*(1.8 if u.kind==1 else 1.4))
 		else:target.hp=maxf(0,target.hp-damage)
-	if percent()==100 or elapsed>=180 or (reserve[0]+reserve[1]+reserve[2]==0 and alive()==0):finished=true
+	if percent()==100 or elapsed>=180 or (reserve.reduce(func(a,b):return a+b,0)==0 and alive()==0):finished=true
 func alive() -> int:return units.filter(func(u):return u.hp>0).size()
 func percent() -> int:
 	var total=0;var destroyed=0

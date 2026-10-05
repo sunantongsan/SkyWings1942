@@ -54,3 +54,6 @@ has completed every animation/detail. Inspect the actual game capture and APK.
 
 No AI-generated image is used to count horns. `sect_art.gd` constructs exactly
 four horns per tier. See `tests/sect_life.gd` for default-renderer coverage.
+
+## v45 additions
+Eight original imagegen assets, generated 2026-10-05: an etched clear-glass tiffin tier filled with golden paddy rice; thief, divine turtle, sword immortal, divine tiger, stone warrior, fire phoenix and deity. Troop sheets use four locomotion cells above four combat poses. The first combat pose plus a procedural lunge is used to avoid weapon trails crossing generated cell boundaries. Sources retain transparency and were converted to WebP using Godot, with no pixel repainting. Glass tiers stack at runtime, one per level.
