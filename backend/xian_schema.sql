@@ -488,3 +488,106 @@ create or replace function public.xian_action(p_action text,p_args jsonb,p_reque
 returns jsonb language sql security invoker set search_path='' as $$ select xian_private.act(p_action,p_args,p_request) $$;
 revoke all on function public.xian_action(text,jsonb,uuid) from public,anon;
 grant execute on function public.xian_action(text,jsonb,uuid) to authenticated;
+
+-- Test reward ends permanently at 100 created Xian game accounts.
+-- Unrelated applications sharing auth.users do not count.
+
+create table if not exists xian_private.match_reward_campaign (
+ id boolean primary key default true check (id),
+ registrations bigint not null check (registrations>=0)
+);
+alter table xian_private.match_reward_campaign enable row level security;
+revoke all on xian_private.match_reward_campaign from public,anon,authenticated;
+insert into xian_private.match_reward_campaign(id,registrations)
+ select true,count(*) from xian_private.players on conflict(id) do nothing;
+create or replace function xian_private.count_game_registration() returns trigger
+language plpgsql security invoker set search_path='' as $$
+begin
+ update xian_private.match_reward_campaign set registrations=registrations+1 where id;
+ return new;
+end; $$;
+revoke all on function xian_private.count_game_registration() from public,anon,authenticated;
+drop trigger if exists xian_count_registration on xian_private.players;
+create trigger xian_count_registration after insert on xian_private.players
+ for each row execute function xian_private.count_game_registration();
+create or replace function xian_private.match_reward_amount() returns integer
+language sql stable security invoker set search_path='' as $$
+ select case when registrations<100 then 50 else 2 end
+ from xian_private.match_reward_campaign where id;
+$$;
+revoke all on function xian_private.match_reward_amount() from public,anon,authenticated;
+-- Patch only the current action implementation, preserving all other live rules.
+do $patch$
+declare source text; updated text;
+begin
+ source:=pg_get_functiondef('xian_private.act(text,jsonb,uuid)'::regprocedure);
+ if position('xian_private.match_reward_amount()' in source)>0 then return;end if;
+ if position(' uid uuid:=auth.uid(); s jsonb;' in source)=0
+ or position(' if p_action=''wall_manage'' then' in source)=0
+ or position('''ghost_ticket'',item||''{"used":true}''::jsonb' in source)=0
+ or (length(source)-length(replace(source,'''jade'',(s->>''jade'')::int+2','')))/length('''jade'',(s->>''jade'')::int+2')<>2
+ then raise exception 'Unexpected action definition; campaign was not installed';end if;
+ updated:=replace(source,' uid uuid:=auth.uid(); s jsonb;',' reward_jade int; uid uuid:=auth.uid(); s jsonb;');
+ updated:=replace(updated,' if p_action=''wall_manage'' then', E' reward_jade:=xian_private.match_reward_amount();\n s:=s||jsonb_build_object(''match_reward_jade'',reward_jade);\n if p_action=''wall_manage'' then');
+ updated:=replace(updated,'''jade'',(s->>''jade'')::int+2','''jade'',(s->>''jade'')::int+reward_jade');
+ updated:=replace(updated,'''ghost_ticket'',item||''{"used":true}''::jsonb','''ghost_ticket'',item||jsonb_build_object(''used'',true,''reward_jade'',reward_jade)');
+ updated:=replace(updated,'''paid'',n<10)','''paid'',n<10,''reward_jade'',case when n<10 then reward_jade else 0 end)');
+ execute updated;
+end; $patch$;
+
+create or replace function xian_private.retire_recruit(s jsonb) returns jsonb
+language plpgsql security invoker set search_path='' as $$
+declare b jsonb; kept jsonb:='[]'; archived jsonb:='[]'; units bigint:=0; purchases bigint; credit jsonb;
+begin
+ if coalesce((s->>'recruit_retired_v48')::boolean,false) then return s;end if;
+ for b in select value from jsonb_array_elements(s->'buildings') loop
+  if b->>'id'='recruit' then
+   purchases:=(power(2,greatest(0,least(10,(b->>'level')::int)))-1)::bigint;
+   if coalesce((b->>'finish')::bigint,0)>0 then purchases:=purchases+power(2,greatest(0,least(10,(b->>'level')::int)))::bigint;end if;
+   units:=units+purchases;archived:=archived||jsonb_build_array(b);
+  else kept:=kept||jsonb_build_array(b);end if;
+ end loop;
+ credit:=jsonb_build_object('water',units*80,'rice',units*100,'stone',units*5);
+ return s||jsonb_build_object('buildings',kept,'retired_recruit',archived,'recruit_refund',credit,'recruit_retired_v48',true);
+end $$;
+revoke all on function xian_private.retire_recruit(jsonb) from public,anon,authenticated;
+do $patch$
+declare src text; marker text;
+begin
+ src:=pg_get_functiondef('xian_private.catalog()'::regprocedure);
+ marker:='{"id":"recruit","name":"โรงรับศิษย์","water":80,"rice":100,"stone":5,"seconds":20,"limit":2},';
+ if position(marker in src)>0 then execute replace(src,marker,'');
+ elsif position('"id":"recruit"' in src)>0 then raise exception 'Unknown recruit catalog definition';end if;
+ src:=pg_get_functiondef('xian_private.act(text,jsonb,uuid)'::regprocedure);
+ if position('xian_private.retire_recruit(s)' in src)>0 then return;end if;
+ marker:=' -- Normalize only once under the account lock; archive removed dorms for recovery.';
+ if position(marker in src)=0 then raise exception 'Unexpected action body';end if;
+ src:=replace(src,marker,$body$
+ -- Index-based actions require a matching layout on accounts whose recruit was removed.
+ if p_action in ('upgrade','move','boost','wall_edit','wall_manage') then
+  if exists(select 1 from jsonb_array_elements(s->'buildings') v where v->>'id'='recruit') then raise exception 'กรุณาอัปเดตข้อมูลสำนักก่อน มีการถอดฐานรับศิษย์';end if;
+  if jsonb_array_length(coalesce(s->'retired_recruit','[]'))>0 and p_args->>'layout' is distinct from
+   (select string_agg((v->>'id')||':'||(v->>'x')||':'||(v->>'y'),',' order by i) from jsonb_array_elements(s->'buildings') with ordinality q(v,i)) then
+   raise exception 'ผังฐานเปลี่ยนแล้ว กรุณาใช้เกมรุ่นใหม่และเลือกอาคารอีกครั้ง';
+  end if;
+ end if;
+ s:=xian_private.retire_recruit(s);
+ -- Normalize only once under the account lock; archive removed dorms for recovery.
+$body$);
+ marker:=' worker_max:=7;';
+ if position(marker in src)=0 then raise exception 'Missing settlement marker';end if;
+ src:=replace(src,marker,$body$
+ -- Refund overflow stays in the account; never discard it at the storage cap.
+ foreach typ in array array['water','rice','stone'] loop
+  n:=case typ when 'water' then wc when 'rice' then rc else sc end;
+  qty:=least(greatest(0,n-floor((s->>typ)::numeric)::int),coalesce((s->'recruit_refund'->>typ)::int,0));
+  if qty>0 then
+   s:=jsonb_set(s,array[typ],to_jsonb((s->>typ)::numeric+qty));
+   s:=jsonb_set(s,array['recruit_refund',typ],to_jsonb((s->'recruit_refund'->>typ)::int-qty));
+  end if;
+ end loop;
+ water:=(s->>'water')::numeric;rice:=(s->>'rice')::numeric;stone:=(s->>'stone')::numeric;
+ worker_max:=7;
+$body$);
+ execute src;
+end $patch$;

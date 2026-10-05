@@ -51,10 +51,10 @@ func _process(delta: float):
 		frame=int(elapsed*7.0)%(4 if troop_kind>=3 else 8);position.y=0.12+sin(elapsed*2.0)*0.035
 	elif state in ["walk","climb"]:
 		restore_walk();frame=0
-		gait_target+=Vector2(movement.x,movement.z).length()*TAU/(3.0 if troop_kind in [4,6] else 2.2)
+		gait_target+=Vector2(movement.x,movement.z).length()*TAU/maxf(0.15,(1.15 if troop_kind in [4,6] else 0.72)*get_parent().global_basis.get_scale().x)
 		gait_phase=lerpf(gait_phase,gait_target,1.0-exp(-delta*22.0))
 		material_override=walk_material;walk_material.set_shader_parameter("phase",gait_phase);walk_material.set_shader_parameter("climbing",1.0 if state=="climb" else 0.0)
-		position.y=absf(sin(gait_phase*2))*0.022
+		position.y=0 # Keep the planted foot at ground height; lift only the swing leg.
 	else:
 		restore_walk()
 		frame=0;position.y=0

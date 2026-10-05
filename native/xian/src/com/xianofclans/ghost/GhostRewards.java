@@ -52,7 +52,14 @@ final class GhostRewards {
      JSONArray queue=read();
      if(queue.length()>0&&queue.getJSONObject(0).optString("p_request").equals(event.optString("p_request"))){queue.remove(0);prefs.edit().putString("queue",queue.toString()).commit();}
     }
-    if("ghost_win".equals(event.optString("p_action")))host.rewardStatus("รับแล้ว 2 หยก • ส่งเข้าสำนักเรียบร้อย");
+    if("ghost_win".equals(event.optString("p_action"))){
+     JSONObject state=result.getJSONObject("state");JSONObject round=state.optJSONObject("ghost_ticket");
+     int amount=round==null?0:round.optInt("reward_jade",0);
+     host.rewardStatus(amount>0?"รับแล้ว "+amount+" หยก • ส่งเข้าสำนักเรียบร้อย":"ส่งรางวัลเข้าสำนักเรียบร้อย");
+    }else if("ghost_begin".equals(event.optString("p_action"))){
+     int amount=result.getJSONObject("state").optInt("match_reward_jade",2);
+     host.rewardStatus("ผ่านด่านรับ "+amount+" หยก"+(amount==50?" • ช่วงทดสอบก่อนครบ 100 สมาชิก":"")+" • โฆษณาทุก 2 ด่าน");
+    }
    }}catch(Exception e){host.rewardStatus("รางวัลรอส่ง • เชื่อมต่อแล้วเปิดเกมจับคู่อีกครั้ง");}
    finally{synchronized(LOCK){running.set(false);if(drained&&!closed&&read().length()>0)drain();}}
   });

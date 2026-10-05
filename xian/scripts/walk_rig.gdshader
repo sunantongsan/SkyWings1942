@@ -11,13 +11,13 @@ void vertex(){
 void fragment(){
  // Animate one identity-locked contact pose, not disconnected generated poses.
  vec2 p=UV*vec2(4.0,2.0);p.x=(p.x-0.5)*1.3+0.5;
- float split=smoothstep(0.25,0.75,p.x);
+ float split=smoothstep(0.47,0.53,p.x);
  float opposite=mix(sin(phase),sin(phase+3.14159265),split);
  if(quadruped>0.5){opposite=sin(phase+p.x*9.42477796);}
  float legs=smoothstep(quadruped>0.5?0.52:0.57,0.90,p.y);
  float arms=smoothstep(0.25,0.38,p.y)*(1.0-smoothstep(0.49,0.61,p.y));
  vec2 sample_pos=p;
- sample_pos.x-=opposite*((quadruped>0.5?0.035:0.07)*legs-0.018*arms);
+ sample_pos.x-=opposite*((quadruped>0.5?0.035:0.095)*legs-0.018*arms);
  // The swing foot lifts; the support foot remains on the ground. Half a cycle later they swap.
  float lift=mix(max(0.0,sin(phase)),max(0.0,sin(phase+3.14159265)),split);
  sample_pos.y+=lift*(quadruped>0.5?0.02:0.04)*legs;

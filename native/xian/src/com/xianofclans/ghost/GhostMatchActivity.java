@@ -24,14 +24,14 @@ public class GhostMatchActivity extends Activity {
   LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setBackgroundColor(Color.rgb(18,10,46));
   Button back=new Button(this);back.setText("กลับสำนัก  •  Xian of Clans");back.setOnClickListener(v->finish());
   layout.addView(back,new LinearLayout.LayoutParams(-1,(int)(48*getResources().getDisplayMetrics().density)));
-  rewardLabel=new TextView(this);rewardLabel.setText("ผ่านด่านรับ 2 หยก • โฆษณาทุก 2 ด่าน");rewardLabel.setTextColor(Color.WHITE);rewardLabel.setGravity(Gravity.CENTER);layout.addView(rewardLabel);
+  rewardLabel=new TextView(this);rewardLabel.setText("กำลังตรวจรางวัลประจำด่าน • โฆษณาทุก 2 ด่าน");rewardLabel.setTextColor(Color.WHITE);rewardLabel.setGravity(Gravity.CENTER);layout.addView(rewardLabel);
   rewards=new GhostRewards(this,getIntent().getStringExtra("token"));ads=new GhostAds(this);
   gameView=new GhostGameView(this);layout.addView(gameView,new LinearLayout.LayoutParams(-1,0,1));setContentView(layout);
  }
  boolean needsPrivacyOptions(){return ads!=null&&ads.needsPrivacy();}
  void openPrivacyOptions(){if(ads!=null)ads.privacy();}
  void showRewardedMoves(Runnable earned,Runnable unavailable){unavailable.run();}
- void onLevelCompleted(int level){rewardStatus("ผ่านด่านแล้ว • กำลังส่ง 2 หยกเข้าสำนัก");rewards.win(level);ads.completed();}
+ void onLevelCompleted(int level){rewardStatus("ผ่านด่านแล้ว • กำลังส่งรางวัลเข้าสำนัก");rewards.win(level);ads.completed();}
  void onLevelStarted(int level){rewards.begin(level);}
  void rewardStatus(String message){runOnUiThread(()->{if(!isFinishing()&&rewardLabel!=null)rewardLabel.setText(message);});}
  void showAdBeforeNextLevel(Runnable next){ads.betweenLevels(next);}

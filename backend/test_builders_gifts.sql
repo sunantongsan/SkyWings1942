@@ -34,14 +34,14 @@ set local role authenticated;
 do $$ declare r jsonb; ticket text; before_j int; req uuid:=gen_random_uuid(); begin
  r:=public.xian_action('sync','{}',gen_random_uuid());ticket:=r->'state'->'ghost_ticket'->>'id';before_j:=(r->'state'->>'jade')::int;
  r:=public.xian_action('ghost_win',jsonb_build_object('level',1,'ticket',ticket),req);
- assert (r->'state'->>'jade')::int=before_j+2 and (r->'state'->>'ghost_wins')::int=1;
+ assert (r->'state'->>'jade')::int=before_j+(r->'state'->'ghost_ticket'->>'reward_jade')::int and (r->'state'->>'ghost_wins')::int=1;
  r:=public.xian_action('ghost_win',jsonb_build_object('level',1,'ticket',ticket),req);
  r:=public.xian_action('ghost_win',jsonb_build_object('level',1,'ticket',ticket),gen_random_uuid());
- assert (r->'state'->>'jade')::int=before_j+2,'Duplicate native reward';
+ assert (r->'state'->>'jade')::int=before_j+(r->'state'->'ghost_ticket'->>'reward_jade')::int,'Duplicate native reward';
  assert (r->>'checkin_available')::boolean;
  r:=public.xian_action('checkin','{}',gen_random_uuid());
  assert not (r->>'checkin_available')::boolean;
- assert (r->'state'->>'jade')::int=before_j+7;
+ assert (r->'state'->>'jade')::int=before_j+(r->'state'->'ghost_ticket'->>'reward_jade')::int+5;
 end $$;
 reset role;
 select 'XIAN_BUILDERS_GIFTS_PASSED' as result;

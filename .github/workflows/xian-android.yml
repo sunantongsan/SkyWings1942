@@ -11,6 +11,7 @@ permissions:
 jobs:
   android:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -57,35 +58,35 @@ jobs:
           set -o pipefail
           godot --headless --path xian --editor --import --quit 2>&1 | tee import.log
           if grep -E 'SCRIPT ERROR|Parse Error' import.log; then exit 1; fi
-          godot --headless --path xian --script res://tests/smoke.gd 2>&1 | tee smoke.log
+          timeout 90 godot --headless --path xian --script res://tests/smoke.gd 2>&1 | tee smoke.log
           grep XIAN_SMOKE_PASSED smoke.log
-          godot --headless --path xian --script res://tests/ten_troops.gd 2>&1 | tee ten_troops.log
+          timeout 90 godot --headless --path xian --script res://tests/ten_troops.gd 2>&1 | tee ten_troops.log
           grep XIAN_TEN_TROOPS_PASSED ten_troops.log
           timeout 90 godot --headless --path xian --script res://tests/skills_and_breaches.gd 2>&1 | tee skills.log
           grep XIAN_SKILLS_BREACHES_PASSED skills.log
           if grep -E 'SCRIPT ERROR|Parse Error' skills.log ten_troops.log; then exit 1; fi
-          godot --headless --path xian --script res://tests/auth.gd 2>&1 | tee auth.log
+          timeout 90 godot --headless --path xian --script res://tests/auth.gd 2>&1 | tee auth.log
           grep XIAN_AUTH_PASSED auth.log
-          godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log
+          timeout 90 godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log
           grep XIAN_TOUCH_BUILD_PASSED touch.log
-          godot --headless --path xian --script res://tests/walls.gd 2>&1 | tee walls.log
+          timeout 90 godot --headless --path xian --script res://tests/walls.gd 2>&1 | tee walls.log
           grep -q XIAN_WALL_CLIENT_PASSED walls.log
-          godot --headless --path xian --script res://tests/practice_touch.gd 2>&1 | tee practice-touch.log
+          timeout 90 godot --headless --path xian --script res://tests/practice_touch.gd 2>&1 | tee practice-touch.log
           grep -q XIAN_PRACTICE_TOUCH_PASSED practice-touch.log
-          godot --headless --path xian --script res://tests/practice.gd 2>&1 | tee practice.log
+          timeout 90 godot --headless --path xian --script res://tests/practice.gd 2>&1 | tee practice.log
           grep -q XIAN_OFFLINE_PRACTICE_PASSED practice.log
-          godot --headless --path xian --script res://tests/gifts_builders.gd 2>&1 | tee gifts.log
+          timeout 90 godot --headless --path xian --script res://tests/gifts_builders.gd 2>&1 | tee gifts.log
           grep -q XIAN_GIFTS_BUILDERS_PASSED gifts.log
           if grep -E 'SCRIPT ERROR|Parse Error' gifts.log; then exit 1; fi
-          godot --headless --path xian --script res://tests/building_levels.gd 2>&1 | tee levels.log
+          timeout 90 godot --headless --path xian --script res://tests/building_levels.gd 2>&1 | tee levels.log
           grep -q XIAN_BUILDING_LEVELS_PASSED levels.log
           if grep -E 'SCRIPT ERROR|Parse Error' levels.log walls.log; then exit 1; fi
-          godot --headless --path xian --script res://tests/donor_assets.gd 2>&1 | tee donor.log
+          timeout 90 godot --headless --path xian --script res://tests/donor_assets.gd 2>&1 | tee donor.log
           grep XIAN_DONOR_ASSETS_PASSED donor.log
-          godot --headless --path xian --script res://tests/sect_life.gd 2>&1 | tee sect-life.log
+          timeout 90 godot --headless --path xian --script res://tests/sect_life.gd 2>&1 | tee sect-life.log
           grep XIAN_SECT_LIFE_PASSED sect-life.log
           if grep -E 'SCRIPT ERROR|Parse Error' sect-life.log; then exit 1; fi
-          godot --headless --path xian --script res://tests/realistic_art.gd 2>&1 | tee realistic.log
+          timeout 90 godot --headless --path xian --script res://tests/realistic_art.gd 2>&1 | tee realistic.log
           grep XIAN_REALISTIC_ART_PASSED realistic.log
           if grep -E 'SCRIPT ERROR|Parse Error' realistic.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' practice.log; then exit 1; fi
@@ -93,6 +94,50 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' touch.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' auth.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' smoke.log; then exit 1; fi
+      - name: Verify all offline campaign stages
+        run: |
+          set -o pipefail
+          timeout 90 godot --headless --path xian --script res://tests/campaign.gd 2>&1 | tee campaign.log
+          grep XIAN_CAMPAIGN_PASSED campaign.log
+          timeout 300 godot --headless --path xian --script res://tests/campaign_balance.gd 2>&1 | tee campaign-balance.log
+          grep XIAN_CAMPAIGN_BALANCE_PASSED campaign-balance.log
+          if grep -E 'SCRIPT ERROR|Parse Error' campaign.log campaign-balance.log; then exit 1; fi
+      - name: Verify responsive controls
+        run: |
+          set -o pipefail
+          timeout 90 godot --headless --path xian --script res://tests/responsiveness.gd 2>&1 | tee responsiveness.log
+          grep XIAN_RESPONSIVENESS_PASSED responsiveness.log
+          timeout 90 godot --headless --path xian --script res://tests/restored_base_ui.gd 2>&1 | tee restored-ui.log
+          grep XIAN_RESTORED_BASE_UI_PASSED restored-ui.log
+          if grep -E 'SCRIPT ERROR|Parse Error' restored-ui.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error' responsiveness.log; then exit 1; fi
+      - name: Render village review and matching building icons
+        run: |
+          set -o pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb
+          timeout 300 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/ground_visibility.gd 2>&1 | tee ground.log
+          grep XIAN_GROUND_VISIBILITY_PASSED ground.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Shader compilation failed' ground.log; then exit 1; fi
+          timeout 180 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/studio_v48.gd 2>&1 | tee studio.log
+          grep XIAN_STUDIO_V50_PASSED studio.log
+          if grep -E 'SCRIPT ERROR|Parse Error' studio.log; then exit 1; fi
+          timeout 180 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/campaign_studio.gd 2>&1 | tee campaign-studio.log
+          grep XIAN_CAMPAIGN_STUDIO_PASSED campaign-studio.log
+          if grep -E 'SCRIPT ERROR|Parse Error' campaign-studio.log; then exit 1; fi
+          godot --headless --path xian --editor --import --quit
+          timeout 90 godot --headless --path xian --script res://tests/architecture.gd 2>&1 | tee architecture.log
+          grep XIAN_ARCHITECTURE_PASSED architecture.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Xian-v051-Review
+          path: |
+            xian/build/review/v050-*.png
+            xian/build/review/v051-*.png
+            xian/build/review/campaign-balance.json
+            xian/build/review/ground-report.json
+            xian/assets/ui/buildings/*.png
       - name: Export Android
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore

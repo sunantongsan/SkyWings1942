@@ -1,0 +1,36 @@
+begin;
+do $$
+declare uid uuid:=gen_random_uuid(); second_uid uuid:=gen_random_uuid(); r jsonb; req uuid; ticket text; balance int;
+begin
+ insert into auth.users(id,aud,role,email,created_at,updated_at) values(uid,'authenticated','authenticated',uid::text||'@example.invalid',now(),now());
+ perform set_config('request.jwt.claim.sub',uid::text,true);
+ update xian_private.match_reward_campaign set registrations=98 where id;
+ r:=public.xian_action('create','{"name":"ทดสอบหยก","map":"bamboo"}',gen_random_uuid());
+ assert (select registrations=99 from xian_private.match_reward_campaign where id);
+ assert (r->'state'->>'match_reward_jade')::int=50;
+ r:=public.xian_action('ghost_begin','{"level":1}',gen_random_uuid());ticket:=r->'state'->'ghost_ticket'->>'id';
+ update xian_private.players set state=jsonb_set(state,'{ghost_ticket,start}',to_jsonb(floor(extract(epoch from now()))::bigint-30)) where user_id=uid;
+ balance:=(r->'state'->>'jade')::int;req:=gen_random_uuid();
+ r:=public.xian_action('ghost_win',jsonb_build_object('level',1,'ticket',ticket),req);
+ assert (r->'state'->>'jade')::int=balance+50;
+ assert (r->'state'->'ghost_ticket'->>'reward_jade')::int=50;
+ r:=public.xian_action('ghost_win',jsonb_build_object('level',1,'ticket',ticket),req);
+ assert (r->'state'->>'jade')::int=balance+50;
+ r:=public.xian_action('ghost_win',jsonb_build_object('level',1,'ticket',ticket),gen_random_uuid());
+ assert (r->'state'->>'jade')::int=balance+50;
+ insert into auth.users(id,aud,role,email,created_at,updated_at) values(second_uid,'authenticated','authenticated',second_uid::text||'@example.invalid',now(),now());
+ perform set_config('request.jwt.claim.sub',second_uid::text,true);
+ r:=public.xian_action('create','{"name":"คนที่หนึ่งร้อย","map":"bamboo"}',gen_random_uuid());
+ assert (r->'state'->>'match_reward_jade')::int=2;
+ assert (select registrations=100 from xian_private.match_reward_campaign where id);
+ delete from auth.users where id=second_uid;
+ assert xian_private.match_reward_amount()=2,'Deletion reopened promotion';
+ perform set_config('request.jwt.claim.sub',uid::text,true);
+ r:=public.xian_action('ghost_begin','{"level":2}',gen_random_uuid());ticket:=r->'state'->'ghost_ticket'->>'id';balance:=(r->'state'->>'jade')::int;
+ update xian_private.players set state=jsonb_set(state,'{ghost_ticket,start}',to_jsonb(floor(extract(epoch from now()))::bigint-30)) where user_id=uid;
+ r:=public.xian_action('ghost_win',jsonb_build_object('level',2,'ticket',ticket),gen_random_uuid());
+ assert (r->'state'->>'jade')::int=balance+2;
+ assert (r->'state'->'ghost_ticket'->>'reward_jade')::int=2;
+end $$;
+rollback;
+select 'XIAN_BETA_REWARDS_PASSED' as result, registrations, xian_private.match_reward_amount() as live_reward from xian_private.match_reward_campaign;

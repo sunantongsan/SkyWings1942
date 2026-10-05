@@ -2,7 +2,7 @@ extends SceneTree
 const Art=preload("res://scripts/art.gd")
 func _initialize():call_deferred("run")
 func run():
-	var art=Art.new();var names={}
+	var art=Art.new();art.architecture_enabled=false;var names={} # Retained legacy art regression
 	for level in range(1,11):
 		var wall=art.wall(15,0,level);root.add_child(wall);names[wall.get_meta("material_name")]=true;assert(wall.get_meta("wall_mask")==15);wall.free()
 		var ward=art.building("ward",level);root.add_child(ward);assert(ward.find_children("Horn_*","Node3D",false,false).size()==4*level);assert(art.model_bounds(ward).size.y<8);ward.free()

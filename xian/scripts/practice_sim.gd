@@ -1,4 +1,9 @@
 extends RefCounted
+const Campaign=preload("res://scripts/campaign.gd")
+const Defenses=preload("res://scripts/campaign_defenses.gd")
+var campaign_mode=false
+var campaign_data: Dictionary={}
+var traps: Array=[]
 const Troops=preload("res://scripts/troops.gd")
 # Pure local simulation. No API, account state, currency or online army access.
 var buildings: Array = []
@@ -15,6 +20,7 @@ var finished=false
 var grid=AStarGrid2D.new()
 var revision=0
 func setup(level: int):
+	campaign_mode=false;traps.clear()
 	clear_targets();next_id=0
 	tier=clampi(level,1,12);buildings.clear();units.clear();shots.clear();defenders.clear();stolen={"water":0,"rice":0,"stone":0}
 	reserve=[12+int(tier/4)*2,6+int(tier/6),4,0,0,0,0,0,0,0];
@@ -48,6 +54,61 @@ func setup(level: int):
 		defenders.append(combatant(0,Vector2(8,6),1))
 	if tier>=6:defenders.append(combatant(1,Vector2(9,7),1))
 	if tier>=9:defenders.append(combatant(5,Vector2(8,9),1))
+func setup_campaign(number: int):
+	setup(1);campaign_mode=true;campaign_data=Campaign.stage(number);tier=number
+	buildings.clear();defenders.clear();reserve=campaign_data.reserve.duplicate()
+	var power: float=campaign_data.power
+	for entry in campaign_data.buildings:
+		var hp=190.0*power
+		if entry.kind=="hall":hp=650.0*power
+		elif entry.kind=="wall":hp=65.0*power
+		elif Defenses.STATS.has(entry.kind):hp=260.0*power
+		add_building(entry.kind,Vector2i(entry.x,entry.y),hp)
+	for entry in campaign_data.guards:defenders.append(combatant(entry.kind,Vector2(entry.x,entry.y),1))
+	for entry in campaign_data.traps:traps.append({"kind":entry.kind,"pos":Vector2(entry.x,entry.y),"triggered":false})
+	rebuild_grid()
+func tick_campaign_defense(b: Dictionary,dt: float):
+	if b.hp<=0 or not Defenses.STATS.has(b.kind):return
+	var config=Defenses.STATS[b.kind];var target: Dictionary={};var nearest: float=config.range
+	# The flame retains its lock; ramping resets when the target dies or leaves range.
+	if b.kind=="flame":
+		for u in units:
+			if u.hp>0 and u.eid==b.get("lock","") and b.pos.distance_to(u.pos)<=config.range:target=u;break
+	if target.is_empty():
+		for u in units:
+			if u.hp<=0 or not Defenses.eligible(b.kind,Troops.air(u.kind)):continue
+			var distance: float=b.pos.distance_to(u.pos)
+			if distance>=config.min_range and distance<=nearest:nearest=distance;target=u
+	if target.is_empty():b["lock"]="";b["ramp"]=0;return
+	b.cooldown-=dt
+	if b.cooldown>0:return
+	b.cooldown=config.cooldown
+	var damage: float=config.damage*campaign_data.power
+	if b.kind=="flame":
+		b["ramp"]=mini(6,int(b.get("ramp",0))+1) if b.get("lock","")==target.eid else 0
+		b["lock"]=target.eid;damage*=1.0+b.ramp*0.45
+	shots.append({"from":b.pos,"to":target.pos,"kind":1,"enemy":true,"weapon":b.kind,"target_height":2.4 if Troops.air(target.kind) else 0.0})
+	if config.splash>0:
+		var center: Vector2=b.pos if b.kind=="ward" else target.pos
+		for u in units:
+			if u.hp>0 and Defenses.eligible(b.kind,Troops.air(u.kind)) and u.pos.distance_to(center)<=config.splash:damage_target(u,damage)
+	elif b.kind=="storm":
+		damage_target(target,damage)
+		var extra=units.filter(func(u):return u.hp>0 and u.eid!=target.eid and u.pos.distance_to(target.pos)<=2.0)
+		extra.sort_custom(func(a,c):return a.pos.distance_squared_to(target.pos)<c.pos.distance_squared_to(target.pos))
+		for i in range(mini(2,extra.size())):damage_target(extra[i],damage*0.65)
+	else:damage_target(target,damage)
+func tick_traps():
+	for trap in traps:
+		if trap.triggered:continue
+		var air=trap.kind=="air_mine"
+		for u in units:
+			if u.hp<=0 or Troops.air(u.kind)!=air or u.pos.distance_to(trap.pos)>1.0:continue
+			trap.triggered=true
+			shots.append({"from":trap.pos,"to":u.pos,"kind":8,"enemy":true,"weapon":trap.kind,"trap":true})
+			for victim in units:
+				if victim.hp>0 and Troops.air(victim.kind)==air and victim.pos.distance_to(trap.pos)<=1.6:damage_target(victim,(100.0 if air else 65.0)*campaign_data.power)
+			break
 func add_building(kind: String, p: Vector2i, hp: float):
 	buildings.append({"eid":"b"+str(buildings.size()),"kind":kind,"pos":Vector2(p),"hp":hp,"max_hp":hp,"cooldown":0.0,"burn":0.0,"stock":200.0})
 func rebuild_grid():
@@ -80,6 +141,11 @@ func route_to(unit: Dictionary, target: Dictionary) -> PackedVector2Array:
 		if not path.is_empty() and (best.is_empty() or path.size()<best.size()):best=path
 	grid.set_point_solid(start,was_solid)
 	for cell in climb_cells:grid.set_point_solid(cell,true)
+	# A fractional position may already be past the rounded start cell. Do not
+	# walk backwards to that cell every replan (slow units otherwise oscillate).
+	if best.size()>1:
+		var segment=best[1]-best[0];var offset: Vector2=unit.pos-best[0]
+		if offset.dot(segment)>0 and absf(offset.cross(segment))<0.05:best.remove_at(0)
 	return best
 func choose_target(unit: Dictionary):
 	var enemy_units=units if unit.get("team",0)==1 else defenders
@@ -100,7 +166,7 @@ func choose_target(unit: Dictionary):
 		var stores=candidates.filter(func(b):return b.kind in ["tank","granary","crystal","spring","well","kitchen"])
 		if not stores.is_empty():candidates=stores
 	if unit.kind==2:
-		var defenses=candidates.filter(func(b):return b.kind in ["tower","ward"])
+		var defenses=candidates.filter(func(b):return b.kind in ["tower","ward"] or (campaign_mode and Defenses.STATS.has(b.kind)))
 		if not defenses.is_empty():candidates=defenses
 	candidates.sort_custom(func(a,b):return unit.pos.distance_squared_to(a.pos)<unit.pos.distance_squared_to(b.pos))
 	unit.target={};unit.path=PackedVector2Array();unit.revision=revision
@@ -199,7 +265,9 @@ func step(dt: float):
 		if target.hp>0 and target.get("burn",0)>0:target.burn=maxf(0,target.burn-dt);damage_target(target,18*dt)
 	for u in units:tick_unit(u,dt)
 	for guard in defenders:tick_unit(guard,dt)
+	if campaign_mode:tick_traps()
 	for b in buildings:
+		if campaign_mode:tick_campaign_defense(b,dt);continue
 		if b.hp<=0 or not b.kind in ["tower","ward"]:continue
 		b.cooldown-=dt
 		if b.cooldown>0:continue
@@ -216,7 +284,7 @@ func step(dt: float):
 			for u in units:
 				if u.hp>0 and u.pos.distance_to(b.pos)<=4.2:damage_target(u,damage*(1.8 if Troops.air(u.kind) else 1.4))
 		else:damage_target(target,damage)
-	if percent()==100 or elapsed>=180 or (reserve.reduce(func(a,b):return a+b,0)==0 and alive()==0):finished=true
+	if percent()==100 or (not campaign_mode and elapsed>=180) or (reserve.reduce(func(a,b):return a+b,0)==0 and alive()==0):finished=true
 func alive() -> int:return units.filter(func(u):return u.hp>0).size()
 func percent() -> int:
 	var total=0;var destroyed=0
