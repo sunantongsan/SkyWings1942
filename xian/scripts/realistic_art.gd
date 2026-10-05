@@ -17,7 +17,7 @@ func soft_material(color: Color, billboard: bool=false) -> StandardMaterial3D:
 func puff(parent: Node3D, color: Color) -> MeshInstance3D:
 	var n=MeshInstance3D.new();var q=QuadMesh.new();q.size=Vector2(2.5,2.5);n.mesh=q;n.material_override=soft_material(color,true);n.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;parent.add_child(n);return n
 func shadow(parent: Node3D, width: float):
-	var n=MeshInstance3D.new();var q=QuadMesh.new();q.size=Vector2(width,width*0.72);n.mesh=q;n.rotation.x=-PI/2;n.position.y=0.025;n.material_override=soft_material(Color(0.08,0.07,0.04,0.38));n.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;parent.add_child(n)
+	var n=MeshInstance3D.new();var q=QuadMesh.new();q.size=Vector2(width,width*0.72);n.name="ContactShadow";n.mesh=q;n.rotation.x=-PI/2;n.position.y=0.065;n.material_override=soft_material(Color(0.08,0.07,0.04,0.38));n.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF;parent.add_child(n)
 func texture(kind: String) -> Texture2D:
 	if not textures.has(kind):textures[kind] = load(ROOT + kind + ".webp")
 	return textures[kind]
@@ -35,7 +35,11 @@ func building(kind: String, level: int, fill: float=0.5) -> Node3D:
 	var root=Node3D.new();root.set_meta("realistic_art",true)
 	var width=minf(2.45,float(WIDTHS[kind])) if kind!="training" else 5.5
 	if kind!="servant":width*=1.0
-	shadow(root,width*0.9)
+	shadow(root,width*1.05)
+	var footing=MeshInstance3D.new();footing.name="GroundFooting"
+	var slab=BoxMesh.new();slab.size=Vector3(width*0.82,0.055,width*0.7);footing.mesh=slab;footing.position.y=0.018
+	var stone=StandardMaterial3D.new();stone.albedo_texture=texture("stone");stone.albedo_color=Color("8b9078");stone.roughness=1.0
+	footing.material_override=stone;root.add_child(footing)
 	var visual=sprite(kind+"_levels" if regions.has(kind+"_levels") else kind,width,0.16 if kind in ["training","well","granary"] else 0.1)
 	if regions.has(kind+"_levels"):
 		var region=regions[kind+"_levels"][clampi(level,1,10)-1]

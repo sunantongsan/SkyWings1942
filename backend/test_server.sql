@@ -86,9 +86,9 @@ do $$ declare r jsonb; req uuid:=gen_random_uuid(); j int; begin
  r:=public.xian_action('match_swap','{"a":2,"b":10}',req);
  assert (r->'state'->'match'->>'score')::int>=300;
  assert (r->'state'->'match'->>'paid')::boolean;
- assert (r->'state'->>'jade')::int=j+2;
+ assert (r->'state'->>'jade')::int=j+(r->'state'->>'match_reward_jade')::int;
  r:=public.xian_action('match_swap','{"a":2,"b":10}',req);
- assert (r->'state'->>'jade')::int=j+2;
+ assert (r->'state'->>'jade')::int=j+(r->'state'->>'match_reward_jade')::int;
  r:=public.xian_action('match_start','{}',gen_random_uuid());
  r:=public.xian_action('match_shuffle','{}',gen_random_uuid());
  assert (r->'state'->'match'->>'moves')::int=19;

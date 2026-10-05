@@ -93,6 +93,12 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' touch.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' auth.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' smoke.log; then exit 1; fi
+      - name: Verify responsive controls
+        run: |
+          set -o pipefail
+          timeout 90 godot --headless --path xian --script res://tests/responsiveness.gd 2>&1 | tee responsiveness.log
+          grep XIAN_RESPONSIVENESS_PASSED responsiveness.log
+          if grep -E 'SCRIPT ERROR|Parse Error' responsiveness.log; then exit 1; fi
       - name: Export Android
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore

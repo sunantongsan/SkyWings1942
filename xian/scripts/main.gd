@@ -46,6 +46,9 @@ var pan_start = Vector2.ZERO
 var dragging = false
 var pivot = Vector3.ZERO
 var last_buildings = ""
+var icon_cache: Dictionary={}
+var base_cache: Dictionary={}
+var side_refresh_pending=false
 var map_drawn = ""
 var battle_visual = false
 var battle_nodes: Array = []
@@ -192,12 +195,15 @@ func receive(payload: Dictionary):
 	if mode in ["login","create"]:close_modal();mode="home"
 	if state.has("raid"):mode="raid"
 	if map_drawn!=state.get("map","bamboo"):draw_terrain(state.get("map","bamboo"))
-	var encoded=JSON.stringify(state.get("army",[]))+str(state.get("last_defense",{}).get("time",0))+JSON.stringify(state.get("buildings",[]))+str(int(float(state.get("water",0))/maxf(1,float(caps.get("water",1000)))*100))+str(int(float(state.get("rice",0))/maxf(1,float(caps.get("rice",1000)))*100))+str(int(float(state.get("stone",0))/maxf(1,float(caps.get("stone",100)))*10))
+	var encoded=JSON.stringify(state.get("army",[]))+str(state.get("last_defense",{}).get("time",0))+JSON.stringify(state.get("buildings",[]))
 	if encoded!=last_buildings and not battle_visual:
 		last_buildings=encoded;draw_base()
 	if mode=="raid" and state.has("raid") and not battle_visual:draw_battle()
 	elif battle_visual and (mode!="raid" or not state.has("raid")):battle_visual=false;draw_base()
-	update_top();show_side()
+	update_storage_visuals()
+	update_top()
+	if menu_touch<0:show_side()
+	else:side_refresh_pending=true
 	if mode=="match":show_match()
 	if mode=="jade" and is_instance_valid(modal):show_gifts()
 	message("บันทึกออนไลน์แล้ว")
@@ -321,11 +327,16 @@ func show_side():
 				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d โอสถ %d" % [d.attacker,d.water,d.rice,d.stone],16)
 			button(side,"อัปเดตข้อมูล",send.bind("sync",{}))
 			button(side,"เครดิตภาพ / โมเดล",show_credits)
-func send(action: String,args: Dictionary):api.action(action,args)
+func send(action: String,args: Dictionary):
+	if api.busy:
+		message("กำลังบันทึกคำสั่งก่อนหน้า กรุณารอสักครู่");return
+	message("รับคำสั่งแล้ว กำลังบันทึก…")
+	api.action(action,args)
 func building_icon(kind: String) -> Texture2D:
+	if icon_cache.has(kind):return icon_cache[kind]
 	if kind=="granary":return load("res://assets/realistic/glass_tiffin.webp")
 	if art.realistic_enabled and art.realistic.WIDTHS.has(kind):
-		var model=art.realistic.building(kind,1);var texture=model.get_node("RealisticVisual").texture;model.free();return texture
+		var model=art.realistic.building(kind,1);var texture=model.get_node("RealisticVisual").texture;model.free();icon_cache[kind]=texture;return texture
 	return load("res://assets/buildings/"+kind+".png")
 func choose_build(kind: String):
 	chosen_build=kind;moving=false;wall_group.clear();clear_preview()
@@ -395,27 +406,40 @@ func draw_terrain(kind: String):
 	art.landscape(terrain,kind=="mountain")
 
 func draw_base():
+	# Preserve unchanged geometry/materials across build and upgrade responses.
+	for cached in base_cache.values():
+		if is_instance_valid(cached) and cached.get_parent()==world:world.remove_child(cached)
 	clear(world);actors=[]
+	var next_cache: Dictionary={}
 	for b in state.get("buildings",[]):
 		var resource={"tank":"water","granary":"rice","crystal":"stone"}.get(b.id,"")
 		var fill=float(state.get(resource,0))/maxf(1,float(caps.get(resource,1000)))
-		var model=base_model(b,state.buildings,fill);model.position=building_position(b);world.add_child(model)
+		var key=JSON.stringify(b)+("/"+str(Walls.mask(state.buildings,Walls.cell(b))) if b.id=="wall" else "")
+		var reused=base_cache.has(key) and is_instance_valid(base_cache[key])
+		var model=base_cache[key] if reused else base_model(b,state.buildings,fill)
+		next_cache[key]=model;model.position=building_position(b);world.add_child(model)
 		if b.id=="training" and footprint(b)==1:model.scale=Vector3(0.49,1,0.49)
-		var body=StaticBody3D.new();body.set_meta("index",state.buildings.find(b));model.add_child(body)
-		var collision=CollisionShape3D.new();var shape=BoxShape3D.new();shape.size=Vector3(footprint(b)*3-0.2,3.4,footprint(b)*3-0.2);collision.shape=shape;collision.position.y=1.7;body.add_child(collision)
-		if float(b.finish)>now_time():
-			var remaining_seconds=float(b.finish)-now_time();var spec=find_catalog(b.id)
-			var total=minf(28800.0,float(spec.get("seconds",30))*pow(3.0,int(b.level)))
-			var progress=clampf(1.0-remaining_seconds/maxf(1.0,total),0.0,1.0)
-			art.construction_dressing(model,footprint(b),progress)
-
+		if not reused:
+			var body=StaticBody3D.new();body.set_meta("index",state.buildings.find(b));model.add_child(body)
+			var collision=CollisionShape3D.new();var shape=BoxShape3D.new();shape.size=Vector3(footprint(b)*3-0.2,3.4,footprint(b)*3-0.2);collision.shape=shape;collision.position.y=1.7;body.add_child(collision)
+			if float(b.finish)>now_time():
+				var remaining_seconds=float(b.finish)-now_time();var spec=find_catalog(b.id)
+				var total=minf(28800.0,float(spec.get("seconds",30))*pow(3.0,int(b.level)))
+				var progress=clampf(1.0-remaining_seconds/maxf(1.0,total),0.0,1.0)
+				art.construction_dressing(model,footprint(b),progress)
+		else:
+			for body in model.get_children():
+				if body is StaticBody3D:body.set_meta("index",state.buildings.find(b))
 		if b.id in ["well","kitchen","spring"] and int(b.level)>0:
 			var target={"well":"tank","kitchen":"granary","spring":"crystal"}[b.id]
 			for storage in state.buildings:
 				if storage.id==target and int(storage.level)>0:
 					var person=art.person(0,false);person.scale=Vector3.ONE*0.5;world.add_child(person)
 					if not person.get_meta("realistic_art",false):art.box(person,Vector3(0.4,0.65,0),Vector3(0.35,0.4,0.35),"62b4c1" if b.id=="well" else "d2bb79")
-					actors.append({"node":person,"from":model.position+Vector3(1,0,0),"to":cell_pos(storage.x,storage.y)+Vector3(1,0,0),"phase":actors.size(),"kind":0});break
+					actors.append({"node":person,"from":model.position+Vector3(1,0,0),"to":cell_pos(storage.x,storage.y)+Vector3(1,0,0),"phase":actors.size(),"kind":0,"progress":0.0,"forward":true,"pause":0.0});person.position=actors[-1].from;break
+	for key in base_cache:
+		if not next_cache.has(key) and is_instance_valid(base_cache[key]):base_cache[key].queue_free()
+	base_cache=next_cache
 	var yard: Dictionary={}
 	for b in state.buildings:
 		if b.id=="training" and int(b.level)>0:yard=b;break
@@ -663,6 +687,8 @@ func tap_ground(screen: Vector2):
 	mode="home";show_side()
 func _process(delta):
 	if is_instance_valid(practice):return
+	if side_refresh_pending and menu_touch<0:
+		side_refresh_pending=false;show_side()
 	if menu_touch<0 and absf(menu_velocity)>5 and is_instance_valid(sidebar_scroll):
 		menu_scroll_value=sidebar_scroll.scroll_vertical+menu_velocity*delta
 		sidebar_scroll.scroll_vertical=roundi(menu_scroll_value);menu_velocity*=exp(-7*delta)
@@ -697,19 +723,22 @@ func _process(delta):
 			elif time>unit.node.get_meta("next_strike",0.0):art.pose(unit.node,"attack",0.8);art.strike_fx(world,unit.node.position,unit.node.position+Vector3(0,0,-1),unit.kind);unit.node.set_meta("next_strike",time+Troops.COOLDOWN[unit.kind])
 		if progress>=1:draw_base()
 	for actor in actors:
-		var f=(sin(time*0.5+actor.phase)+1)/2
-		var direction=(actor.to-actor.from)*(1.0 if cos(time*0.5+actor.phase)>=0 else -1.0)
-		if direction.length()>0.01:actor.node.rotation.y=atan2(direction.x,direction.z)
-		art.pose(actor.node,"walk" if actor.from.distance_to(actor.to)>1 else "idle")
-		actor.node.position=actor.from.lerp(actor.to,f)
-		if actor.from.distance_to(actor.to)<1:art.idle_flair(actor.node,time,float(actor.phase),int(actor.kind))
-		actor.node.position.y=1.7 if Troops.air(actor.kind) else 0
+		var distance=actor.from.distance_to(actor.to)
+		actor.pause=maxf(0.0,actor.pause-delta)
+		if distance<0.1 or actor.pause>0:
+			art.pose(actor.node,"idle");continue
+		actor.progress=move_toward(actor.progress,1.0 if actor.forward else 0.0,delta*0.85/distance)
+		actor.node.position=actor.from.lerp(actor.to,actor.progress)
+		art.pose(actor.node,"walk")
+		if actor.progress>=1.0 or actor.progress<=0.0:
+			actor.forward=not actor.forward;actor.pause=0.7
+
 	if is_instance_valid(clock_label) and not state.is_empty():
 		if mode=="raid" and state.has("raid"):clock_label.text="การต่อสู้อัตโนมัติ • %d วิ" % maxi(0,int(state.raid.finish-now_time()))
 		elif mode=="home" and selected>=0 and selected<state.buildings.size():clock_label.text=remaining(state.buildings[selected].finish)
 
 func draw_battle():
-	battle_visual=true;clear(world);actors=[];battle_nodes=[];battle_buildings=[];defense_nodes=[];home_units=[]
+	battle_visual=true;base_cache.clear();clear(world);actors=[];battle_nodes=[];battle_buildings=[];defense_nodes=[];home_units=[]
 	pivot=Vector3.ZERO;position_camera()
 	var enemy=state.raid.enemy
 	var buildings=enemy.get("buildings",[
@@ -771,7 +800,7 @@ func show_gifts():
 		label(column,"รับแล้ว ✓" if day<completed else ("วันนี้" if day==completed and checkin_available else "รอรับ"),14)
 	var claim=button(box,"รับของขวัญวันนี้" if checkin_available else "รับแล้ว • กลับมาใหม่พรุ่งนี้",claim_daily)
 	claim.disabled=not checkin_available or gift_claiming or api.busy
-	button(box,"เล่นเกมจับคู่ • ผ่าน 1 ด่านรับ 2 หยก",func():close_modal();show_match())
+	button(box,"เล่นเกมจับคู่ • ผ่าน 1 ด่านรับ %d หยก" % int(state.get("match_reward_jade",2)),func():close_modal();show_match())
 	label(box,"โฆษณาระหว่างด่านทุกครั้งที่ผ่านครบ 2 ด่าน",16)
 	button(box,"ปิด",close_modal)
 
@@ -803,3 +832,15 @@ func wall_signature() -> String:
 		var b=state.buildings[i]
 		if b.id=="wall":parts.append("%d:%d:%d:%d"%[i,b.x,b.y,b.level])
 	return ",".join(parts)
+
+func update_storage_visuals():
+	for b in state.get("buildings",[]):
+		var resource={"tank":"water","granary":"rice","crystal":"stone"}.get(b.id,"")
+		if resource.is_empty():continue
+		var key=JSON.stringify(b)
+		if not base_cache.has(key) or not is_instance_valid(base_cache[key]):continue
+		var model=base_cache[key]
+		var fill=clampf(float(state.get(resource,0))/maxf(1,float(caps.get(resource,1000))),0,1)
+		model.set_meta("storage_fill",fill)
+		var amount=model.get_node_or_null("StorageAmount")
+		if amount!=null:amount.text=str(roundi(fill*100))+"%"

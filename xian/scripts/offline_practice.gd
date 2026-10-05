@@ -17,6 +17,14 @@ var wall_revision=-1
 var camera: Camera3D
 var battlefield: Node3D
 var hud: Control
+var troop_scroll: ScrollContainer
+var scroll_touch=-1
+var scroll_start=Vector2.ZERO
+var scroll_origin=0.0
+var scroll_dragged=false
+var scroll_velocity=0.0
+var scroll_button: Button
+var hud_elapsed=0.0
 var sidebar: VBoxContainer
 var skill_label: Label
 var heading: Label
@@ -44,7 +52,7 @@ func _ready():
 	hud=Control.new();hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);hud.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(hud)
 	hud.theme=VisualStyle.theme()
 	var header=panel(Vector2(16,12),Vector2(1248,66));heading=text(header,"ประลองบอทออฟไลน์",24)
-	var right=panel(Vector2(960,92),Vector2(304,530));var scroll=ScrollContainer.new();right.add_child(scroll);sidebar=VBoxContainer.new();sidebar.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(sidebar)
+	var right=panel(Vector2(960,92),Vector2(304,530));var scroll=ScrollContainer.new();troop_scroll=scroll;right.add_child(scroll);sidebar=VBoxContainer.new();sidebar.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(sidebar)
 	level_picker=OptionButton.new();level_picker.custom_minimum_size.y=48;sidebar.add_child(level_picker)
 	level_picker.item_selected.connect(func(i):start_level(i+1))
 	text(sidebar,"แตะขอบเขียวเพื่อปล่อยศิษย์\nลากพื้นเลื่อน / จีบสองนิ้วซูม",17)
@@ -160,6 +168,8 @@ func dress_battlefield():
 	for p in [Vector2(2,5),Vector2(13,6),Vector2(4,13),Vector2(11,2)]:art.rock(battlefield,world_pos(p),0.75)
 func _process(delta):
 	if test_mode:return
+	if scroll_touch<0 and absf(scroll_velocity)>5:
+		troop_scroll.scroll_vertical+=roundi(scroll_velocity*delta);scroll_velocity*=exp(-8*delta)
 	accumulator+=minf(delta,0.25)
 	while accumulator>=0.1:
 		accumulator-=0.1;sim.step(0.1)
@@ -197,7 +207,9 @@ func _process(delta):
 	for i in range(projectiles.size()-1,-1,-1):
 		var p=projectiles[i];p.age+=delta;p.node.position=p.start.lerp(p.end,minf(1,p.age/0.25))
 		if p.age>=0.25:p.node.queue_free();projectiles.remove_at(i)
-	refresh_hud()
+	hud_elapsed+=delta
+	if hud_elapsed>=0.15:
+		hud_elapsed=0;refresh_hud()
 	if sim.finished and not result_shown:finish()
 func update_actor(u: Dictionary, visual: Dictionary,delta: float):
 	var node=visual.node;node.visible=u.hp>0;visual.bar.scale.x=maxf(0.001,u.hp/u.max_hp)
@@ -220,3 +232,28 @@ func finish():
 	if sim.stolen.water+sim.stolen.rice+sim.stolen.stone>0:hint.text+=" • โจรขโมยได้ในสนามฝึก: น้ำ %d ข้าว %d โอสถ %d (ไม่เข้าออนไลน์)"%[sim.stolen.water,sim.stolen.rice,sim.stolen.stone]
 func _exit_tree():
 	sim.clear_targets()
+
+func _input(event):
+	if not is_instance_valid(troop_scroll):return
+	var area=troop_scroll.get_global_rect()
+	if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==InputEvent.DEVICE_ID_EMULATION and area.has_point(event.position):
+		get_viewport().set_input_as_handled();return
+	if event is InputEventScreenTouch:
+		if event.pressed and area.has_point(event.position) and scroll_touch<0:
+			# Let the native level dropdown handle its own taps.
+			if level_picker.get_global_rect().has_point(event.position):return
+			scroll_touch=event.index;scroll_start=event.position;scroll_origin=troop_scroll.scroll_vertical;scroll_dragged=false;scroll_velocity=0;scroll_button=null
+			for child in sidebar.find_children("*","Button",true,false):
+				if child.get_global_rect().has_point(event.position):scroll_button=child;break
+			get_viewport().set_input_as_handled()
+		elif not event.pressed and event.index==scroll_touch:
+			var tapped=scroll_button
+			scroll_touch=-1;scroll_button=null
+			if not scroll_dragged and event.position.distance_to(scroll_start)<10 and is_instance_valid(tapped) and not tapped.disabled and tapped.get_global_rect().has_point(event.position):tapped.pressed.emit()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventScreenDrag and event.index==scroll_touch:
+		var diff=event.position-scroll_start
+		if absf(diff.y)>8 or scroll_dragged:
+			scroll_dragged=true;troop_scroll.scroll_vertical=roundi(scroll_origin-diff.y)
+			scroll_velocity=clampf(event.velocity.y*-1,-1200,1200)
+		get_viewport().set_input_as_handled()
