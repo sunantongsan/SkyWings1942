@@ -31,6 +31,9 @@ func run():
    var model=art.building(kind,level);viewport.add_child(model);model.process_mode=Node.PROCESS_MODE_DISABLED
    for node in model.get_children():
     if node.name in ["ContactShadow","StorageAmount","BlackSmokeMotion"]:node.hide()
+   var bounds=art.model_bounds(model)
+   camera.size=maxf(6.0,maxf(bounds.size.x,bounds.size.z)*1.65)
+   Iso.place_camera(camera,Vector3(0,bounds.end.y*0.4,0))
    floor.hide()
    var reference=await capture()
    floor.show()
@@ -38,21 +41,22 @@ func run():
    var result=coverage(reference,actual);result["kind"]=kind;result["level"]=level;report.append(result)
    if result.ratio>=0.01:
     reference.save_png("res://build/review/v050-failed-reference.png");actual.save_png("res://build/review/v050-failed-ground.png")
-   assert(result.pixels>30,"Missing artwork: "+kind)
-   assert(result.ratio<0.01,"Ground clipped artwork: "+str(result))
+   if result.pixels<=30 or result.ratio>=0.01:
+    push_error("Ground visibility failed: "+str(result));quit(1);return
    if level in [1,5,10]:actual.save_png("res://build/review/v050-ground-"+kind+"-"+str(level)+".png")
    model.queue_free();await process_frame
  # A real foreground object must still occlude an image, unlike no_depth_test.
  floor.hide()
  var hall=art.building("hall",5);viewport.add_child(hall);hall.get_node("ContactShadow").hide()
+ camera.size=6.0;Iso.place_camera(camera,Vector3(0,1.3,0))
  var baseline=await capture()
  var blocker=MeshInstance3D.new();var cube=BoxMesh.new();cube.size=Vector3(4,4,0.3);blocker.mesh=cube;blocker.material_override=green;viewport.add_child(blocker)
  blocker.position=Vector3(0,1.3,0)+Iso.CAMERA_OFFSET.normalized()*5
  var front=coverage(baseline,await capture())
- assert(front.ratio>0.25,"Foreground occlusion not working")
+ if front.ratio<=0.25:push_error("Foreground occlusion not working");quit(1);return
  blocker.position=Vector3(0,1.3,0)-Iso.CAMERA_OFFSET.normalized()*5
  var behind=coverage(baseline,await capture())
- assert(behind.ratio<0.01,"Background incorrectly covers artwork")
+ if behind.ratio>=0.01:push_error("Background incorrectly covers artwork");quit(1);return
  var file=FileAccess.open("res://build/review/ground-report.json",FileAccess.WRITE)
  file.store_string(JSON.stringify({"buildings":report,"foreground":front,"background":behind}, "  "))
  print("XIAN_GROUND_VISIBILITY_PASSED cases=",report.size()," foreground=",front.ratio," background=",behind.ratio)
