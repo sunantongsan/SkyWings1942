@@ -440,21 +440,23 @@ func draw_base():
 			world.add_child(person);home_units.append(person);visible_unit+=1
 	var report=state.get("last_defense",{})
 	if report.has("finish") and now_time()<float(report.finish):start_home_defense(report)
+func garrison_position(kind: int,index: int) -> Vector3:
+	return cell_pos(4+(index%8)*0.8,10.3-(index/8)*0.65)+Vector3(0,1.7 if kind==1 else 0,-kind*0.7)
 func start_home_defense(report: Dictionary):
 	home_defense_time=float(report.finish)
 	var guards=report.get("garrison",[0,0,0]);var used=[0,0,0]
 	for person in home_units:
 		var kind=int(person.unit_kind)
 		if used[kind]<int(guards[kind]):
-			person.alarm(cell_pos(5+used[kind]%5,10)+Vector3(0,0,kind*0.5));used[kind]+=1
+			person.alarm(garrison_position(kind,used[kind]));used[kind]+=1
 	for kind in range(3):
 		# Every committed defender gets a visual; the calm village uses fewer extras.
 		for i in range(used[kind],int(guards[kind])):
 			var guard=art.person(kind);guard.set_script(preload("res://scripts/sect_life.gd"));guard.art=art;guard.unit_kind=kind;guard.position=cell_pos(6+i%4,6)
-			world.add_child(guard);home_units.append(guard);guard.alarm(cell_pos(4+i%8,10)+Vector3(0,0,(i/8)*0.5+kind*0.2))
+			world.add_child(guard);home_units.append(guard);guard.alarm(garrison_position(kind,i))
 		for i in range(mini(20,int(report.get("army",[0,0,0])[kind]))):
 			var node=art.person(kind);world.add_child(node)
-			defense_nodes.append({"node":node,"start":cell_pos(4+i*0.5,14),"target":cell_pos(5+i%5,11),"phase":i,"kind":kind})
+			defense_nodes.append({"node":node,"start":cell_pos(4+i*0.5,14),"target":cell_pos(4+(i%8)*0.8,11.2+(i/8)*0.65+kind*0.3),"phase":i,"kind":kind})
 	message("สำนักถูกบุกรุก! นักรบ 50% ออกป้องกันฐาน")
 func position_camera():
 	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
@@ -711,13 +713,13 @@ func draw_battle():
 		for i in range(mini(20,int(state.raid.army[kind]))):
 			var node=art.person(kind);world.add_child(node)
 			var start=cell_pos(4+i*0.45,13+kind*0.5)
-			var target=cell_pos(5+i%5,8 if kind==2 else 7)
+			var target=cell_pos(4+(i%8)*0.8,8.4+(i/8)*0.65)
 			battle_nodes.append({"node":node,"start":start,"target":target,"kind":kind,"phase":i})
 	var guards=enemy.get("garrison",[0,0,0])
 	for kind in range(3):
 		for i in range(int(guards[kind])):
 			var node=art.person(kind);world.add_child(node)
-			battle_nodes.append({"node":node,"start":cell_pos(4+(i%8)*0.65,3+(i/8)*0.35+kind*0.15),"target":cell_pos(4+(i%8)*0.65,7.8-(i/8)*0.45),"kind":kind,"phase":i})
+			battle_nodes.append({"node":node,"start":cell_pos(4+(i%8)*0.65,3+(i/8)*0.35+kind*0.15),"target":cell_pos(4+(i%8)*0.8,7.8-(i/8)*0.65),"kind":kind,"phase":i})
 	message("กำลังบุก "+str(enemy.name)+" • การต่อสู้อัตโนมัติรุ่นทดลอง")
 
 func _notification(what):
