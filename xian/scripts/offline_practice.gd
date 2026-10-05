@@ -157,10 +157,12 @@ func _process(delta):
 			if shot.has("unit"):
 				var actor=unit_models[shot.unit].node;var direction: Vector2=shot.to-shot.from
 				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",[0.7,1.0,1.1][shot.kind])
+			if shot.get("weapon","")=="ward":
+				art.sound_wave(battlefield,world_pos(shot.from),4.2*3);continue
 			if shot.has("to"):art.impact_fx(battlefield,world_pos(shot.to,1.0),int(shot.kind))
 			if not shot.enemy and shot.kind!=1:continue
-			var node=art.box(battlefield,world_pos(shot.from,2),Vector3(0.16,0.12,1.1),"ee8868" if shot.enemy else "adf0ff")
-			projectiles.append({"node":node,"start":world_pos(shot.from,2),"end":world_pos(shot.to,1),"age":0.0})
+			var node=art.orb(battlefield,world_pos(shot.from,2.8),Vector3.ONE*0.2,"9d8d71") if shot.enemy else art.box(battlefield,world_pos(shot.from,2),Vector3(0.16,0.12,1.1),"adf0ff")
+			projectiles.append({"node":node,"start":world_pos(shot.from,2.8 if shot.enemy else 2),"end":world_pos(shot.to,1),"age":0.0})
 	if wall_revision!=sim.revision:
 		wall_revision=sim.revision
 		for i in range(sim.buildings.size()):

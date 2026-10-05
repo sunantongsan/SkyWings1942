@@ -180,11 +180,12 @@ func building_base(kind: String, level: int, fill = 0.5) -> Node3D:
 	if kind=="crystal":return pill_pouch(level,fill)
 	if kind=="barracks":return barracks(level)
 	if kind=="kitchen":return inn(clampi(level,1,10))
-	if kind=="granary":return rice_tiffin(clampi(level,1,10),fill)
+	if kind=="granary":return takeaway_box(clampi(level,1,10),fill)
 	if kind=="servant":return builder_shed()
 	if kind=="well":return hand_pump(clampi(level,1,10))
 	if kind=="tank":return water_bottle(clampi(level,1,10),fill)
-	if kind=="tower":return resource_building(kind,level,fill)
+	if kind=="tower":return slingshot_ladder(clampi(level,1,10))
+	if kind=="ward":return speaker_tower(clampi(level,1,10))
 	var mapping={"hall":["hall.gltf",""],"recruit":["gate.gltf",""],"dorm":["hitherton_buildings.glb","House_4"],"servant":["hitherton_buildings.glb","House Player"],"kitchen":["hitherton_buildings.glb","shop"],"granary":["hitherton_buildings.glb","House_2"],"well":["pavilion.gltf",""],"tank":["hitherton_buildings.glb","House_3"],"spring":["moon_gate.gltf",""],"crystal":["moon_gate.gltf",""],"tower":["gate.gltf",""],"ward":["pavilion.gltf",""],"wall":["wall.gltf",""]}
 	var spec=mapping.get(kind,mapping.hall)
 	var root=donor(spec[0],2.7,spec[1],4.2)
@@ -410,33 +411,26 @@ func ring(parent: Node3D, pos: Vector3, radius: float, thickness: float, color: 
 	node.mesh=mesh;node.material_override=material(color);node.position=pos;parent.add_child(node)
 	return node
 func furnace(level: int) -> Node3D:
-	var lv=clampi(level,1,10);var root=new_original()
-	var bronze=level_color(lv)
-	box(root,Vector3(0,0.1,0),Vector3(2.7,0.2,2.7),"8b9895")
-	for i in range(3):
-		var a=i*TAU/3
-		cone(root,Vector3(cos(a)*0.7,0.43,sin(a)*0.7),0.17,0.12,0.6,bronze)
-	for floor_index in range(lv):
-		var y=0.75+floor_index*0.39;var radius=0.95-floor_index*0.045
-		cone(root,Vector3(0,y,0),radius*0.8,radius,0.38,bronze,16)
-		ring(root,Vector3(0,y+0.18,0),radius,0.045,"e8c77b")
-		for side in [-1,1]:
-			var handle=ring(root,Vector3(side*(radius+0.13),y+0.15,0),0.19,0.045,bronze);handle.rotation.z=PI/2
-		for i in range(6):
-			var a=i*TAU/6
-			orb(root,Vector3(cos(a)*radius*0.93,y,sin(a)*radius*0.93),Vector3(0.09,0.13,0.09),"e8c77b")
-	var top=0.95+(lv-1)*0.39
-	cone(root,Vector3(0,top,0),0.89-(lv-1)*0.045,0.89-(lv-1)*0.045,0.035,"615448",16)
-	for x in [-0.25,0,0.25]:
-		cone(root,Vector3(x,top+0.3,0),0.025,0.025,0.6,"aa4b42",6)
-		orb(root,Vector3(x,top+0.61,0),Vector3.ONE*0.06,"ffbd69")
-	var smoke=motion(root,"smoke");smoke.position.y=top+0.65
-	for i in range(7):
-		var puff=orb(smoke,Vector3.ZERO,Vector3.ONE*0.2,"e5e3d3")
-		puff.material_override=clear_material("e5e3d3",0.28)
-		puff.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.set_meta("tiers",lv)
-	return root
+	var lv=clampi(level,1,10);var root=new_original();var tint=level_color(lv);var k=0.8+lv*0.035
+	box(root,Vector3(0,0.1,0),Vector3(2.75,0.2,2.75),"a5aaa0")
+	var pot=Node3D.new();root.add_child(pot);pot.scale=Vector3.ONE*k
+	for x in [-0.65,0.65]:box(pot,Vector3(x,0.3,0),Vector3(0.26,0.3,0.8),"424f50")
+	cone(pot,Vector3(0,1.03,0),0.9,0.95,1.2,"e5e8d9",24)
+	cone(pot,Vector3(0,0.5,0),0.92,0.92,0.2,tint,24)
+	cone(pot,Vector3(0,1.69,0),1.0,0.8,0.18,tint,24)
+	box(pot,Vector3(0,1.9,0),Vector3(0.65,0.15,0.22),"384d4e")
+	for x in [-1,1]:box(pot,Vector3(x*0.99,1.36,0),Vector3(0.38,0.18,0.35),"45595a")
+	box(pot,Vector3(0,0.92,0.92),Vector3(0.58,0.5,0.07),"405557")
+	box(pot,Vector3(0,0.91,0.99),Vector3(0.16,0.27,0.1),"e87753").rotation.x=-0.25
+	for x in [-0.16,0.16]:orb(pot,Vector3(x,1.08,0.99),Vector3(0.075,0.075,0.04),"ee6655" if x<0 else "96d886")
+	for i in range(lv):orb(pot,Vector3(-0.7+i*0.15,1.43,0.91),Vector3(0.06,0.09,0.04),tint)
+	beam(pot,Vector3(0.85,0.6,-0.3),Vector3(1.1,0.25,-0.65),0.04,"393f3d")
+	beam(pot,Vector3(1.1,0.25,-0.65),Vector3(0.65,0.22,-1),0.04,"393f3d")
+	box(pot,Vector3(0.6,0.23,-1),Vector3(0.18,0.1,0.16),"393f3d")
+	var smoke=motion(pot,"black_smoke");smoke.position=Vector3(0.3,1.83,0)
+	for i in range(6):
+		var puff=orb(smoke,Vector3.ZERO,Vector3.ONE*0.3,"343735");puff.material_override=clear_material("343735",0.55);puff.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.set_meta("rice_cooker",true);return root
 func pill_pouch(level: int, fill: float) -> Node3D:
 	var root=Node3D.new();root.set_meta("original_building",true);root.set_meta("pill_fill",clampf(fill,0,1))
 	building_trim(root,"crystal",level)
@@ -478,12 +472,13 @@ func barracks(level: int) -> Node3D:
 			var blade=box(root,Vector3(side*(0.79+j*0.24),0.94,0.99),Vector3(0.07,0.94,0.055),"b5d3d6");blade.rotation.z=side*0.16
 			box(root,Vector3(side*(0.79+j*0.24),0.64,1.0),Vector3(0.25,0.06,0.08),"d5ab61")
 		training_banner(root,Vector3(side*1.17,0,-0.67),"476f9e")
+	boxer_statue(root,level)
 	return root
 func evolve(root: Node3D, kind: String, level: int):
 	# Every level changes silhouette, masonry height and an additive detail;
 	# higher tiers add buttresses, gables, lanterns and a jade/gold crown.
 	var lv=clampi(level,1,10);root.set_meta("visual_level",lv)
-	if kind in ["kitchen","granary","well","tank","spring","servant"]:return
+	if kind in ["kitchen","granary","well","tank","spring","servant","tower","ward"]:return
 	if lv==1:return
 	var colors=["836d50","9d7956","a58758","547c72","3f898a","447f98","596ea8","896baf","ae814f","d4b269"]
 	var accent=colors[lv-1];var span=5.7 if kind=="training" else 2.68
@@ -532,7 +527,7 @@ func clear_material(color: String, alpha: float) -> StandardMaterial3D:
 	return mat
 func motion(parent: Node3D, kind: String) -> Node3D:
 	var node=Node3D.new();node.set_script(preload("res://scripts/visual_motion.gd"));node.kind=kind
-	node.set_meta("dynamic_visual",true);node.name=kind.capitalize()+"Motion";parent.add_child(node);return node
+	node.set_meta("dynamic_visual",true);node.name=kind.to_pascal_case()+"Motion";parent.add_child(node);return node
 func beam(parent: Node3D, start: Vector3, end: Vector3, width: float, color: String):
 	var node=box(parent,(start+end)*0.5,Vector3(width,start.distance_to(end),width),color)
 	node.quaternion=Quaternion(Vector3.UP,(end-start).normalized());return node
@@ -554,6 +549,7 @@ func inn(level: int) -> Node3D:
 	box(root,Vector3(0,0.89,1.16),Vector3(0.83,0.26,0.08),"814e33")
 	var sign=Label3D.new();sign.text="เตี๊ยม";sign.font=load("res://assets/NotoSansThai.ttf");sign.font_size=36;sign.pixel_size=0.005;sign.position=Vector3(0,0.9,1.22);sign.modulate=Color("f3d394");root.add_child(sign)
 	for x in [-1,1]:lantern(root,Vector3(x*1.17,0,1.05),0.45)
+	roast_chicken(root,1.23+level*0.48)
 	root.set_meta("floors",level);return root
 func rice_tiffin(level: int, fill: float) -> Node3D:
 	var root=new_original();var tint=level_color(level);var amount=clampf(fill,0,1)
@@ -683,3 +679,115 @@ func ruins(parent: Node3D, pos: Vector3, kind: String="hall", width: int=1) -> N
 	var fire=motion(root,"fire")
 	for i in range(2):cone(fire,Vector3(-0.3+i*0.6,0.25,0.1),0.09,0.01,0.24,"d99a50",6)
 	batch_static(root);return root
+
+func takeaway_box(level: int, fill: float) -> Node3D:
+	var root=new_original();var amount=clampf(fill,0,1);var k=0.86+level*0.025;var tint=level_color(level)
+	box(root,Vector3(0,0.09,0),Vector3(2.8,0.18,2.75),"929f8b")
+	var tray=Node3D.new();root.add_child(tray);tray.scale=Vector3.ONE*k
+	box(tray,Vector3(0,0.26,0),Vector3(2.2,0.18,1.65),"eeeeda")
+	var plastic=clear_material("e9f4e6",0.24)
+	for x in [-1.08,1.08]:
+		var side=box(tray,Vector3(x,0.59,0),Vector3(0.075,0.66,1.7),"e9f4e6");side.material_override=plastic
+	for z in [-0.82,0.82]:
+		var side=box(tray,Vector3(0,0.59,z),Vector3(2.18,0.66,0.065),"e9f4e6");side.material_override=plastic
+	var lid=Node3D.new();tray.add_child(lid);lid.position=Vector3(0,0.91,-0.8);lid.rotation.x=0.68
+	var cover=box(lid,Vector3(0,0,-0.8),Vector3(2.25,0.075,1.65),"e9f4e6");cover.material_override=plastic
+	for x in [-1.1,1.1]:box(lid,Vector3(x,0,-0.8),Vector3(0.07,0.09,1.65),"f5f0d8")
+	for z in [0,-1.6]:box(lid,Vector3(0,0,z),Vector3(2.25,0.09,0.07),"f5f0d8")
+	var count=ceili(amount*24);root.set_meta("food_count",count);root.set_meta("storage_fill",amount)
+	for i in range(count):
+		var pos=Vector3(-0.8+(i%6)*0.31,0.4+floori(i/12.0)*0.19,-0.47+((i/6)%2)*0.64)
+		if i%6<3:orb(tray,pos,Vector3(0.35,0.25,0.32),"fff3cf")
+		else:
+			orb(tray,pos,Vector3(0.28,0.16,0.3),"92633d" if i%2 else "6d9e46")
+			box(tray,pos+Vector3(0,0.1,0),Vector3(0.12,0.04,0.05),"d75b3e")
+	if count>6:
+		orb(tray,Vector3(-0.42,0.79,0.15),Vector3(0.66,0.075,0.5),"fff9dd")
+		orb(tray,Vector3(-0.42,0.85,0.15),Vector3(0.26,0.1,0.26),"edb742")
+	for i in range(level):box(tray,Vector3(-0.9+i*0.2,0.31,0.88),Vector3(0.09,0.06,0.03),tint)
+	root.set_meta("takeaway",true);return root
+func roast_chicken(parent: Node3D, y: float):
+	var chicken=Node3D.new();parent.add_child(chicken);chicken.position.y=y;chicken.name="RoofChicken"
+	orb(chicken,Vector3(0,0.35,0),Vector3(1.1,0.65,0.75),"c57a36")
+	for side in [-1,1]:
+		orb(chicken,Vector3(side*0.49,0.24,0.38),Vector3(0.4,0.33,0.48),"d99444")
+		beam(chicken,Vector3(side*0.54,0.24,0.43),Vector3(side*0.7,0.34,0.74),0.09,"f2ddae")
+		orb(chicken,Vector3(side*0.7,0.34,0.76),Vector3(0.18,0.12,0.12),"fff0c8")
+	for x in [-0.25,0,0.25]:box(chicken,Vector3(x,0.67,0),Vector3(0.045,0.025,0.38),"87502d")
+	beam(chicken,Vector3(-0.8,0.2,0),Vector3(0.8,0.2,0),0.06,"806246")
+func boxer_statue(parent: Node3D, level: int):
+	var lv=clampi(level,1,10);var boxer=Node3D.new();parent.add_child(boxer);boxer.name="RoofBoxer";boxer.position=Vector3(0,2.58,0)
+	boxer.scale=Vector3.ONE*(0.55+lv*0.07);boxer.set_meta("muscle",lv)
+	var muscle=0.28+lv*0.018
+	box(boxer,Vector3(0,0.23,0),Vector3(0.9,0.15,0.7),"d3b77a")
+	for side in [-1,1]:
+		beam(boxer,Vector3(side*0.21,0.28,0),Vector3(side*0.19,0.94,0),0.2,"c9936c")
+		box(boxer,Vector3(side*0.2,0.95,0),Vector3(0.31,0.4,0.38),"cc5453")
+		orb(boxer,Vector3(side*0.3,1.53,0),Vector3(muscle,muscle,0.3),"d8a47c")
+		beam(boxer,Vector3(side*0.38,1.54,0),Vector3(side*0.55,1.25,0.1),muscle*0.75,"d8a47c")
+		beam(boxer,Vector3(side*0.55,1.25,0.1),Vector3(side*0.35,1.65,0.28),0.18,"d8a47c")
+		orb(boxer,Vector3(side*0.35,1.66,0.28),Vector3(0.25,0.27,0.25),"e06452")
+	orb(boxer,Vector3(0,1.35,0),Vector3(0.53+lv*0.016,0.68,0.36),"d8a47c")
+	orb(boxer,Vector3(0,1.97,0),Vector3(0.38,0.43,0.36),"d8a47c")
+	cone(boxer,Vector3(0,2.16,0),0.21,0.2,0.11,"384746",10)
+	ring(boxer,Vector3(0,2.12,0),0.205,0.035,"e3c86b")
+	for x in [-0.08,0.08]:orb(boxer,Vector3(x,2.0,0.172),Vector3(0.045,0.045,0.035),"343c39")
+	if lv==10:
+		var fire=motion(boxer,"fire");fire.name="ChampionFire"
+		for i in range(8):
+			var a=i*TAU/8;var flame=cone(fire,Vector3(cos(a)*0.55,0.6,sin(a)*0.46),0.12,0,0.8,"ef973e",6)
+			var mat=material("ef973e").duplicate();mat.emission_enabled=true;mat.emission=Color("e87529");flame.material_override=mat
+func speaker_tower(level: int) -> Node3D:
+	var root=new_original();var h=2.5+level*0.17;var spread=0.65+level*0.025;var tint=level_color(level)
+	box(root,Vector3(0,0.12,0),Vector3(2.7,0.24,2.7),"929e96")
+	for side in [-1,1]:
+		for z in [-1,1]:beam(root,Vector3(side*spread,0.2,z*spread),Vector3(side*0.35,h,z*0.35),0.1+level*0.005,"708f94")
+	for i in range(1,5):
+		var y=i*h/5
+		beam(root,Vector3(-spread,y,-spread),Vector3(spread,y+h/5,-spread),0.055,tint)
+		beam(root,Vector3(-spread,y,spread),Vector3(spread,y+h/5,spread),0.055,tint)
+	box(root,Vector3(0,h,0),Vector3(1.4+level*0.025,0.16,1.4+level*0.025),tint)
+	for i in range(4):
+		var a=i*TAU/4;var horn=Node3D.new();root.add_child(horn);horn.position=Vector3(0,h+0.34,0);horn.rotation.y=a
+		cone(horn,Vector3(0,0,0.51),0.17,0.38+level*0.006,0.7,"d5d9bd",12).rotation.x=PI/2
+		cone(horn,Vector3(0,0,0.88),0.32+level*0.006,0.32+level*0.006,0.025,"45585a",12).rotation.x=PI/2
+	cone(root,Vector3(0,h+0.64,0),0.045,0.02,0.7,"d7bd78",6)
+	root.set_meta("sound_radius",4.2);return root
+func slingshot_ladder(level: int) -> Node3D:
+	var root=new_original();var h=1.8+level*0.08;var w=0.78+level*0.035
+	var timber="987043" if level<4 else "627f7f" if level<8 else "a39a77"
+	box(root,Vector3(0,0.1,0),Vector3(2.8,0.2,2.8),"9b9e87")
+	for side in [-1,1]:
+		for z in [-1,1]:beam(root,Vector3(side*w,0.2,z*0.85),Vector3(side*w,h,z*0.25),0.11+level*0.007,timber)
+	for step in range(1,5+level/2):
+		var y=float(step)*h/(5+level/2);var z=0.85-0.6*y/h
+		beam(root,Vector3(-w,y,z),Vector3(w,y,z),0.1,timber)
+	box(root,Vector3(0,h,0),Vector3(w*2+0.2,0.15,1.15),timber)
+	# One more seated shooter per level; two staggered rows keep the ladder readable.
+	for i in range(level):
+		var holder=Node3D.new();root.add_child(holder);holder.position=Vector3((i%5-(mini(level,5)-1)*0.5)*0.4 if level>2 else (i-(level-1)*0.5)*0.55,h+0.08,-0.3+(i/5)*0.6)
+		holder.scale=Vector3.ONE*(0.48 if level>2 else 0.68)
+		small_worker(holder,true)
+		box(holder,Vector3(0,0.39,0),Vector3(0.45,0.09,0.35),timber)
+		for side in [-1,1]:box(holder,Vector3(side*0.17,0.19,0),Vector3(0.07,0.38,0.3),timber)
+		var hand=motion(holder,"slinger");hand.name="Sling"
+		beam(hand,Vector3(-0.16,0.73,0),Vector3(0.16,0.81,0.38),0.1,"e3b58c")
+		for side in [-1,1]:beam(hand,Vector3(0.16,0.83,0.4),Vector3(0.16+side*0.14,1.15,0.4),0.055,"805a39")
+		beam(hand,Vector3(0.02,1.15,0.4),Vector3(0.16,1.03,0.15),0.025,"d7c99e")
+		beam(hand,Vector3(0.3,1.15,0.4),Vector3(0.16,1.03,0.15),0.025,"d7c99e")
+		batch_static(hand)
+	root.set_meta("shooters",level);return root
+func sound_wave(parent: Node3D, pos: Vector3, radius: float):
+	var root=Node3D.new();parent.add_child(root);root.position=pos
+	for i in range(3):
+		var wave=ring(root,Vector3(0,0.2+i*0.17,0),1.0,0.025,"e2d891")
+		wave.material_override=clear_material("f5e5a2",0.65);wave.scale=Vector3.ONE*0.2
+		var tween=wave.create_tween();tween.set_parallel(true)
+		tween.tween_property(wave,"scale",Vector3(radius,1,radius),0.65+i*0.12)
+		tween.tween_property(wave.material_override,"albedo_color:a",0.0,0.65+i*0.12)
+	var timer=root.get_tree().create_timer(1.0);timer.timeout.connect(root.queue_free)
+
+func slingshot_fx(parent: Node3D, start: Vector3, end: Vector3):
+	var pebble=orb(parent,start,Vector3.ONE*0.18,"a39880")
+	var tween=pebble.create_tween();tween.tween_property(pebble,"position",end,0.3)
+	tween.tween_callback(pebble.queue_free)

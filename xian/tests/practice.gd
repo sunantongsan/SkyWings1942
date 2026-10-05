@@ -37,4 +37,17 @@ func run():
  sim.setup(12);assert(sim.stars()==0)
  for b in sim.buildings:b.hp=0
  assert(sim.stars()==3 and sim.percent()==100)
+ # Broadcast hits separated targets around its source, not only a small splash at one target.
+ sim.setup(5);sim.buildings.clear();sim.add_building("ward",Vector2i(7,7),1000);sim.rebuild_grid()
+ for i in range(3):
+  assert(sim.deploy(0,Vector2i(0,i)))
+  sim.units[i].pos=[Vector2(7,10),Vector2(10,7),Vector2(12,7)][i]
+  sim.units[i].windup=100
+ sim.step(0.1)
+ assert(sim.units[0].hp<190 and sim.units[1].hp<190 and sim.units[2].hp==190)
+ assert(sim.shots[0].weapon=="ward")
+ sim.buildings[0].kind="tower";sim.buildings[0].cooldown=0
+ for u in sim.units:u.hp=190
+ sim.step(0.1)
+ assert(sim.units[0].hp<190 and sim.units[1].hp==190)
  print("XIAN_OFFLINE_PRACTICE_PASSED");quit()

@@ -10,7 +10,7 @@ func run():
   for level in range(1,2 if kind=="servant" else 11):
    var model=art.building(kind,level,0.6)
    var bounds=art.model_bounds(model)
-   assert(bounds.size.y>0.1 and bounds.size.y<7.0,"Invalid height "+kind)
+   assert(bounds.size.y>0.1 and bounds.size.y<8.5,"Invalid height "+kind)
    var envelope=7.0 if kind=="training" else 4.4
    assert(bounds.size.x<envelope and bounds.size.z<envelope,"Invalid footprint "+kind+str(level)+str(bounds.size))
    var count=0
@@ -27,10 +27,10 @@ func run():
   for fill in [0.0,0.5,1.0]:
    var model=art.building(kind,10,fill)
    assert(is_equal_approx(model.get_meta("storage_fill"),fill))
-   if kind=="granary":assert(model.get_meta("food_count")==ceili(fill*180))
+   if kind=="granary":assert(model.get_meta("food_count")==ceili(fill*24))
    else:assert((model.find_child("StoredWater",true,false)!=null)==(fill>0))
    model.free()
- for kind in ["kitchen","spring","granary"]:
+ for kind in ["kitchen"]:
   for level in range(1,11):
    var model=art.building(kind,level)
    assert(model.get_meta("floors" if kind=="kitchen" else "tiers")==level)
@@ -44,9 +44,14 @@ func run():
  var saw=scaffold.find_child("SawMotion",true,false)
  saw.animate(0);saw.animate(0.2);assert(abs(saw.get_node("Saw").position.x)>0.05)
  var burner=art.building("spring",10);root.add_child(burner)
- var smoke=burner.find_child("SmokeMotion",true,false)
+ var smoke=burner.find_child("BlackSmokeMotion",true,false)
  smoke.animate(0);var first=smoke.get_child(0).position
  smoke.animate(0.5);assert(first.distance_to(smoke.get_child(0).position)>0.1)
  pump.queue_free();scaffold.queue_free();burner.queue_free()
  await process_frame
+ for lv in [1,5,10]:
+  var ladder=art.building("tower",lv);assert(ladder.get_meta("shooters")==lv);ladder.free()
+  var gym=art.building("barracks",lv);assert(gym.find_child("RoofBoxer",true,false)!=null)
+  assert((gym.find_child("ChampionFire",true,false)!=null)==(lv==10));gym.free()
+  var inn=art.building("kitchen",lv);assert(inn.find_child("RoofChicken",true,false)!=null);inn.free()
  print("XIAN_BUILDING_LEVELS_PASSED");quit()

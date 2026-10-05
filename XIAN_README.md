@@ -1,3 +1,12 @@
+## v0.42 comic Thai village
+
+- Food storage is a large transparent foam-style takeaway clamshell with rice, basil-style stir fry and a fried egg. Contents reflect storage utilization; sizes and trims change per level.
+- The elixir producer is an electric rice cooker with switch, indicator lights, handles, cable and continuously rising black smoke.
+- Wards become tall four-horn village broadcast towers. Offline sound pulses damage every living unit within 4.2 grid cells of the tower; tests cover separated in-range targets and an untouched out-of-range unit. Online prototype retains its server aggregate outcome and shows matching expanding sound rings.
+- Arrow towers become A-frame ladders, wood at low levels and reinforced structures later, with one seated slingshot shooter per level. Static bodies are batched; only sling groups animate. Stone projectiles replace enemy arrow visuals, single-target damage retained.
+- Inns feature roast-chicken roof ornaments. Barracks feature a Muay Thai boxer that grows in scale and musculature from levels 1–10, with animated fire at level 10.
+- Stable backend keys/economy/save data and the v0.41 reward/ads integration are retained. Display names are overridden in the current client. Godot regression suite and OpenGL level captures reviewed; physical Android frame rate remains unmeasured.
+
 ## v0.41 builders, gifts and native match rewards
 
 - Builder houses become fixed-level corrugated-metal work sheds. The first is included free; subsequent sheds cost 250 / 500 / 1,000 / 2,000 / 3,500 / 5,000 jade. The server caps new construction at seven and creates sheds instantly without tying up an existing builder. Older accounts with more builders retain them but cannot add any.

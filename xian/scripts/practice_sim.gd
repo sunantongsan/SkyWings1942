@@ -128,11 +128,11 @@ func step(dt: float):
 			if d<nearest:nearest=d;target=u
 		if target.is_empty():continue
 		b.cooldown=1.0 if b.kind=="tower" else 1.8
-		shots.append({"from":b.pos,"to":target.pos,"kind":1,"enemy":true})
+		shots.append({"from":b.pos,"to":target.pos,"kind":1,"enemy":true,"weapon":b.kind})
 		var damage=10.0+tier*3.0
 		if b.kind=="ward":
 			for u in units:
-				if u.hp>0 and u.pos.distance_to(target.pos)<1.4:u.hp=maxf(0,u.hp-damage*(1.8 if u.kind==1 else 1.4))
+				if u.hp>0 and u.pos.distance_to(b.pos)<=4.2:u.hp=maxf(0,u.hp-damage*(1.8 if u.kind==1 else 1.4))
 		else:target.hp=maxf(0,target.hp-damage)
 	if percent()==100 or elapsed>=180 or (reserve[0]+reserve[1]+reserve[2]==0 and alive()==0):finished=true
 func alive() -> int:return units.filter(func(u):return u.hp>0).size()
