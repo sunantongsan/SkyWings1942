@@ -264,7 +264,8 @@ func show_side():
 				var sheet=load("res://assets/realistic/"+Troops.ASSETS[i]+".webp")
 				var frame=AtlasTexture.new();frame.atlas=sheet;frame.region=Rect2(0,0,sheet.get_width()/4.0,sheet.get_height()/2.0)
 				var portrait=TextureRect.new();portrait.texture=frame;portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(120,90);side.add_child(portrait)
-				label(side,"ระดับ %d"%(i+1),15)
+				label(side,"ระดับ %d • "% (i+1)+Troops.SKILLS[i],15)
+				label(side,Troops.DETAILS[i],14)
 				label(side,"%s: %d คน" % [names[i],Troops.count(state.army,i)])
 				var produce=button(side,"ผลิต • น้ำ %d ข้าว %d โอสถ %d" % [Troops.WATER[i],Troops.RICE[i],Troops.ELIXIR[i]],send.bind("train",{"type":i}))
 				produce.disabled=building_level("barracks")<i+1 or building_level("training")<1 or army_total()+state.jobs.size()>=int(caps.get("army",10))
@@ -681,19 +682,19 @@ func _process(delta):
 		for unit in battle_nodes:
 			var node=unit.node
 			node.position=unit.start.lerp(unit.target,clampf(progress*3,0,1))
-			node.position.y=(2.1 if Troops.air(unit.kind) else abs(sin(time*4+unit.phase))*0.25)
+			node.position.y=(2.1 if Troops.air(unit.kind) else 0.0)
 			var direction=unit.target-unit.start
 			node.rotation.y=atan2(direction.x,direction.z)
 			if progress>0.33:
 				if not node.get_meta("next_strike",0.0)>time:
-					art.pose(node,"attack",0.85);art.strike_fx(world,node.position,node.position+Vector3(0.4,0,-0.7),unit.kind);node.set_meta("next_strike",time+1.0)
+					art.pose(node,"attack",0.85);art.strike_fx(world,node.position,node.position+Vector3(0.4,0,-0.7),unit.kind);node.set_meta("next_strike",time+Troops.COOLDOWN[unit.kind])
 			else:art.pose(node,"walk")
 	if not battle_visual and not defense_nodes.is_empty():
 		var progress=clampf(1.0-(home_defense_time-now_time())/25.0,0,1)
 		for unit in defense_nodes:
 			unit.node.position=unit.start.lerp(unit.target,minf(1,progress*3))
 			if progress<0.33:art.pose(unit.node,"walk")
-			elif time>unit.node.get_meta("next_strike",0.0):art.pose(unit.node,"attack",0.8);art.strike_fx(world,unit.node.position,unit.node.position+Vector3(0,0,-1),unit.kind);unit.node.set_meta("next_strike",time+1)
+			elif time>unit.node.get_meta("next_strike",0.0):art.pose(unit.node,"attack",0.8);art.strike_fx(world,unit.node.position,unit.node.position+Vector3(0,0,-1),unit.kind);unit.node.set_meta("next_strike",time+Troops.COOLDOWN[unit.kind])
 		if progress>=1:draw_base()
 	for actor in actors:
 		var f=(sin(time*0.5+actor.phase)+1)/2
@@ -702,7 +703,7 @@ func _process(delta):
 		art.pose(actor.node,"walk" if actor.from.distance_to(actor.to)>1 else "idle")
 		actor.node.position=actor.from.lerp(actor.to,f)
 		if actor.from.distance_to(actor.to)<1:art.idle_flair(actor.node,time,float(actor.phase),int(actor.kind))
-		actor.node.position.y=abs(sin(time*6+actor.phase))*0.08+(1.7 if Troops.air(actor.kind) else 0)
+		actor.node.position.y=1.7 if Troops.air(actor.kind) else 0
 	if is_instance_valid(clock_label) and not state.is_empty():
 		if mode=="raid" and state.has("raid"):clock_label.text="การต่อสู้อัตโนมัติ • %d วิ" % maxi(0,int(state.raid.finish-now_time()))
 		elif mode=="home" and selected>=0 and selected<state.buildings.size():clock_label.text=remaining(state.buildings[selected].finish)

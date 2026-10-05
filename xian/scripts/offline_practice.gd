@@ -18,12 +18,14 @@ var camera: Camera3D
 var battlefield: Node3D
 var hud: Control
 var sidebar: VBoxContainer
+var skill_label: Label
 var heading: Label
 var hint: Label
 var unit_buttons: Array = []
 var level_picker: OptionButton
 var models: Array = []
 var unit_models: Array = []
+var guard_models: Array=[]
 var projectiles: Array = []
 var records: Dictionary = {}
 var level=1
@@ -48,7 +50,8 @@ func _ready():
 	text(sidebar,"แตะขอบเขียวเพื่อปล่อยศิษย์\nลากพื้นเลื่อน / จีบสองนิ้วซูม",17)
 	for i in range(10):
 		var b=button(sidebar,"",func():selected_kind=i;refresh_hud());unit_buttons.append(b)
-	text(sidebar,"ขั้นต้น: เดิน / เจาะกำแพง\nฝึกปราณ: บิน / กระบี่ระยะไกล\nมังกร: ข้ามกำแพง / ตีป้อม",16)
+	text(sidebar,"นักรบแต่ละชนิดมีสกิลเฉพาะ\nโจรปีนกำแพง • เสือล่านักรบ\nคนหินทุบสิ่งกีดขวาง",16)
+	skill_label=text(sidebar,"",16)
 	var zoom_row=HBoxContainer.new();sidebar.add_child(zoom_row)
 	button(zoom_row,"− ซูมออก",func():camera.size=minf(72,camera.size+4))
 	button(zoom_row,"+ ซูมเข้า",func():camera.size=maxf(24,camera.size-4))
@@ -68,13 +71,18 @@ func button(parent: Node, value: String, callback: Callable) -> Button:
 func world_pos(p: Vector2, height=0.0) -> Vector3:return Vector3((p.x-7.5)*3,height,(p.y-7.5)*3)
 func start_level(value: int):
 	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;pivot=Vector3.ZERO;position_camera()
-	for child in battlefield.get_children():child.queue_free()
-	models.clear();unit_models.clear();projectiles.clear()
-	art.landscape(battlefield,level%2==0,true)
+	for child in battlefield.get_children():
+		battlefield.remove_child(child);child.queue_free()
+	models.clear();unit_models.clear();guard_models.clear();projectiles.clear()
+	var terrain=Node3D.new();terrain.name="Terrain";battlefield.add_child(terrain)
+	art.landscape(terrain,level%2==0,true)
 	dress_battlefield()
 	for b in sim.buildings:
 		var model=art.wall(Walls.mask(sim.buildings,Vector2i(b.pos)),0,level) if b.kind=="wall" else art.building(b.kind,level);battlefield.add_child(model);model.position=world_pos(b.pos)
 		var bar=health_bar(model,art.model_bounds(model).end.y+0.35);models.append({"node":model,"bar":bar})
+	for guard in sim.defenders:
+		var actor=art.person(guard.kind);battlefield.add_child(actor);actor.position=world_pos(guard.pos,2.4 if Troops.air(guard.kind) else 0)
+		guard_models.append({"node":actor,"bar":health_bar(actor,2.1)})
 	level_picker.clear()
 	for i in range(1,13):
 		level_picker.add_item("ฐาน %02d  %s" % [i,"★".repeat(int(records.get(str(i),0)))])
@@ -87,6 +95,7 @@ func health_bar(parent: Node3D, height: float) -> MeshInstance3D:
 	art.box(parent,Vector3(0,height,0),Vector3(1.7,0.13,0.13),"392f32")
 	return art.box(parent,Vector3(0,height,0.08),Vector3(1.65,0.14,0.14),"86df8b")
 func refresh_hud():
+	if is_instance_valid(skill_label):skill_label.text=Troops.SKILLS[selected_kind]+"\n"+Troops.DETAILS[selected_kind]
 	heading.text="ฐานบอท %02d  •  ทำลาย %d%%  •  %s  •  เวลา %d:%02d" % [level,sim.percent(),"★".repeat(sim.stars())+"☆".repeat(3-sim.stars()),int(maxf(0,180-sim.elapsed))/60,int(maxf(0,180-sim.elapsed))%60]
 	for i in range(10):
 		unit_buttons[i].text=("▶ " if i==selected_kind else "")+Troops.NAMES[i]+" × %d" % sim.reserve[i]
@@ -98,8 +107,8 @@ func place_at(screen: Vector2):
 	var cell=Vector2i(roundi(hit.x/3+7.5),roundi(hit.z/3+7.5))
 	if not sim.deploy(selected_kind,cell):hint.text="แตะพื้นที่ขอบสีเขียวเพื่อปล่อยศิษย์";return
 	level_picker.disabled=true
-	var model=art.person(selected_kind);battlefield.add_child(model);model.position=world_pos(Vector2(cell),2.4 if selected_kind==1 else 0)
-	unit_models.append({"node":model,"bar":health_bar(model,2.0)})
+	var model=art.person(selected_kind);battlefield.add_child(model);model.position=world_pos(Vector2(cell),2.4 if Troops.air(selected_kind) else 0)
+	unit_models.append({"node":model,"bar":health_bar(model,art.model_bounds(model).end.y+0.25)})
 	hint.text="★ ทำลายสำนักหลัก  •  ★ ทำลาย 50%  •  ★ ทำลายทั้งหมด"
 	refresh_hud()
 func position_camera():
@@ -155,13 +164,13 @@ func _process(delta):
 	while accumulator>=0.1:
 		accumulator-=0.1;sim.step(0.1)
 		for shot in sim.shots:
-			if shot.has("unit"):
-				var actor=unit_models[shot.unit].node;var direction: Vector2=shot.to-shot.from
-				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",0.8)
+			if shot.has("unit") or shot.has("guard"):
+				var actor=unit_models[shot.unit].node if shot.has("unit") else guard_models[shot.guard].node;var direction: Vector2=shot.to-shot.from
+				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",0.8,Vector3(direction.x,0,direction.y))
 			if shot.get("weapon","")=="ward":
 				art.sound_wave(battlefield,world_pos(shot.from),4.2*3);continue
-			if shot.has("to"):art.strike_fx(battlefield,world_pos(shot.from,0.6),world_pos(shot.to,0.6),int(shot.kind))
-			if not shot.enemy and shot.kind!=1:continue
+			if not shot.has("weapon") and shot.has("to"):art.strike_fx(battlefield,world_pos(shot.from,shot.get("source_height",0.0)),world_pos(shot.to,shot.get("target_height",0.0)),int(shot.kind))
+			if not shot.has("weapon"):continue
 			var node=art.orb(battlefield,world_pos(shot.from,2.8),Vector3.ONE*0.2,"9d8d71") if shot.enemy else art.box(battlefield,world_pos(shot.from,2),Vector3(0.16,0.12,1.1),"adf0ff")
 			projectiles.append({"node":node,"start":world_pos(shot.from,2.8 if shot.enemy else 2),"end":world_pos(shot.to,1),"age":0.0})
 	if wall_revision!=sim.revision:
@@ -175,24 +184,29 @@ func _process(delta):
 			var model=art.wall(mask,0,level);battlefield.add_child(model);model.position=world_pos(b.pos)
 			models[i]={"node":model,"bar":health_bar(model,2.5)}
 	for i in range(sim.buildings.size()):
-		var b=sim.buildings[i];models[i].bar.scale.x=maxf(0.001,b.hp/b.max_hp)
+		var b=sim.buildings[i]
+		if models[i].get("dead",false):continue
+		models[i].bar.scale.x=maxf(0.001,b.hp/b.max_hp)
 		if b.hp<=0 and models[i].node.visible:
-			models[i].node.hide()
+			models[i].dead=true
+			var dead=models[i].node;dead.hide();battlefield.remove_child(dead);dead.queue_free()
 			if b.kind!="wall":art.ruins(battlefield,world_pos(b.pos),b.kind)
 			art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
-	for i in range(sim.units.size()):
-		var u=sim.units[i];var node=unit_models[i].node
-		node.visible=u.hp>0;unit_models[i].bar.scale.x=maxf(0.001,u.hp/u.max_hp)
-		var target=world_pos(u.pos,2.4 if u.kind==1 else absf(sin(sim.elapsed*5))*0.16 if u.kind==2 else 0)
-		var diff=target-node.position
-		if Vector2(diff.x,diff.z).length()>0.01 and u.moving:node.rotation.y=atan2(diff.x,diff.z)
-		art.pose(node,"walk" if u.moving else "idle")
-		node.position=target
+	for i in range(sim.units.size()):update_actor(sim.units[i],unit_models[i],delta)
+	for i in range(sim.defenders.size()):update_actor(sim.defenders[i],guard_models[i],delta)
 	for i in range(projectiles.size()-1,-1,-1):
 		var p=projectiles[i];p.age+=delta;p.node.position=p.start.lerp(p.end,minf(1,p.age/0.25))
 		if p.age>=0.25:p.node.queue_free();projectiles.remove_at(i)
 	refresh_hud()
 	if sim.finished and not result_shown:finish()
+func update_actor(u: Dictionary, visual: Dictionary,delta: float):
+	var node=visual.node;node.visible=u.hp>0;visual.bar.scale.x=maxf(0.001,u.hp/u.max_hp)
+	var height=2.4 if Troops.air(u.kind) else u.get("climbing",0.0)*2.3
+	if u.kind==6 and u.windup>0 and u.pending_target.get("entity","")=="unit" and Troops.air(u.pending_target.kind):height+=sin(clampf(1-u.windup/0.35,0,1)*PI)*2.4
+	var target=world_pos(u.pos,height);var diff=target-node.position
+	if Vector2(diff.x,diff.z).length()>0.01 and u.moving:node.rotation.y=atan2(diff.x,diff.z)
+	art.pose(node,"climb" if u.get("climbing",0.0)>0.05 else "walk" if u.moving else "idle")
+	node.position=node.position.lerp(target,1.0-exp(-delta*18))
 func finish():
 	if result_shown:return
 	result_shown=true;sim.finished=true
@@ -202,3 +216,7 @@ func finish():
 	level_picker.disabled=false
 	if level<12 and stars>0:level_picker.set_item_disabled(level,false)
 	hint.text="จบการประลอง: %s • ทำลาย %d%% • %s" % ["★".repeat(stars)+"☆".repeat(3-stars),sim.percent(),"เปิดฐานถัดไปแล้ว" if stars>0 and level<12 else "ลองจัดแนวโจมตีใหม่"]
+
+	if sim.stolen.water+sim.stolen.rice+sim.stolen.stone>0:hint.text+=" • โจรขโมยได้ในสนามฝึก: น้ำ %d ข้าว %d โอสถ %d (ไม่เข้าออนไลน์)"%[sim.stolen.water,sim.stolen.rice,sim.stolen.stone]
+func _exit_tree():
+	sim.clear_targets()

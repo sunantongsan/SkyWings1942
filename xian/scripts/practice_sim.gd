@@ -4,6 +4,9 @@ const Troops=preload("res://scripts/troops.gd")
 var buildings: Array = []
 var units: Array = []
 var shots: Array = []
+var defenders: Array=[]
+var next_id=0
+var stolen={"water":0,"rice":0,"stone":0}
 var reserve: Array = [12,6,4]
 var tier=1
 var elapsed=0.0
@@ -12,7 +15,8 @@ var finished=false
 var grid=AStarGrid2D.new()
 var revision=0
 func setup(level: int):
-	tier=clampi(level,1,12);buildings.clear();units.clear();shots.clear()
+	clear_targets();next_id=0
+	tier=clampi(level,1,12);buildings.clear();units.clear();shots.clear();defenders.clear();stolen={"water":0,"rice":0,"stone":0}
 	reserve=[12+int(tier/4)*2,6+int(tier/6),4,0,0,0,0,0,0,0];
 	for i in range(3,10):reserve[i]=2 if tier>=i+1 else 0
 	elapsed=0;started=false;finished=false;revision=0
@@ -40,8 +44,12 @@ func setup(level: int):
 		for turn in range((tier-1)%4):b.pos=Vector2(15-b.pos.y,b.pos.x)
 	grid.region=Rect2i(0,0,16,16);grid.cell_size=Vector2.ONE
 	grid.diagonal_mode=AStarGrid2D.DIAGONAL_MODE_NEVER;grid.update();rebuild_grid()
+	if tier>=3:
+		defenders.append(combatant(0,Vector2(8,6),1))
+	if tier>=6:defenders.append(combatant(1,Vector2(9,7),1))
+	if tier>=9:defenders.append(combatant(5,Vector2(8,9),1))
 func add_building(kind: String, p: Vector2i, hp: float):
-	buildings.append({"kind":kind,"pos":Vector2(p),"hp":hp,"max_hp":hp,"cooldown":0.0})
+	buildings.append({"eid":"b"+str(buildings.size()),"kind":kind,"pos":Vector2(p),"hp":hp,"max_hp":hp,"cooldown":0.0,"burn":0.0,"stock":200.0})
 func rebuild_grid():
 	grid.fill_solid_region(grid.region,false)
 	for b in buildings:
@@ -52,11 +60,17 @@ func can_deploy(pos: Vector2i) -> bool:
 func deploy(kind: int, pos: Vector2i) -> bool:
 	if finished or kind<0 or kind>9 or reserve[kind]<=0 or not can_deploy(pos):return false
 	reserve[kind]-=1;started=true
-	var hp=float(Troops.HP[kind])
-	units.append({"kind":kind,"pos":Vector2(pos),"hp":hp,"max_hp":hp,"cooldown":0.0,"think":0.0,"target":{},"path":PackedVector2Array(),"revision":-1,"windup":0.0,"pending_target":{},"moving":false})
+	units.append(combatant(kind,Vector2(pos),0))
 	return true
+func combatant(kind: int,pos: Vector2,team: int) -> Dictionary:
+	var hp=float(Troops.HP[kind]);next_id+=1
+	return {"eid":"u"+str(next_id),"entity":"unit","team":team,"kind":kind,"pos":pos,"hp":hp,"max_hp":hp,"cooldown":0.0,"think":0.0,"target":{},"path":PackedVector2Array(),"revision":-1,"windup":0.0,"pending_target":{},"moving":false,"climbing":0.0,"burn":0.0}
 func route_to(unit: Dictionary, target: Dictionary) -> PackedVector2Array:
 	var start=Vector2i(unit.pos.round());start=start.clamp(Vector2i.ZERO,Vector2i(15,15))
+	var climb_cells=[]
+	if unit.kind==3:
+		for b in buildings:
+			if b.kind=="wall" and b.hp>0:climb_cells.append(Vector2i(b.pos));grid.set_point_solid(Vector2i(b.pos),false)
 	var was_solid=grid.is_point_solid(start);grid.set_point_solid(start,false)
 	var best=PackedVector2Array()
 	for offset in [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN]:
@@ -65,9 +79,26 @@ func route_to(unit: Dictionary, target: Dictionary) -> PackedVector2Array:
 		var path=grid.get_point_path(start,end)
 		if not path.is_empty() and (best.is_empty() or path.size()<best.size()):best=path
 	grid.set_point_solid(start,was_solid)
+	for cell in climb_cells:grid.set_point_solid(cell,true)
 	return best
 func choose_target(unit: Dictionary):
+	var enemy_units=units if unit.get("team",0)==1 else defenders
+	var living=enemy_units.filter(func(u):return u.hp>0)
+	living.sort_custom(func(a,b):return unit.pos.distance_squared_to(a.pos)<unit.pos.distance_squared_to(b.pos))
+	if not living.is_empty() and (unit.get("team",0)==1 or unit.kind==6 or unit.pos.distance_to(living[0].pos)<1.8):
+		unit.target=living[0];unit.revision=revision;unit.path=route_to(unit,unit.target)
+		if unit.path.is_empty() and not Troops.air(unit.kind) and unit.pos.distance_to(unit.target.pos)>Troops.reach(unit.kind):
+			var closest=INF
+			for wall in buildings:
+				if wall.kind!="wall" or wall.hp<=0:continue
+				var path=route_to(unit,wall);var score=path.size()+wall.pos.distance_to(living[0].pos)
+				if not path.is_empty() and score<closest:closest=score;unit.target=wall;unit.path=path
+		return
+	if unit.get("team",0)==1:unit.target={};return
 	var candidates=buildings.filter(func(b):return b.hp>0 and b.kind!="wall")
+	if unit.kind==3:
+		var stores=candidates.filter(func(b):return b.kind in ["tank","granary","crystal","spring","well","kitchen"])
+		if not stores.is_empty():candidates=stores
 	if unit.kind==2:
 		var defenses=candidates.filter(func(b):return b.kind in ["tower","ward"])
 		if not defenses.is_empty():candidates=defenses
@@ -75,6 +106,14 @@ func choose_target(unit: Dictionary):
 	unit.target={};unit.path=PackedVector2Array();unit.revision=revision
 	if candidates.is_empty():return
 	if Troops.air(unit.kind):unit.target=candidates[0];return
+	if unit.kind==7:
+		unit.target=candidates[0]
+		var direction: Vector2=(unit.target.pos-unit.pos).normalized();var nearest: float=unit.pos.distance_to(unit.target.pos)
+		for obstacle in buildings:
+			if obstacle.hp<=0:continue
+			var offset: Vector2=obstacle.pos-unit.pos;var projection: float=offset.dot(direction)
+			if projection>0.05 and projection<nearest and absf(offset.cross(direction))<0.78:unit.target=obstacle;nearest=projection
+		return
 	var best=PackedVector2Array()
 	for b in candidates:
 		var path=route_to(unit,b)
@@ -90,36 +129,76 @@ func damage_building(b: Dictionary, amount: float):
 	if b.hp<=0:return
 	b.hp=maxf(0,b.hp-amount)
 	if b.hp<=0:rebuild_grid()
+func damage_target(target: Dictionary,amount: float):
+	if target.get("entity","")=="unit":target.hp=maxf(0,target.hp-amount*(1.0-Troops.ARMOR[target.kind]))
+	else:damage_building(target,amount)
+func enemies(unit: Dictionary) -> Array:
+	return units.filter(func(u):return u.hp>0) if unit.get("team",0)==1 else buildings.filter(func(b):return b.hp>0)+defenders.filter(func(u):return u.hp>0)
+func resolve_skill(unit: Dictionary,target: Dictionary):
+	if target.is_empty() or target.hp<=0:return
+	var damage=float(Troops.DAMAGE[unit.kind]);var targets=enemies(unit)
+	var direction: Vector2=(target.pos-unit.pos).normalized()
+	match unit.kind:
+		2:
+			for victim in targets:
+				var offset: Vector2=victim.pos-unit.pos
+				if victim.eid==target.eid or (offset.length()<=3.4 and offset.normalized().dot(direction)>=0.80):damage_target(victim,damage);victim.burn=2.0
+		3:
+			damage_target(target,damage)
+			if target.get("entity","")!="unit" and target.kind in ["tank","granary","crystal","spring","well","kitchen"]:
+				var key="water" if target.kind in ["tank","well"] else "rice" if target.kind in ["granary","kitchen"] else "stone"
+				var amount=mini(25,int(target.get("stock",0)));target.stock-=amount;stolen[key]+=amount
+		5:
+			var length: float=unit.pos.distance_to(target.pos)+1.4
+			for victim in targets:
+				var offset: Vector2=victim.pos-unit.pos
+				if offset.dot(direction)>=0 and offset.dot(direction)<=length and absf(offset.cross(direction))<=0.6:damage_target(victim,damage)
+		7,8:
+			for victim in targets:
+				if victim.pos.distance_to(target.pos)<=(1.05 if unit.kind==7 else 1.6):damage_target(victim,damage if victim.eid==target.eid else damage*0.65)
+		9:
+			var current=target;var hit=[]
+			for jump in range(3):
+				hit.append(current.eid);damage_target(current,damage*pow(0.8,jump))
+				var next=targets.filter(func(v):return v.hp>0 and not v.eid in hit and v.pos.distance_to(current.pos)<=3)
+				if next.is_empty():break
+				next.sort_custom(func(a,b):return a.pos.distance_squared_to(current.pos)<b.pos.distance_squared_to(current.pos));current=next[0]
+		_ :damage_target(target,damage)
+func tick_unit(u: Dictionary,dt: float):
+	u.moving=false;u.climbing=0.0
+	if u.hp<=0:return
+	u.cooldown-=dt;u.think-=dt
+	if u.windup>0:
+		u.windup-=dt
+		if u.windup<=0:resolve_skill(u,u.pending_target)
+		return
+	if u.target.is_empty() or u.target.get("hp",0)<=0 or u.revision!=revision or u.think<=0:
+		choose_target(u);u.think=0.35 if u.kind==6 or u.get("team",0)==1 else 1.2
+	if u.target.is_empty():return
+	if u.pos.distance_to(u.target.pos)<=Troops.reach(u.kind):
+		if u.cooldown<=0:
+			u.cooldown=Troops.COOLDOWN[u.kind]
+			var shot={"from":u.pos,"to":u.target.pos,"kind":u.kind,"enemy":u.get("team",0)==1,"skill":Troops.SKILLS[u.kind],"source_height":2.4 if Troops.air(u.kind) else 0.0,"target_height":2.4 if u.target.get("entity","")=="unit" and Troops.air(u.target.kind) else 0.0}
+			shot["guard" if u.get("team",0)==1 else "unit"]=(defenders if u.get("team",0)==1 else units).find(u);shots.append(shot)
+			u.pending_target=u.target;u.windup=0.35 if u.kind!=7 else 0.55
+	else:
+		var destination: Vector2=u.target.pos
+		if not Troops.air(u.kind) and u.kind!=7:
+			while not u.path.is_empty() and u.pos.distance_to(u.path[0])<0.05:u.path.remove_at(0)
+			if u.path.is_empty():return
+			destination=u.path[0]
+		u.moving=true;u.pos=u.pos.move_toward(destination,float(Troops.SPEED[u.kind])*dt)
+		if u.kind==3:
+			for b in buildings:
+				if b.kind=="wall" and b.hp>0:u.climbing=maxf(u.climbing,maxf(0,1.0-u.pos.distance_to(b.pos)/0.8))
 func step(dt: float):
 	shots.clear()
 	if not started or finished:return
 	elapsed+=dt
-	for u in units:
-		u.moving=false
-		if u.hp<=0:continue
-		u.cooldown-=dt;u.think-=dt
-		if u.windup>0:
-			u.windup-=dt
-			if u.windup<=0 and not u.pending_target.is_empty():damage_building(u.pending_target,float(Troops.DAMAGE[u.kind]))
-			continue
-		if u.target.is_empty() or u.target.get("hp",0)<=0 or u.revision!=revision or u.think<=0:
-			choose_target(u);u.think=1.5
-		if u.target.is_empty():continue
-		var distance=u.pos.distance_to(u.target.pos)
-		var reach=Troops.reach(u.kind)
-		if distance<=reach:
-			if u.cooldown<=0:
-				u.cooldown=1.1 if u.kind>2 else [0.8,1.1,1.2][u.kind]
-				shots.append({"from":u.pos,"to":u.target.pos,"kind":u.kind,"enemy":false,"unit":units.find(u)})
-				u.pending_target=u.target;u.windup=0.3
-		else:
-			var target: Vector2=u.target.pos
-			if not Troops.air(u.kind):
-				while not u.path.is_empty() and u.pos.distance_to(u.path[0])<0.05:u.path.remove_at(0)
-				if u.path.is_empty():continue
-				target=u.path[0]
-			u.moving=true
-			u.pos=u.pos.move_toward(target,float(Troops.SPEED[u.kind])*dt)
+	for target in buildings+units+defenders:
+		if target.hp>0 and target.get("burn",0)>0:target.burn=maxf(0,target.burn-dt);damage_target(target,18*dt)
+	for u in units:tick_unit(u,dt)
+	for guard in defenders:tick_unit(guard,dt)
 	for b in buildings:
 		if b.hp<=0 or not b.kind in ["tower","ward"]:continue
 		b.cooldown-=dt
@@ -135,8 +214,8 @@ func step(dt: float):
 		var damage=10.0+tier*3.0
 		if b.kind=="ward":
 			for u in units:
-				if u.hp>0 and u.pos.distance_to(b.pos)<=4.2:u.hp=maxf(0,u.hp-damage*(1.8 if u.kind==1 else 1.4))
-		else:target.hp=maxf(0,target.hp-damage)
+				if u.hp>0 and u.pos.distance_to(b.pos)<=4.2:damage_target(u,damage*(1.8 if Troops.air(u.kind) else 1.4))
+		else:damage_target(target,damage)
 	if percent()==100 or elapsed>=180 or (reserve.reduce(func(a,b):return a+b,0)==0 and alive()==0):finished=true
 func alive() -> int:return units.filter(func(u):return u.hp>0).size()
 func percent() -> int:
@@ -153,3 +232,6 @@ func stars() -> int:
 	if percent()>=50:count+=1
 	if percent()==100:count+=1
 	return count
+
+func clear_targets():
+	for u in units+defenders:u.target={};u.pending_target={}

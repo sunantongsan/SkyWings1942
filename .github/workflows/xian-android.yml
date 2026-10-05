@@ -61,6 +61,9 @@ jobs:
           grep XIAN_SMOKE_PASSED smoke.log
           godot --headless --path xian --script res://tests/ten_troops.gd 2>&1 | tee ten_troops.log
           grep XIAN_TEN_TROOPS_PASSED ten_troops.log
+          timeout 90 godot --headless --path xian --script res://tests/skills_and_breaches.gd 2>&1 | tee skills.log
+          grep XIAN_SKILLS_BREACHES_PASSED skills.log
+          if grep -E 'SCRIPT ERROR|Parse Error' skills.log ten_troops.log; then exit 1; fi
           godot --headless --path xian --script res://tests/auth.gd 2>&1 | tee auth.log
           grep XIAN_AUTH_PASSED auth.log
           godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log

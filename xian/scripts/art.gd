@@ -298,18 +298,16 @@ func impact_fx(parent: Node3D, pos: Vector3, kind: int=0):
 	for i in range(7):
 		var spark=orb(root,Vector3.ZERO,Vector3(0.035,0.07,0.035),tint.to_html(false));root.sparks.append(spark)
 func strike_fx(parent: Node3D, start: Vector3, target: Vector3, kind: int):
-	if kind in [1,2,5,8,9]:
-		if fx_count>=24:return
-		var trail=realistic.puff(parent,Color("8ddcfa") if kind in [1,5] else Color("ffad54"));trail.position=start+Vector3(0,0.8,0);trail.scale=Vector3.ONE*0.10
-		var tween=trail.create_tween();tween.tween_property(trail,"position",target+Vector3(0,0.6,0),0.24);tween.tween_callback(func():impact_fx(parent,target+Vector3(0,0.6,0),kind);trail.queue_free())
-	else:impact_fx(parent,target+Vector3(0,0.6,0),kind)
+	var maker=preload("res://scripts/skill_visuals.gd").new();maker.art=self;maker.build(parent,start,target,kind)
 func rubble(parent: Node3D, pos: Vector3):
 	for i in range(5):
 		var angle=i*TAU/5.0;var r=rock(parent,pos+Vector3(cos(angle)*0.65,0,sin(angle)*0.65),0.22+0.04*(i%2));r.rotation.y=angle
 
-func pose(root: Node3D, state: String, attack_duration: float=0.8):
+func pose(root: Node3D, state: String, attack_duration: float=0.8,direction: Vector3=Vector3.ZERO):
 	if root.has_node("CharacterSprite"):
-		root.get_node("CharacterSprite").set_pose(state,attack_duration);return
+		root.get_node("CharacterSprite").set_pose(state,attack_duration)
+		if direction!=Vector3.ZERO:root.get_node("CharacterSprite").face(direction)
+		return
 	if not root.has_meta("anim_player"):return
 	var player: AnimationPlayer=root.get_meta("anim_player")
 	if state!="attack" and root.get_meta("attacking",false) and player.is_playing():return
@@ -376,7 +374,7 @@ func batch_static(root: Node3D):
 	# Merge only immutable decoration. Actors, health bars and selectable buildings stay independent.
 	var groups: Dictionary={}
 	for node in root.find_children("*","MeshInstance3D",true,false):
-		if node.mesh==null:continue
+		if node.mesh==null or node.is_queued_for_deletion():continue
 		var ancestor: Node=node;var moving=false
 		while ancestor!=root:
 			if ancestor.get_meta("dynamic_visual",false):moving=true;break

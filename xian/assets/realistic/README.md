@@ -57,3 +57,6 @@ four horns per tier. See `tests/sect_life.gd` for default-renderer coverage.
 
 ## v45 additions
 Eight original imagegen assets, generated 2026-10-05: an etched clear-glass tiffin tier filled with golden paddy rice; thief, divine turtle, sword immortal, divine tiger, stone warrior, fire phoenix and deity. Troop sheets use four locomotion cells above four combat poses. The first combat pose plus a procedural lunge is used to avoid weapon trails crossing generated cell boundaries. Sources retain transparency and were converted to WebP using Godot, with no pixel repainting. Glass tiers stack at runtime, one per level.
+
+## v46
+Sword sage recolored with imagegen to crimson silk/gold embroidery while preserving identity, sheet layout, silver hair and all eight poses. Native animated aura is separate. Ground locomotion uses a continuous, distance-driven two-dimensional deformation of the first contact pose (alternating support/swing feet and arm counter-motion), not disconnected generated frame cycling. This is a 2.5D deformation, not a fully rigged 3D skeleton. Sprite baselines are adjusted for padding so feet sit on the ground.

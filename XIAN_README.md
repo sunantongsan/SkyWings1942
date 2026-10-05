@@ -134,3 +134,5 @@ Credits/licenses are included in the APK and accessible from the sect panel. `na
 - Client tests cover all 150 building/level combinations, translucent pill visibility, post-placement wall pan, existing gestures, donor animation and all offline maps. New thumbnails and comparison captures come from Godot OpenGL, not concept art. Android remains an arm64 debug-signed test APK; physical-phone frame rate is not measured here.
 
 See [v0.45 release notes](xian/RELEASE-v045.md) for ten troop unlocks, glass tiffins and wall management.
+
+[v0.46 skill and movement notes](xian/RELEASE-v046.md) describe the offline signature skills and wall restart fix.

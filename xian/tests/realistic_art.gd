@@ -24,7 +24,9 @@ func run():
 	for kind in range(10):
 		var unit=art.person(kind);root.add_child(unit);art.pose(unit,"walk")
 		var sprite=unit.get_node("CharacterSprite");sprite._process(0.15)
-		assert(sprite.frame>0);assert(sprite.hframes*sprite.vframes==8)
+		assert(sprite.hframes*sprite.vframes==8)
+		unit.position=Vector3(1,0,0);sprite._process(0.1)
+		assert(sprite.frame>0 if sprite.flying else sprite.gait_phase>0)
 		unit.position=Vector3(-1,0,1);sprite._process(0.01);assert(sprite.flip_h)
 		art.pose(unit,"attack",0.7);assert(sprite.attack_time>0);unit.free()
 	var scaffold=Node3D.new();root.add_child(scaffold);art.construction_dressing(scaffold,1,0.4)
