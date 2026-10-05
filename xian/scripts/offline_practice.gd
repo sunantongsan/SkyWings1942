@@ -174,7 +174,7 @@ func _process(delta):
 	for i in range(sim.buildings.size()):
 		var b=sim.buildings[i];models[i].bar.scale.x=maxf(0.001,b.hp/b.max_hp)
 		if b.hp<=0 and models[i].node.visible:
-			models[i].node.hide();art.box(battlefield,world_pos(b.pos,0.12),Vector3(2.1,0.24,2.1),"6c695c");art.rubble(battlefield,world_pos(b.pos,0.15));art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
+			models[i].node.hide();art.ruins(battlefield,world_pos(b.pos),b.kind);art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
 	for i in range(sim.units.size()):
 		var u=sim.units[i];var node=unit_models[i].node
 		node.visible=u.hp>0;unit_models[i].bar.scale.x=maxf(0.001,u.hp/u.max_hp)
