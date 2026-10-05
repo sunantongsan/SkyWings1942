@@ -20,7 +20,7 @@ func _process(delta: float):
   for i in range(particles.size()):
    var p=particles[i];var t=fposmod(age*2.6+i/float(particles.size()),1.0)
    p.position=start.lerp(target,t)+Vector3(sin(i*2.4)*t*0.4,sin(i*4.1)*t*0.35,cos(i*3.2)*t*0.4)
-   p.scale=Vector3.ONE*(0.10+t*0.23);p.material_override.set_shader_parameter("opacity",(1-t)*0.65*(1-clampf((age-0.5)*3,0,1)))
+   p.scale=Vector3.ONE*(0.10+t*0.23);p.material_override.set_shader_parameter("opacity",(1-t*0.45)*0.85*(1-clampf((age-0.5)*3,0,1)))
  elif kind==7:
   for i in range(particles.size()):
    var t=clampf(age/duration,0,1);var a=i*TAU/particles.size();particles[i].position=target+Vector3(cos(a)*t*2.0,sin(t*PI)*0.65,sin(a)*t*2.0);particles[i].scale=Vector3.ONE*0.16*(1-t)
