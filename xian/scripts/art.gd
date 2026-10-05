@@ -1,6 +1,6 @@
 extends RefCounted
 var realistic_enabled=true
-var architecture_enabled=true
+var architecture_enabled=false
 var stone_mat: StandardMaterial3D
 var realistic=preload("res://scripts/realistic_art.gd").new()
 var mats = {}
@@ -856,6 +856,6 @@ func upgrades():
 func glass_tiffin(level: int,fill: float) -> Node3D:
 	var root=Node3D.new();root.set_meta("realistic_art",true);root.set_meta("visual_level",clampi(level,1,10));root.set_meta("storage_fill",fill);root.set_meta("tiers",clampi(level,1,10));realistic.shadow(root,2.0)
 	for i in range(clampi(level,1,10)):
-		var layer=realistic.sprite("glass_tiffin",2.0,0.18);layer.name="GlassTier"+str(i);layer.position.y=i*0.24;root.add_child(layer)
+		var layer=realistic.sprite("glass_tiffin",2.0,0.18);layer.name="GlassTier"+str(i);realistic.ground_sprite(layer,"glass_tiffin",0.15);layer.position.y+=i*0.24;root.add_child(layer)
 	var label=Label3D.new();label.name="StorageAmount";label.text=str(roundi(fill*100))+"%";label.font_size=36;label.pixel_size=0.01;label.outline_size=8;label.position=Vector3(0,0.18,0.2);label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;root.add_child(label)
 	return root

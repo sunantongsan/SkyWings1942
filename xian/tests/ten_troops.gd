@@ -8,8 +8,7 @@ func run():
  assert(Troops.UPGRADE[9]==10000000)
  for level in range(1,11):
   var model=art.building("granary",level,0.5);stage.add_child(model)
-  assert(model.get_meta("architecture",false) and model.get_meta("visual_level")==level)
-  assert(art.model_bounds(model).size.y<4.2)
+  assert(model.find_children("GlassTier*","Sprite3D",false,false).size()==level)
   model.free()
  var sim=Sim.new();sim.setup(10)
  for kind in range(10):

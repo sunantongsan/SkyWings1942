@@ -123,7 +123,7 @@ func place_at(screen: Vector2):
 	hint.text="★ ทำลายสำนักหลัก  •  ★ ทำลาย 50%  •  ★ ทำลายทั้งหมด"
 	refresh_hud()
 func position_camera():
-	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
+	camera.position=pivot+Vector3(40,32.66,40);camera.look_at(pivot)
 func pan(relative: Vector2):
 	pivot+=Vector3(-relative.x-relative.y,0,relative.x-relative.y)*camera.size/1400.0
 	pivot.x=clampf(pivot.x,-22,22);pivot.z=clampf(pivot.z,-22,22);position_camera()

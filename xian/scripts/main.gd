@@ -53,7 +53,7 @@ var side_panel: PanelContainer
 var build_category="all"
 var selection_marker: Node3D
 var low_effects=false
-var resource_compact=false
+var base_actions: PanelContainer
 var map_drawn = ""
 var battle_visual = false
 var battle_nodes: Array = []
@@ -123,10 +123,11 @@ func _ready():
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
-	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกทหาร","train"],["บุกสำนัก","raid"],["ฝึกบุก","practice"],["จับคู่","match"],["ร้านค้า","jade"]]:
+	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["จัดฐาน","manage"],["ฝึกทหาร","train"],["บุกสำนัก","raid"],["ฝึกบุก","practice"],["จับคู่","match"],["ร้านค้า","jade"]]:
 		button(row,pair[0],navigate.bind(pair[1]))
 	button(row,"⚙",show_settings)
 	button(row,"−",zoom.bind(5.0));button(row,"+",zoom.bind(-5.0))
+	base_actions=panel(Vector2(224,552),Vector2(710,68));base_actions.hide()
 	toast=Label.new();toast.position=Vector2(28,588);toast.size=Vector2(915,42);toast.add_theme_color_override("font_color",Color("ffe7a5"));toast.add_theme_color_override("font_shadow_color",Color.BLACK);toast.add_theme_constant_override("shadow_offset_x",2);toast.add_theme_constant_override("shadow_offset_y",2);ui.add_child(toast)
 	draw_terrain("bamboo")
 	show_login()
@@ -256,14 +257,22 @@ func show_side():
 		side_panel.visible=not state.is_empty() and (mode!="home" or selected>=0)
 		camera.h_offset=6 if side_panel.visible else 0
 	refresh_selection()
+	show_base_actions()
 	build_cards.clear()
 	clear(side)
 	var title_row=HBoxContainer.new();side.add_child(title_row)
-	label(title_row,{"build":"ก่อสร้าง","train":"กองทัพ","raid":"การต่อสู้"}.get(mode,"ข้อมูลสำนัก"),22)
+	label(title_row,{"build":"ก่อสร้าง","manage":"จัดการฐาน","train":"กองทัพ","raid":"การต่อสู้"}.get(mode,"ข้อมูลสำนัก"),22)
 	button(title_row,"ปิด",func():selected=-1;navigate("home"))
 	if state.is_empty():label(side,"เริ่มต้นตำนานสำนักของคุณ");return
 	label(side,"ช่างว่าง %d/%d • ศิษย์ %d/%d" % [int(caps.get("workers",1))-int(caps.get("busy",0)),int(caps.get("workers",1)),army_total(),int(caps.get("army",10))],16)
 	match mode:
+		"manage":
+			label(side,"เลือกอาคารเพื่อจัดตำแหน่งหรืออัปเกรด",18)
+			button(side,"มองทั้งสำนัก",func():pivot=Vector3.ZERO;camera.size=48;position_camera())
+			for index in range(state.buildings.size()):
+				var b=state.buildings[index]
+				var entry=button(side,"%s • ระดับ %d\n%s" % [find_catalog(b.id).get("name",b.id),int(b.level),remaining(b.finish)],focus_building.bind(index))
+				entry.icon=building_icon(b.id);entry.expand_icon=true;entry.add_theme_constant_override("icon_max_width",56);entry.custom_minimum_size=Vector2(272,82);entry.clip_text=true
 		"build":
 			label(side,"เลื่อนขึ้นลงเพื่อเลือก\nลากรูปอาคารออกมาวางบนพื้น",20)
 			button(side,"เลื่อนจอ / จบการวาง",end_placement)
@@ -347,7 +356,7 @@ func show_side():
 						button(side,"ลบกำแพง "+choice[0],wall_dialog.bind("delete",choice[1]))
 					button(side,"หมุนแนวกำแพง 90°",send.bind("wall_edit",{"index":selected,"operation":"rotate"}))
 					button(side,"ย้ายทั้งแนวกำแพง",func():moving=true;wall_group=Walls.run_indices(state.buildings,selected);clear_preview();message("ลากแนวกำแพงไปยังพื้นที่สีเขียว"))
-				button(side,"ย้ายอาคาร",func():moving=true;wall_group.clear();clear_preview();message("ลากบนพื้นไปยังช่องสีเขียว แล้วปล่อยเพื่อย้าย"))
+				button(side,"ย้ายอาคาร",start_selected_move)
 			else:
 				label(side,"สำนักของคุณ",27)
 				label(side,"1. สร้างบ่อน้ำและโรงครัว\n2. สร้างโกดังเพิ่มความจุ\n3. ฝึกทหารและบุกสำนัก\n4. เล่นจับคู่ระหว่างรอ",20)
@@ -546,9 +555,10 @@ func start_home_defense(report: Dictionary):
 			defense_nodes.append({"node":node,"start":cell_pos(4+i*0.5,14),"target":cell_pos(4+(i%8)*0.8,11.2+(i/8)*0.65+kind*0.3),"phase":i,"kind":kind})
 	message("สำนักถูกบุกรุก! นักรบ 50% ออกป้องกันฐาน")
 func position_camera():
-	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
+	camera.position=pivot+Vector3(40,32.66,40);camera.look_at(pivot)
 func zoom(amount: float):camera.size=clampf(camera.size+amount,18,80)
 func world_area(pos: Vector2) -> bool:
+	if is_instance_valid(base_actions) and base_actions.visible and base_actions.get_global_rect().has_point(pos):return false
 	if is_instance_valid(gift_button) and gift_button.visible and gift_button.get_global_rect().has_point(pos):return false
 	return Rect2(0,82,950 if is_instance_valid(side_panel) and side_panel.visible else 1280,550).has_point(pos)
 func clear_preview():
@@ -935,3 +945,44 @@ func show_settings():
 	label(box,"โหมดประหยัดลดจำนวนประกายโจมตีที่แสดงพร้อมกัน",17)
 	button(box,"จัดมุมมองกลางสำนัก",func():pivot=Vector3.ZERO;camera.size=29;position_camera();close_modal())
 	button(box,"ปิด",close_modal)
+
+func focus_building(index: int):
+	if index<0 or index>=state.buildings.size():return
+	selected=index;mode="home";moving=false;chosen_build="";clear_preview()
+	pivot=building_position(state.buildings[index]);position_camera();show_side()
+
+func start_selected_move():
+	if selected<0 or selected>=state.buildings.size():return
+	moving=true;wall_group.clear();clear_preview()
+	message("ลากอาคารไปยังพื้นที่สีเขียว • แตะยกเลิกเพื่อคงตำแหน่งเดิม")
+	show_base_actions()
+
+func selected_upgrade():
+	if selected<0 or selected>=state.buildings.size():return
+	var b=state.buildings[selected];var c=find_catalog(b.id)
+	if b.id=="wall":wall_dialog("upgrade","one");return
+	if b.id=="servant" or int(b.level)>=10:return
+	var costs=[int(c.get("water",0)*pow(2,b.level)),int(c.get("rice",0)*pow(2,b.level)),int(c.get("stone",0)*pow(2,b.level))]
+	if b.id=="barracks":costs=[Troops.UPGRADE[int(b.level)],Troops.UPGRADE[int(b.level)],Troops.UPGRADE[int(b.level)]]
+	if float(b.finish)>now_time():message("อาคารนี้กำลังอัปเกรด");return
+	if int(caps.get("busy",0))>=int(caps.get("workers",1)):message("ช่างกำลังทำงานครบทุกคน");return
+	if float(state.get("water",0))<costs[0] or float(state.get("rice",0))<costs[1] or float(state.get("stone",0))<costs[2]:message("ทรัพยากรไม่พอสำหรับอัปเกรด");return
+	confirm_upgrade(selected,costs)
+
+func show_base_actions():
+	if not is_instance_valid(base_actions):return
+	clear(base_actions)
+	base_actions.visible=mode=="home" and selected>=0 and selected<state.get("buildings",[]).size()
+	if is_instance_valid(toast):toast.position.y=506 if base_actions.visible else 588
+	if not base_actions.visible:return
+	var row=HBoxContainer.new();row.add_theme_constant_override("separation",8);base_actions.add_child(row)
+	var b=state.buildings[selected]
+	label(row,find_catalog(b.id).get("name",b.id)+" • Lv."+str(int(b.level)),18)
+	if moving:
+		button(row,"ยกเลิกการย้าย",func():moving=false;wall_group.clear();clear_preview();show_base_actions())
+	else:
+		button(row,"ย้าย",start_selected_move)
+		if b.id!="servant" and int(b.level)<10:
+			var upgrade=button(row,"อัปเกรด",selected_upgrade);upgrade.disabled=float(b.finish)>now_time()
+		button(row,"จัดฐาน",navigate.bind("manage"))
+	button(row,"ปิด",func():selected=-1;moving=false;clear_preview();show_side())

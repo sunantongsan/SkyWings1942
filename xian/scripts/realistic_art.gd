@@ -5,6 +5,7 @@ const Troops=preload("res://scripts/troops.gd")
 const ROOT = "res://assets/realistic/"
 const WIDTHS = {"hall":3.7,"recruit":3.5,"training":6.4,"barracks":3.6,"kitchen":3.6,"spring":3.2,"granary":3.3,"crystal":2.8,"servant":3.7,"well":3.5,"tank":2.3,"ward":2.8,"tower":2.6,"carpenter":2.1}
 var textures: Dictionary = {}
+var ground_anchors: Dictionary = {}
 var regions: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(ROOT+"atlas.json"))
 var soft_texture: GradientTexture2D
 func soft_material(color: Color, billboard: bool=false) -> StandardMaterial3D:
@@ -36,21 +37,26 @@ func building(kind: String, level: int, fill: float=0.5) -> Node3D:
 	var width=minf(2.45,float(WIDTHS[kind])) if kind!="training" else 5.5
 	if kind!="servant":width*=1.0
 	shadow(root,width*1.05)
-	var footing=MeshInstance3D.new();footing.name="GroundFooting"
-	var slab=BoxMesh.new();slab.size=Vector3(width*0.82,0.055,width*0.7);footing.mesh=slab;footing.position.y=0.018
-	var stone=StandardMaterial3D.new();stone.albedo_texture=texture("stone");stone.albedo_color=Color("8b9078");stone.roughness=1.0
-	footing.material_override=stone;root.add_child(footing)
 	var visual=sprite(kind+"_levels" if regions.has(kind+"_levels") else kind,width,0.16 if kind in ["training","well","granary"] else 0.1)
 	if regions.has(kind+"_levels"):
 		var region=regions[kind+"_levels"][clampi(level,1,10)-1]
 		var frame=AtlasTexture.new();frame.atlas=texture(kind+"_levels");frame.region=Rect2(region[0],region[1],region[2],region[3]);frame.filter_clip=true
-		visual.texture=frame;visual.pixel_size=minf(width/frame.get_width(),4.2/frame.get_height());visual.offset.y=frame.get_height()*0.40
+		visual.texture=frame;visual.pixel_size=minf(width/frame.get_width(),4.2/frame.get_height());visual.offset.y=frame.get_height()*0.5-frame.get_width()*0.22
 
+	ground_sprite(visual,kind+":"+str(level))
 	root.add_child(visual)
 	if kind in ["tank","granary","crystal"]:
 		var label=Label3D.new();label.name="StorageAmount";label.text=str(roundi(clampf(fill,0,1)*100))+"%";label.font_size=40;label.pixel_size=0.012;label.outline_size=8;label.font=load("res://assets/NotoSansThai.ttf");label.position.y=0.4;label.render_priority=10;label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;label.no_depth_test=true;root.add_child(label)
 	root.set_meta("visual_level",clampi(level,1,10));root.set_meta("storage_fill",clampf(fill,0,1))
 	return root
+
+func ground_sprite(visual: Sprite3D, key: String, depth: float=0.22):
+	# Only placement changes: the source pixels and aspect ratio remain intact.
+	if not ground_anchors.has(key):
+		var used=visual.texture.get_image().get_used_rect()
+		ground_anchors[key]=float(used.end.y)-visual.texture.get_height()*0.5-used.size.x*depth
+	visual.offset.y=ground_anchors[key]
+	visual.position.y=0.025
 
 func character(kind: int, armed: bool) -> Node3D:
 	var root=Node3D.new();root.set_meta("realistic_art",true)
