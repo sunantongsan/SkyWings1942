@@ -6,14 +6,15 @@ func run():
  DirAccess.make_dir_recursive_absolute("res://assets/ui/buildings")
  DirAccess.make_dir_recursive_absolute("res://build/review")
  for kind in ["hall","barracks","training","well","kitchen","granary","spring","crystal","servant","tank","tower","ward","wall"]:
-  var viewport=SubViewport.new();viewport.size=Vector2i(192,192);viewport.transparent_bg=true;viewport.own_world_3d=true;root.add_child(viewport)
+  var viewport=SubViewport.new();viewport.size=Vector2i(192,192);viewport.transparent_bg=true;viewport.own_world_3d=true;viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS;root.add_child(viewport)
   var model=art.building(kind,1,0.5);viewport.add_child(model)
   var bounds=art.model_bounds(model);var target=Vector3(0,bounds.end.y*0.45,0)
-  var camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=maxf(3.8,maxf(bounds.size.x,bounds.size.z)*1.55);viewport.add_child(camera);camera.position=target+Vector3(40,48,40);camera.look_at(target)
+  var camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=maxf(3.8,maxf(bounds.size.x,bounds.size.z)*1.55);viewport.add_child(camera);camera.position=target+Vector3(40,48,40);camera.look_at(target);camera.make_current()
   var sun=DirectionalLight3D.new();sun.rotation_degrees=Vector3(-55,-35,0);sun.light_energy=0.95;viewport.add_child(sun)
   var env=WorldEnvironment.new();env.environment=Environment.new();env.environment.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.environment.ambient_light_color=Color("d3dfdb");env.environment.ambient_light_energy=0.65;viewport.add_child(env)
   for i in range(3):await process_frame
   await RenderingServer.frame_post_draw
+  assert(not viewport.get_texture().get_image().is_invisible())
   assert(viewport.get_texture().get_image().save_png("res://assets/ui/buildings/"+kind+".png")==OK)
   viewport.queue_free();await process_frame
  var scene=load("res://scenes/main.tscn").instantiate();root.add_child(scene);await process_frame

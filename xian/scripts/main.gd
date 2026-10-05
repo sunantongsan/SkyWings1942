@@ -117,7 +117,7 @@ func _ready():
 		var icon=TextureRect.new();icon.texture=load("res://assets/ui/"+pair[0]+".svg");icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.custom_minimum_size=Vector2(42,38);group.add_child(icon)
 		resource_labels[pair[0]]=label(group,pair[1]+" • —",17)
 	gift_button=button(ui,"ของขวัญ",navigate.bind("jade"));gift_button.position=Vector2(24,112);gift_button.size=Vector2(128,76)
-	gift_glow=VisualStyle.panel();gift_glow.bg_color=Color("376a63");gift_glow.border_color=Color("ffe39a");gift_glow.shadow_color=Color(1,0.76,0.28,0.5);gift_glow.shadow_size=12;gift_button.add_theme_stylebox_override("normal",gift_glow)
+	gift_glow=VisualStyle.panel();gift_glow.bg_color=Color("365e87");gift_glow.border_color=Color("ffe39a");gift_glow.shadow_color=Color(1,0.76,0.28,0.5);gift_glow.shadow_size=12;gift_button.add_theme_stylebox_override("normal",gift_glow)
 	gift_button.icon=load("res://assets/ui/gift.svg");gift_button.expand_icon=true;gift_button.add_theme_constant_override("icon_max_width",50);gift_button.visible=false
 	var sidebar=panel(Vector2(960,92),Vector2(304,530));side_panel=sidebar
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
