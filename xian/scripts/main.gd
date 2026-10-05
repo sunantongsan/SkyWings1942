@@ -308,6 +308,8 @@ func show_side():
 			button(side,"เครดิตภาพ / โมเดล",show_credits)
 func send(action: String,args: Dictionary):api.action(action,args)
 func building_icon(kind: String) -> Texture2D:
+	if art.realistic_enabled and art.realistic.WIDTHS.has(kind):
+		var model=art.realistic.building(kind,1);var texture=model.get_node("RealisticVisual").texture;model.free();return texture
 	return load("res://assets/buildings/"+kind+".png")
 func choose_build(kind: String):
 	chosen_build=kind;moving=false;wall_group.clear();clear_preview()
@@ -394,7 +396,7 @@ func draw_base():
 			for storage in state.buildings:
 				if storage.id==target and int(storage.level)>0:
 					var person=art.person(0,false);person.scale=Vector3.ONE*0.5;world.add_child(person)
-					art.box(person,Vector3(0.4,0.65,0),Vector3(0.35,0.4,0.35),"62b4c1" if b.id=="well" else "d2bb79")
+					if not person.get_meta("realistic_art",false):art.box(person,Vector3(0.4,0.65,0),Vector3(0.35,0.4,0.35),"62b4c1" if b.id=="well" else "d2bb79")
 					actors.append({"node":person,"from":model.position+Vector3(1,0,0),"to":cell_pos(storage.x,storage.y)+Vector3(1,0,0),"phase":actors.size(),"kind":0});break
 	var yard: Dictionary={}
 	for b in state.buildings:

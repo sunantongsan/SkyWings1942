@@ -1,5 +1,12 @@
 extends RefCounted
+var realistic_enabled=true
+var stone_mat: StandardMaterial3D
+var realistic=preload("res://scripts/realistic_art.gd").new()
 var mats = {}
+func stone_material() -> StandardMaterial3D:
+	if stone_mat==null:
+		stone_mat=StandardMaterial3D.new();stone_mat.albedo_texture=realistic.texture("stone");stone_mat.albedo_color=Color("9b9d90");stone_mat.roughness=1;stone_mat.uv1_triplanar=true;stone_mat.uv1_world_triplanar=true;stone_mat.uv1_scale=Vector3.ONE*0.5
+	return stone_mat
 func material(hex: String) -> StandardMaterial3D:
 	if mats.has(hex): return mats[hex]
 	var m = StandardMaterial3D.new()
@@ -7,6 +14,7 @@ func material(hex: String) -> StandardMaterial3D:
 	# Stylized PBR: keep the broad readable shapes, but let sun/highlights sell depth.
 	m.roughness = 0.72
 	m.metallic = 0.0
+	if realistic_enabled and hex in ["b8b19c","a9b091","b4bb87","c8c4a1"]:return stone_material()
 	mats[hex] = m
 	return m
 func box(parent: Node3D, pos: Vector3, size: Vector3, color: String) -> MeshInstance3D:
@@ -70,6 +78,11 @@ func mesh_transform(node: Node3D, root: Node3D) -> Transform3D:
 	return result
 func model_bounds(root: Node3D) -> AABB:
 	var bounds=AABB();var first=true
+	for sprite in root.find_children("*","Sprite3D",true,false):
+		var size=Vector2(sprite.texture.get_width()/float(sprite.hframes),sprite.texture.get_height()/float(sprite.vframes))
+		var rect=AABB(Vector3((sprite.offset.x-size.x*0.5)*sprite.pixel_size,(sprite.offset.y-size.y*0.5)*sprite.pixel_size,0),Vector3(size.x*sprite.pixel_size,size.y*sprite.pixel_size,0.01));var value=mesh_transform(sprite,root)*rect
+		if first:bounds=value;first=false
+		else:bounds=bounds.merge(value)
 	for mesh in root.find_children("*","MeshInstance3D",true,false):
 		var value=mesh_transform(mesh,root)*mesh.get_aabb()
 		if first:bounds=value;first=false
@@ -148,6 +161,8 @@ func wall(mask: int=0, rotation: int=0, level: int=1) -> Node3D:
 	box(root,Vector3(0,1.82,0),Vector3(0.76,0.15,0.76),"537c73" if level<5 else "b59753")
 	cone(root,Vector3(0,2.0,0),0.52,0.08,0.24,"d1b970",4).rotation.y=PI/4
 	evolve(root,"wall",level)
+	if realistic_enabled:
+		for mesh in root.find_children("*","MeshInstance3D",true,false):mesh.material_override=stone_material()
 	batch_static(root)
 	return root
 func construction_dressing(parent: Node3D, footprint_size: int, progress: float):
@@ -168,6 +183,13 @@ func construction_dressing(parent: Node3D, footprint_size: int, progress: float)
 	for i in range(3):box(parent,Vector3(-0.7+i*0.65,0.13,span*0.5+0.35),Vector3(0.42,0.26,0.32),"b8a37a")
 
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
+	if realistic_enabled and realistic.WIDTHS.has(kind):
+		var model=realistic.building(kind,level,fill)
+		if kind=="spring":
+			var smoke=motion(model,"black_smoke");smoke.position.y=2.0+level*0.025
+			for i in range(5):
+				realistic.puff(smoke,Color(0.10,0.10,0.11,0.4))
+		return model
 	if kind=="wall":return wall(0,0,level)
 	var result=building_base(kind,level,fill)
 	evolve(result,kind,level)
@@ -206,6 +228,7 @@ func building_base(kind: String, level: int, fill = 0.5) -> Node3D:
 		lantern(root,Vector3(-1.15,0,-1.15),0.48);lantern(root,Vector3(1.15,0,-1.15),0.48)
 	return root
 func person(kind: int, armed: bool=true) -> Node3D:
+	if realistic_enabled:return realistic.character(kind,armed)
 	var root=Node3D.new()
 	if kind==2:
 		var model=source_scene("Dragon_Evolved.gltf").instantiate();root.add_child(model)
@@ -266,6 +289,8 @@ func rubble(parent: Node3D, pos: Vector3):
 		var angle=i*TAU/5.0;var r=rock(parent,pos+Vector3(cos(angle)*0.65,0,sin(angle)*0.65),0.22+0.04*(i%2));r.rotation.y=angle
 
 func pose(root: Node3D, state: String, attack_duration: float=0.8):
+	if root.has_node("CharacterSprite"):
+		root.get_node("CharacterSprite").set_pose(state,attack_duration);return
 	if not root.has_meta("anim_player"):return
 	var player: AnimationPlayer=root.get_meta("anim_player")
 	if state!="attack" and root.get_meta("attacking",false) and player.is_playing():return
@@ -289,6 +314,8 @@ func landscape(parent: Node3D, mountain: bool=false, deployment: bool=false):
 		var mat=StandardMaterial3D.new();mat.albedo_texture=ImageTexture.create_from_image(pixels);mat.uv1_scale=Vector3(10,10,10);mat.roughness=1
 		ground_materials[mountain]=mat
 	ground.material_override=ground_materials[mountain]
+	if realistic_enabled:
+		ground.material_override.albedo_texture=realistic.texture("ground");ground.material_override.uv1_scale=Vector3(18,18,18);ground.material_override.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;ground.material_override.albedo_color=Color("b8c3a5")
 	# A thin stone boundary frames the buildable area without a chessboard.
 	for axis in range(2):
 		for side in [-1,1]:
@@ -298,11 +325,15 @@ func landscape(parent: Node3D, mountain: bool=false, deployment: bool=false):
 		for axis in range(2):
 			for side in [-1,1]:
 				var pos=Vector3(side*21,0.022,0) if axis==0 else Vector3(0,0.022,side*21)
-				box(parent,pos,Vector3(5.8,0.035,47.8) if axis==0 else Vector3(35.8,0.035,5.8),"82ba72")
+				box(parent,pos,Vector3(5.8,0.035,47.8) if axis==0 else Vector3(35.8,0.035,5.8),"54775c")
 	var rng=RandomNumberGenerator.new();rng.seed=894 if mountain else 421
 	for i in range(42):
 		var angle=i*TAU/42;var radius=rng.randf_range(30,38)
 		var at=Vector3(cos(angle)*radius,0,sin(angle)*radius)
+		if realistic_enabled:
+			if i%2==0:
+				var tree=realistic.sprite("tree",rng.randf_range(5.0,7.0),0.05);tree.position=at;parent.add_child(tree)
+			continue
 		if i%4==0:
 			var rock=orb(parent,at+Vector3(0,0.6,0),Vector3(2.4,1.6,1.9),"8b9c90" if mountain else "9ba586")
 			rock.rotation.y=angle
@@ -649,6 +680,8 @@ func hand_pump(level: int) -> Node3D:
 	var stream=cone(group,Vector3(-0.48,0.87,0.65),0.027,0.027,0.42,"89dce6",6);stream.name="Stream"
 	root.set_meta("pipe_radius",radius);return root
 func scaffold_worker(parent: Node3D, span: float):
+	if realistic_enabled:
+		var worker=realistic.sprite("carpenter_motion",2.1*4,0.07);worker.hframes=4;worker.vframes=2;worker.offset.y=worker.texture.get_height()*0.215;worker.set_script(preload("res://scripts/realistic_loop.gd"));worker.position=Vector3(0,0,span*0.46);parent.add_child(worker);return
 	box(parent,Vector3(0,1.78,span*0.46),Vector3(2.3,0.1,0.73),"b8925c")
 	var group=motion(parent,"saw");group.position=Vector3(-0.58,1.84,span*0.46)
 	small_worker(group,true)
@@ -663,6 +696,12 @@ func scaffold_worker(parent: Node3D, span: float):
 
 func ruins(parent: Node3D, pos: Vector3, kind: String="hall", width: int=1) -> Node3D:
 	var root=new_original();root.name="Ruins";root.set_meta("ruins",true);root.position=pos;parent.add_child(root)
+	if realistic_enabled:
+		root.add_child(realistic.sprite("ruins",2.8 if width==1 else 5.3,0.22))
+		var smoke=motion(root,"embers");smoke.name="EmbersMotion"
+		for i in range(5):
+			realistic.puff(smoke,Color(0.23,0.23,0.23,0.3))
+		return root
 	var span=2.4 if width==1 else 5.3
 	box(root,Vector3(0,0.08,0),Vector3(span,0.16,span),"4b4b43")
 	for i in range(9 if kind!="wall" else 5):
