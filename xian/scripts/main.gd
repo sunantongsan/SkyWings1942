@@ -235,7 +235,7 @@ func open_practice():
 	if is_instance_valid(practice):return
 	clear_preview();fingers.clear();pinching=false;menu_touch=-1
 	ui.hide();world.hide();terrain.hide()
-	practice=load("res://scripts/offline_practice.gd").new();add_child(practice)
+	practice=load("res://scripts/offline_practice.gd").new();practice.art.fx_limit=art.fx_limit;add_child(practice)
 	practice.closed.connect(func():
 		practice.queue_free();practice=null;ui.show();world.show();terrain.show();camera.make_current()
 		if not state.is_empty() and not api.busy:api.action("sync")
