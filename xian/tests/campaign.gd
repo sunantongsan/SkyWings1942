@@ -66,9 +66,10 @@ func run():
  restored.load_progress();assert(restored.total()==269,"Recover last complete save")
  for suffix in ["",".bak",".tmp"]:DirAccess.remove_absolute(progress.path+suffix)
  var game=load("res://scripts/offline_practice.gd").new();game.campaign_mode=true;game.test_mode=true;game.progress.path="user://campaign_ui_test.json";root.add_child(game);await process_frame
+ for icon in game.campaign_map.find_children("*","TextureRect",true,false):assert(icon.size.x<=796 and icon.size.y<=426,"Map image overflow")
  assert(game.campaign_map.visible);assert(game.overlay_open());game.place_at(Vector2(450,400));assert(game.sim.units.is_empty())
  game.start_level(2);assert(game.level==1,"Locked level must stay locked")
- game.start_level(1);assert(not game.overlay_open());assert(game.sim.buildings[0].kind=="hall")
+ game.selected_kind=9;game.start_level(1);assert(game.selected_kind==0);assert(not game.overlay_open());assert(game.sim.buildings[0].kind=="hall")
  for b in game.sim.buildings:b.hp=0
  game.finish();assert(game.progress.total()==3 and game.progress.unlocked()==2 and game.overlay_open())
  game.start_level(2);assert(game.level==2 and not game.sim.finished and game.sim.traps.all(func(t):return not t.triggered))

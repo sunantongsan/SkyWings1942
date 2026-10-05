@@ -100,7 +100,7 @@ func start_level(value: int):
 	if is_instance_valid(campaign_map):campaign_map.hide()
 	if is_instance_valid(result_panel):result_panel.queue_free();result_panel=null
 	fingers.clear();scroll_touch=-1;scroll_velocity=0
-	level=value;result_shown=false;accumulator=0
+	level=value;result_shown=false;accumulator=0;selected_kind=0;troop_scroll.scroll_vertical=0
 	if campaign_mode:sim.setup_campaign(level)
 	else:sim.setup(level)
 	visual_level=sim.campaign_data.visual_level if campaign_mode else level
