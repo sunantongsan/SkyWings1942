@@ -28,6 +28,19 @@ func run():
  # Mortar ignores nearby targets and airborne units.
  sim.buildings[0].kind="mortar";sim.buildings[0].cooldown=0;sim.units[0].pos=Vector2(7,8);sim.step(0.1);assert(sim.units[0].hp==ground_hp)
  sim.units[0].pos=Vector2(7,10);sim.step(0.1);assert(sim.units[0].hp<ground_hp)
+ # Flame ramp resets on a target switch; storm chains only to two neighbors.
+ sim.buildings[0].kind="flame";sim.buildings[0].cooldown=0
+ sim.units[0].pos=Vector2(7,9);sim.units[0].hp=9999;sim.units[1].pos=Vector2(15,15)
+ sim.tick_campaign_defense(sim.buildings[0],1.0)
+ var first_hit=9999-sim.units[0].hp
+ sim.tick_campaign_defense(sim.buildings[0],1.0)
+ assert((9999-first_hit-sim.units[0].hp)>first_hit)
+ sim.units[0].pos=Vector2(15,15);sim.tick_campaign_defense(sim.buildings[0],1.0)
+ assert(sim.buildings[0].get("lock","")=="" and sim.buildings[0].get("ramp",-1)==0)
+ sim.units[0].pos=Vector2(7,9);sim.units[1].pos=Vector2(7,8);sim.units[1].hp=9999
+ sim.buildings[0].kind="storm";sim.buildings[0].cooldown=0
+ var before_chain=sim.units[0].hp;sim.tick_campaign_defense(sim.buildings[0],1.0)
+ assert(sim.units[0].hp<before_chain and sim.units[1].hp<9999)
  # A mine only detonates once, against the appropriate altitude.
  sim.buildings.clear();sim.rebuild_grid();sim.traps=[{"kind":"bomb","pos":Vector2(7,8),"triggered":false}]
  sim.units[0].pos=Vector2(1,1);sim.step(0.1);assert(not sim.traps[0].triggered)

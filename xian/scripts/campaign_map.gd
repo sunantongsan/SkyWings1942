@@ -16,7 +16,7 @@ var chapter_buttons=[]
 var stars_label: Label
 func _ready():
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);mouse_filter=Control.MOUSE_FILTER_STOP;theme=Style.theme()
-	var backdrop=ColorRect.new();backdrop.color=Color("101e2bf5");backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);add_child(backdrop)
+	var backdrop=ColorRect.new();backdrop.color=Color("101e2b");backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);add_child(backdrop)
 	label_at("เส้นทางพิชิต 90 ด่าน",Vector2(40,22),Vector2(700,44),32)
 	stars_label=label_at("",Vector2(790,29),Vector2(250,38),23)
 	button_at("กลับสำนัก",Vector2(1090,24),Vector2(150,48),func():leave.emit())
@@ -25,16 +25,17 @@ func _ready():
 		var b=button_at("เขต %d"%(c+1),Vector2(40+c*134,119),Vector2(126,50),func():chapter=c;selected=c*10+1;refresh())
 		chapter_buttons.append(b)
 	var panel=Panel.new();panel.position=Vector2(40,192);panel.size=Vector2(816,446);panel.add_theme_stylebox_override("panel",Style.panel());add_child(panel)
-	var ground=TextureRect.new();ground.texture=load("res://assets/realistic/ground.webp");ground.position=Vector2(10,10);ground.size=Vector2(796,426);ground.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;ground.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED;ground.modulate=Color(0.36,0.49,0.48,0.7);ground.mouse_filter=Control.MOUSE_FILTER_IGNORE;panel.add_child(ground)
+	var ground=TextureRect.new();ground.texture=load("res://assets/realistic/ground.webp");ground.position=Vector2(10,10);ground.size=Vector2(796,426);ground.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;ground.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_COVERED;ground.size=Vector2(796,426);ground.modulate=Color(0.36,0.49,0.48,0.7);ground.mouse_filter=Control.MOUSE_FILTER_IGNORE;panel.add_child(ground)
 	var route=Line2D.new();route.width=6;route.default_color=Color("688c9b");panel.add_child(route)
 	for i in range(10):route.add_point(point(i)+Vector2(46,28))
 	for i in range(10):
-		var icon=TextureRect.new();var sheet=load("res://assets/realistic/hall_levels.webp");var atlas=AtlasTexture.new();atlas.atlas=sheet;var region=JSON.parse_string(FileAccess.get_file_as_string("res://assets/realistic/atlas.json")).hall_levels[i];atlas.region=Rect2(region[0],region[1],region[2],region[3]);icon.texture=atlas;icon.position=point(i)+Vector2(12,-57);icon.size=Vector2(85,76);icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;panel.add_child(icon)
+		var icon=TextureRect.new();var sheet=load("res://assets/realistic/hall_levels.webp");var atlas=AtlasTexture.new();atlas.atlas=sheet;var region=JSON.parse_string(FileAccess.get_file_as_string("res://assets/realistic/atlas.json")).hall_levels[i];atlas.region=Rect2(region[0],region[1],region[2],region[3]);icon.texture=atlas;icon.position=point(i)+Vector2(12,-57);icon.size=Vector2(85,76);icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.size=Vector2(85,76);icon.mouse_filter=Control.MOUSE_FILTER_IGNORE;panel.add_child(icon)
 		var b=Button.new();b.position=point(i);b.size=Vector2(110,94);b.pressed.connect(func():selected=chapter*10+i+1;refresh());panel.add_child(b);node_buttons.append(b)
 	label_at("แตะหมายเลขเพื่อดูฐาน • ★ สำนักหลัก  ★ ทำลาย 50%  ★ ทำลายทั้งหมด",Vector2(60,650),Vector2(1160,36),18)
 	var side=Panel.new();side.position=Vector2(880,192);side.size=Vector2(360,446);side.add_theme_stylebox_override("panel",Style.panel());add_child(side)
 	title=label_at("",Vector2(904,208),Vector2(312,76),23)
-	details=label_at("",Vector2(904,293),Vector2(312,256),17)
+	var detail_scroll=ScrollContainer.new();detail_scroll.position=Vector2(904,293);detail_scroll.size=Vector2(312,248);detail_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;add_child(detail_scroll)
+	details=Label.new();details.custom_minimum_size.x=288;details.size_flags_horizontal=Control.SIZE_EXPAND_FILL;details.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;details.add_theme_font_size_override("font_size",17);detail_scroll.add_child(details)
 	deploy_button=button_at("เริ่มบุก",Vector2(904,564),Vector2(312,52),func():
 		if selected<=progress.unlocked():launch.emit(selected))
 	chapter=int((selected-1)/10);refresh()

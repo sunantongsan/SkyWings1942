@@ -7,8 +7,13 @@ func capture(name: String):
 func run():
  root.size=Vector2i(1280,720);root.content_scale_size=Vector2i(1280,720)
  DirAccess.make_dir_recursive_absolute("res://build/review")
- var scene=load("res://scripts/offline_practice.gd").new();scene.campaign_mode=true;scene.test_mode=true;scene.progress.path="user://campaign_studio.json"
- root.add_child(scene);await process_frame
+ # Exercise the real main-menu entry, including village lighting/environment.
+ var main=load("res://scenes/main.tscn").instantiate();root.add_child(main);await process_frame
+ main.api.busy=true;main.close_modal();main.open_practice()
+ var scene=main.practice;scene.test_mode=true;scene.progress.path="user://campaign_studio.json";await process_frame
+ assert(scene.campaign_map.node_buttons.size()==10)
+ for button in scene.campaign_map.node_buttons:assert(Rect2(40,192,816,446).encloses(button.get_global_rect()))
+ for icon in scene.campaign_map.find_children("*","TextureRect",true,false):assert(icon.size.x<=796 and icon.size.y<=426,"Map artwork must fit assigned rectangles")
  await capture("campaign-map")
  for n in range(1,91):scene.progress.stars[str(n)]=3
  scene.campaign_map.chapter=8;scene.campaign_map.selected=90;scene.campaign_map.refresh()
@@ -17,7 +22,7 @@ func run():
   scene.start_level(n);await capture("stage-%02d"%n)
  for b in scene.sim.buildings:b.hp=0
  scene.finish();await capture("campaign-result")
- scene.queue_free();await process_frame
+ main.queue_free();await process_frame
  var art=load("res://scripts/art.gd").new()
  var viewport=SubViewport.new();viewport.size=Vector2i(1280,400);viewport.own_world_3d=true;viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS;root.add_child(viewport)
  var camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=6.2;viewport.add_child(camera);camera.position=Vector3(0,9,14);camera.look_at(Vector3(0,1.2,0));camera.make_current()

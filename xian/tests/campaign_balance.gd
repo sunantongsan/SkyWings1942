@@ -14,8 +14,8 @@ func run():
     for i in range(count):
      var points=[Vector2i(1,7),Vector2i(7,1),Vector2i(14,8),Vector2i(8,14)]
      sim.deploy(kind,points[i%4] if strategy==0 else points[((n-1)%4 if strategy==1 else strategy-2)])
-   for tick in range(3000):
-    sim.step(0.2)
+   for tick in range(6000):
+    sim.step(0.1)
     if sim.finished:break
    best=maxi(best,sim.stars());best_damage=maxi(best_damage,sim.percent());fastest=minf(fastest,sim.elapsed)
    results.append({"strategy":strategy,"stars":sim.stars(),"percent":sim.percent(),"seconds":snappedf(sim.elapsed,0.1),"finished":sim.finished})
