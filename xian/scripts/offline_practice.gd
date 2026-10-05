@@ -6,6 +6,14 @@ const Sim=preload("res://scripts/practice_sim.gd")
 const Walls=preload("res://scripts/wall_layout.gd")
 const VisualStyle=preload("res://scripts/visual_style.gd")
 const Art=preload("res://scripts/art.gd")
+const Campaign=preload("res://scripts/campaign.gd")
+const Defenses=preload("res://scripts/campaign_defenses.gd")
+var campaign_mode=false
+var progress=preload("res://scripts/campaign_progress.gd").new()
+var campaign_map: Control
+var result_panel: Control
+var visual_level=1
+var trap_models: Array=[]
 const SAVE="user://practice_stars.json"
 var sim=Sim.new()
 var art=Art.new()
@@ -43,7 +51,8 @@ var result_shown=false
 var accumulator=0.0
 var test_mode=false
 func _ready():
-	if FileAccess.file_exists(SAVE):
+	if campaign_mode:progress.load_progress();records=progress.stars
+	if not campaign_mode and FileAccess.file_exists(SAVE):
 		var data=JSON.parse_string(FileAccess.get_file_as_string(SAVE))
 		if data is Dictionary:records=data
 	camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=42;camera.far=250;camera.h_offset=6
@@ -56,6 +65,10 @@ func _ready():
 	var right=panel(Vector2(960,92),Vector2(304,530));var scroll=ScrollContainer.new();troop_scroll=scroll;right.add_child(scroll);sidebar=VBoxContainer.new();sidebar.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(sidebar)
 	level_picker=OptionButton.new();level_picker.custom_minimum_size.y=48;sidebar.add_child(level_picker)
 	level_picker.item_selected.connect(func(i):start_level(i+1))
+	if campaign_mode:
+		level_picker.hide()
+		button(sidebar,"แผนที่ 90 ด่าน",request_map)
+		button(sidebar,"คู่มือป้อมป้องกัน",show_defense_guide)
 	text(sidebar,"แตะขอบเขียวเพื่อปล่อยศิษย์\nลากพื้นเลื่อน / จีบสองนิ้วซูม",17)
 	for i in range(10):
 		var b=button(sidebar,"",func():selected_kind=i;refresh_hud());unit_buttons.append(b)
@@ -68,11 +81,12 @@ func _ready():
 	button(zoom_row,"− ซูมออก",func():camera.size=minf(72,camera.size+4))
 	button(zoom_row,"+ ซูมเข้า",func():camera.size=maxf(24,camera.size-4))
 	button(zoom_row,"ทั้งฐาน",func():camera.size=64;pivot=Vector3.ZERO;position_camera())
-	button(sidebar,"จบการประลอง",func():sim.finished=true;finish())
+	button(sidebar,"จบการบุก" if campaign_mode else "จบการประลอง",func():sim.finished=true;finish())
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
 	hint=text(row,"",17);hint.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	button(row,"เล่นใหม่",func():start_level(level));button(row,"กลับสำนัก",func():closed.emit())
-	start_level(1)
+	button(row,"เล่นใหม่",func():request_restart() if campaign_mode and sim.started and not sim.finished else start_level(level));button(row,"แผนที่" if campaign_mode else "กลับสำนัก",func():request_map() if campaign_mode else closed.emit())
+	start_level(progress.selected if campaign_mode else 1)
+	if campaign_mode:show_campaign_map()
 func panel(pos: Vector2, extent: Vector2) -> PanelContainer:
 	var p=PanelContainer.new();p.position=pos;p.size=extent
 	p.add_theme_stylebox_override("panel",VisualStyle.panel());hud.add_child(p);return p
@@ -82,26 +96,38 @@ func button(parent: Node, value: String, callback: Callable) -> Button:
 	var b=Button.new();b.text=value;b.custom_minimum_size.y=44;b.pressed.connect(callback);parent.add_child(b);return b
 func world_pos(p: Vector2, height=0.0) -> Vector3:return Iso.world_cell(p.x,p.y,height)
 func start_level(value: int):
-	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;pivot=Vector3.ZERO;position_camera()
+	if campaign_mode and (value<1 or value>progress.unlocked()):return
+	if is_instance_valid(campaign_map):campaign_map.hide()
+	if is_instance_valid(result_panel):result_panel.queue_free();result_panel=null
+	fingers.clear();scroll_touch=-1;scroll_velocity=0
+	level=value;result_shown=false;accumulator=0
+	if campaign_mode:sim.setup_campaign(level)
+	else:sim.setup(level)
+	visual_level=sim.campaign_data.visual_level if campaign_mode else level
+	wall_revision=-1;pivot=Vector3.ZERO
+	if campaign_mode:camera.size=64
+	position_camera()
 	for child in battlefield.get_children():
 		battlefield.remove_child(child);child.queue_free()
-	models.clear();unit_models.clear();guard_models.clear();projectiles.clear()
+	models.clear();unit_models.clear();guard_models.clear();projectiles.clear();trap_models.clear()
 	var terrain=Node3D.new();terrain.name="Terrain";battlefield.add_child(terrain)
 	art.landscape(terrain,level%2==0,true)
 	dress_battlefield()
 	for b in sim.buildings:
-		var model=art.wall(Walls.mask(sim.buildings,Vector2i(b.pos)),0,level) if b.kind=="wall" else art.building(b.kind,level);battlefield.add_child(model);model.position=world_pos(b.pos)
+		var model=art.wall(Walls.mask(sim.buildings,Vector2i(b.pos)),0,visual_level) if b.kind=="wall" else art.building(b.kind,visual_level);battlefield.add_child(model);model.position=world_pos(b.pos)
 		var bar=health_bar(model,art.model_bounds(model).end.y+0.35);models.append({"node":model,"bar":bar})
+	for trap in sim.traps:
+		var marker=art.cone(battlefield,world_pos(trap.pos,0.13),0.65,0.60,0.16,"5d6258",12);marker.visible=false;trap_models.append(marker)
 	for guard in sim.defenders:
 		var actor=art.person(guard.kind);battlefield.add_child(actor);actor.position=world_pos(guard.pos,2.4 if Troops.air(guard.kind) else 0)
 		guard_models.append({"node":actor,"bar":health_bar(actor,2.1)})
 	level_picker.clear()
-	for i in range(1,13):
+	for i in range(1,91 if campaign_mode else 13):
 		level_picker.add_item("ฐาน %02d  %s" % [i,"★".repeat(int(records.get(str(i),0)))])
 		# Earn one star to open the next challenge; replay any unlocked base.
 		level_picker.set_item_disabled(i-1,i>1 and int(records.get(str(i-1),0))==0)
 	level_picker.select(level-1);level_picker.disabled=false
-	hint.text="ฝึกฟรี • ไม่เสียศิษย์ / ไม่ให้ทรัพยากรออนไลน์ • ดาวบันทึกในเครื่อง"
+	hint.text=sim.campaign_data.tip if campaign_mode else "ฝึกฟรี • ไม่เสียศิษย์ / ไม่ให้ทรัพยากรออนไลน์ • ดาวบันทึกในเครื่อง"
 	refresh_hud()
 func health_bar(parent: Node3D, height: float) -> MeshInstance3D:
 	art.box(parent,Vector3(0,height,0),Vector3(1.7,0.13,0.13),"392f32")
@@ -109,10 +135,13 @@ func health_bar(parent: Node3D, height: float) -> MeshInstance3D:
 func refresh_hud():
 	if is_instance_valid(skill_label):skill_label.text=Troops.SKILLS[selected_kind]+"\n"+Troops.DETAILS[selected_kind]
 	heading.text="ฐานบอท %02d  •  ทำลาย %d%%  •  %s  •  เวลา %d:%02d" % [level,sim.percent(),"★".repeat(sim.stars())+"☆".repeat(3-sim.stars()),int(maxf(0,180-sim.elapsed))/60,int(maxf(0,180-sim.elapsed))%60]
+	if campaign_mode:heading.text="ด่าน %02d • %s • %d%% • %s • ไม่จำกัดเวลา"%[level,Campaign.CHAPTERS[int((level-1)/10)],sim.percent(),"★".repeat(sim.stars())+"☆".repeat(3-sim.stars())]
 	for i in range(10):
+		unit_buttons[i].visible=not campaign_mode or sim.campaign_data.reserve[i]>0
 		unit_buttons[i].text=("▶ " if i==selected_kind else "")+Troops.NAMES[i]+" × %d" % sim.reserve[i]
 		unit_buttons[i].disabled=sim.reserve[i]<=0 or sim.finished
 func place_at(screen: Vector2):
+	if overlay_open():return
 	if not Rect2(0,82,950,540).has_point(screen) or sim.finished:return
 	var hit=Plane(Vector3.UP,0).intersects_ray(camera.project_ray_origin(screen),camera.project_ray_normal(screen))
 	if hit==null:return
@@ -129,6 +158,7 @@ func pan(relative: Vector2):
 	pivot+=Vector3(-relative.x-relative.y,0,relative.x-relative.y)*camera.size/1400.0
 	pivot.x=clampf(pivot.x,-22,22);pivot.z=clampf(pivot.z,-22,22);position_camera()
 func _unhandled_input(event):
+	if overlay_open():return
 	var area=Rect2(0,82,950,540)
 	if event is InputEventScreenTouch:
 		if event.pressed and area.has_point(event.position):
@@ -158,6 +188,7 @@ func _unhandled_input(event):
 		if event.position.distance_to(gesture_start)>10:gesture_moved=true
 		if gesture_moved:pan(event.relative)
 func dress_battlefield():
+	if campaign_mode:return # Layout-specific bases keep paths clear of structures.
 	# Wide approach paths, central paving, bamboo/rock framing and paired lanterns.
 	for i in range(3,13):
 		for pos in [Vector2(i,7),Vector2(8,i)]:art.box(battlefield,world_pos(pos,0.03),Vector3(2.9,0.03,2.9),"b8b19c")
@@ -171,7 +202,7 @@ func dress_battlefield():
 		art.bamboo_cluster(battlefield,world_pos(p),0.85)
 	for p in [Vector2(2,5),Vector2(13,6),Vector2(4,13),Vector2(11,2)]:art.rock(battlefield,world_pos(p),0.75)
 func _process(delta):
-	if test_mode:return
+	if test_mode or overlay_open():return
 	if scroll_touch<0 and absf(scroll_velocity)>5:
 		troop_scroll.scroll_vertical+=roundi(scroll_velocity*delta);scroll_velocity*=exp(-8*delta)
 	accumulator+=minf(delta,0.25)
@@ -181,12 +212,14 @@ func _process(delta):
 			if shot.has("unit") or shot.has("guard"):
 				var actor=unit_models[shot.unit].node if shot.has("unit") else guard_models[shot.guard].node;var direction: Vector2=shot.to-shot.from
 				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",0.8,Vector3(direction.x,0,direction.y))
+			if shot.get("trap",false):
+				art.impact_fx(battlefield,world_pos(shot.from,0.3),8);continue
 			if shot.get("weapon","")=="ward":
 				art.sound_wave(battlefield,world_pos(shot.from),4.2*3);continue
 			if not shot.has("weapon") and shot.has("to"):art.strike_fx(battlefield,world_pos(shot.from,shot.get("source_height",0.0)),world_pos(shot.to,shot.get("target_height",0.0)),int(shot.kind))
 			if not shot.has("weapon"):continue
 			var node=art.orb(battlefield,world_pos(shot.from,2.8),Vector3.ONE*0.2,"9d8d71") if shot.enemy else art.box(battlefield,world_pos(shot.from,2),Vector3(0.16,0.12,1.1),"adf0ff")
-			projectiles.append({"node":node,"start":world_pos(shot.from,2.8 if shot.enemy else 2),"end":world_pos(shot.to,1),"age":0.0})
+			projectiles.append({"node":node,"start":world_pos(shot.from,2.8 if shot.enemy else 2),"end":world_pos(shot.to,1+shot.get("target_height",0.0)),"age":0.0})
 	if wall_revision!=sim.revision:
 		wall_revision=sim.revision
 		for i in range(sim.buildings.size()):
@@ -195,7 +228,7 @@ func _process(delta):
 			var mask=Walls.mask(sim.buildings,Vector2i(b.pos))
 			if models[i].node.get_meta("wall_mask",-1)==mask:continue
 			models[i].node.queue_free()
-			var model=art.wall(mask,0,level);battlefield.add_child(model);model.position=world_pos(b.pos)
+			var model=art.wall(mask,0,visual_level);battlefield.add_child(model);model.position=world_pos(b.pos)
 			models[i]={"node":model,"bar":health_bar(model,2.5)}
 	for i in range(sim.buildings.size()):
 		var b=sim.buildings[i]
@@ -206,6 +239,7 @@ func _process(delta):
 			var dead=models[i].node;dead.hide();battlefield.remove_child(dead);dead.queue_free()
 			if b.kind!="wall":art.ruins(battlefield,world_pos(b.pos),b.kind)
 			art.impact_fx(battlefield,world_pos(b.pos,0.5),0)
+	for i in range(sim.traps.size()):trap_models[i].visible=sim.traps[i].triggered
 	for i in range(sim.units.size()):update_actor(sim.units[i],unit_models[i],delta)
 	for i in range(sim.defenders.size()):update_actor(sim.defenders[i],guard_models[i],delta)
 	for i in range(projectiles.size()-1,-1,-1):
@@ -226,6 +260,8 @@ func update_actor(u: Dictionary, visual: Dictionary,delta: float):
 func finish():
 	if result_shown:return
 	result_shown=true;sim.finished=true
+	if campaign_mode:
+		var error=progress.record(level,sim.stars());records=progress.stars;refresh_hud();show_campaign_result(error);return
 	var stars=sim.stars();records[str(level)]=maxi(stars,int(records.get(str(level),0)))
 	var file=FileAccess.open(SAVE,FileAccess.WRITE)
 	if file:file.store_string(JSON.stringify(records))
@@ -238,6 +274,7 @@ func _exit_tree():
 	sim.clear_targets()
 
 func _input(event):
+	if overlay_open():return
 	if not is_instance_valid(troop_scroll):return
 	var area=troop_scroll.get_global_rect()
 	if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==InputEvent.DEVICE_ID_EMULATION and area.has_point(event.position):
@@ -261,3 +298,47 @@ func _input(event):
 			scroll_dragged=true;troop_scroll.scroll_vertical=roundi(scroll_origin-diff.y)
 			scroll_velocity=clampf(event.velocity.y*-1,-1200,1200)
 		get_viewport().set_input_as_handled()
+
+func overlay_open() -> bool:
+	return (is_instance_valid(campaign_map) and campaign_map.visible) or is_instance_valid(result_panel)
+func show_campaign_map():
+	fingers.clear();scroll_touch=-1;scroll_velocity=0
+	if is_instance_valid(result_panel):result_panel.queue_free();result_panel=null
+	if not is_instance_valid(campaign_map):
+		campaign_map=preload("res://scripts/campaign_map.gd").new();campaign_map.progress=progress;campaign_map.selected=level
+		hud.add_child(campaign_map);campaign_map.launch.connect(start_level);campaign_map.leave.connect(func():closed.emit())
+	campaign_map.selected=level;campaign_map.chapter=int((level-1)/10);campaign_map.refresh();campaign_map.show()
+func make_dialog() -> VBoxContainer:
+	fingers.clear();scroll_touch=-1;scroll_velocity=0
+	if is_instance_valid(result_panel):result_panel.queue_free()
+	result_panel=Control.new();result_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);hud.add_child(result_panel)
+	var shade=ColorRect.new();shade.color=Color(0.02,0.05,0.08,0.88);shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);result_panel.add_child(shade)
+	var box=PanelContainer.new();box.position=Vector2(350,170);box.custom_minimum_size=Vector2(580,360);box.add_theme_stylebox_override("panel",VisualStyle.panel());result_panel.add_child(box)
+	var column=VBoxContainer.new();column.add_theme_constant_override("separation",16);box.add_child(column);return column
+func request_restart():
+	var column=make_dialog();text(column,"เริ่มด่านนี้ใหม่?",28);text(column,"การบุกครั้งนี้จะไม่บันทึกดาว",20)
+	button(column,"เริ่มใหม่",func():start_level(level));button(column,"บุกต่อ",dismiss_dialog)
+func request_map():
+	if not sim.started or sim.finished:show_campaign_map();return
+	var column=make_dialog();text(column,"กลับไปแผนที่?",28);text(column,"การบุกครั้งนี้จะไม่บันทึกดาว
+เลือก ‘จบการบุก’ หากต้องการเก็บดาวที่ทำได้",20)
+	button(column,"กลับแผนที่",show_campaign_map);button(column,"บุกต่อ",dismiss_dialog)
+func dismiss_dialog():
+	if is_instance_valid(result_panel):result_panel.queue_free();result_panel=null
+func show_campaign_result(save_error: Error):
+	var column=make_dialog();var score=sim.stars()
+	text(column,"ด่าน %02d • %s"%[level,"ชนะแล้ว" if score>0 else "ลองใหม่อีกครั้ง"],28)
+	var star_label=text(column,"★".repeat(score)+"☆".repeat(3-score),48);star_label.modulate=Color("ffd184")
+	text(column,"ทำลาย %d%% • ดาวรวม %d / 270
+%s"%[sim.percent(),progress.total(),"บันทึกในเครื่องแล้ว • เล่นซ้ำเก็บดาวเพิ่มได้" if save_error==OK else "บันทึกไม่สำเร็จ กรุณาตรวจพื้นที่ว่างในเครื่อง"],20)
+	if score>0 and level<90:button(column,"บุกด่านถัดไป →",func():start_level(level+1))
+	if score==3 and progress.total()==270:text(column,"พิชิตครบ 90 ด่าน • 270 ดาว!",24)
+	button(column,"ลองด่านนี้อีกครั้ง",func():start_level(level));button(column,"แผนที่แคมเปญ",show_campaign_map)
+
+func show_defense_guide():
+	var column=make_dialog();text(column,"รู้จักป้อมป้องกัน",26)
+	var scroll=ScrollContainer.new();scroll.custom_minimum_size=Vector2(550,255);column.add_child(scroll)
+	var content=VBoxContainer.new();content.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(content)
+	var notes={"cannon":"ยิงเป้าหมายพื้นดินทีละตัว • ใช้หน่วยบินเข้าทางนี้ได้","tower":"ยิงได้ทั้งพื้นดินและอากาศ • ระยะคุ้มกันกว้าง","mortar":"ยิงพื้นดินเป็นหมู่ • ยิงใกล้กว่า 2 ช่องไม่ได้","air_defense":"โจมตีเฉพาะหน่วยบิน • ใช้ทหารพื้นดินเข้าทำลาย","ward":"โจมตีหมู่รอบหอ • อย่ารวมทหารในรัศมีเดียวกัน","flame":"ยิงต่อเนื่องเป้าเดิมแรงขึ้น • ใช้หลายหน่วยเข้ากดดัน","storm":"สายฟ้าชิ่งใส่เป้าหมายใกล้กัน • แยกแนวโจมตี","bomb":"ระเบิดหน่วยพื้นดินที่เข้าใกล้ • ทำงานครั้งเดียว","air_mine":"ระเบิดหน่วยบินที่เข้าใกล้ • ทำงานครั้งเดียว"}
+	for kind in notes:text(content,Defenses.NAMES[kind]+" — "+notes[kind],17)
+	button(column,"กลับไปบุกต่อ",dismiss_dialog)

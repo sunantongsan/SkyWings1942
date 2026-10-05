@@ -94,6 +94,14 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' touch.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' auth.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' smoke.log; then exit 1; fi
+      - name: Verify all offline campaign stages
+        run: |
+          set -o pipefail
+          timeout 90 godot --headless --path xian --script res://tests/campaign.gd 2>&1 | tee campaign.log
+          grep XIAN_CAMPAIGN_PASSED campaign.log
+          timeout 300 godot --headless --path xian --script res://tests/campaign_balance.gd 2>&1 | tee campaign-balance.log
+          grep XIAN_CAMPAIGN_BALANCE_PASSED campaign-balance.log
+          if grep -E 'SCRIPT ERROR|Parse Error' campaign.log campaign-balance.log; then exit 1; fi
       - name: Verify responsive controls
         run: |
           set -o pipefail
@@ -114,15 +122,20 @@ jobs:
           timeout 180 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/studio_v48.gd 2>&1 | tee studio.log
           grep XIAN_STUDIO_V50_PASSED studio.log
           if grep -E 'SCRIPT ERROR|Parse Error' studio.log; then exit 1; fi
+          timeout 180 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/campaign_studio.gd 2>&1 | tee campaign-studio.log
+          grep XIAN_CAMPAIGN_STUDIO_PASSED campaign-studio.log
+          if grep -E 'SCRIPT ERROR|Parse Error' campaign-studio.log; then exit 1; fi
           godot --headless --path xian --editor --import --quit
           timeout 90 godot --headless --path xian --script res://tests/architecture.gd 2>&1 | tee architecture.log
           grep XIAN_ARCHITECTURE_PASSED architecture.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Xian-v050-Review
+          name: Xian-v051-Review
           path: |
             xian/build/review/v050-*.png
+            xian/build/review/v051-*.png
+            xian/build/review/campaign-balance.json
             xian/build/review/ground-report.json
             xian/assets/ui/buildings/*.png
       - name: Export Android

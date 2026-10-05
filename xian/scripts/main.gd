@@ -124,7 +124,7 @@ func _ready():
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
-	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["จัดฐาน","manage"],["ฝึกทหาร","train"],["บุกสำนัก","raid"],["ฝึกบุก","practice"],["จับคู่","match"],["ร้านค้า","jade"]]:
+	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["จัดฐาน","manage"],["ฝึกทหาร","train"],["บุกสำนัก","raid"],["ออฟไลน์","practice"],["จับคู่","match"],["ร้านค้า","jade"]]:
 		button(row,pair[0],navigate.bind(pair[1]))
 	button(row,"⚙",show_settings)
 	button(row,"−",zoom.bind(5.0));button(row,"+",zoom.bind(-5.0))
@@ -237,7 +237,7 @@ func open_practice():
 	if is_instance_valid(practice):return
 	clear_preview();fingers.clear();pinching=false;menu_touch=-1
 	ui.hide();world.hide();terrain.hide()
-	practice=load("res://scripts/offline_practice.gd").new();practice.art.fx_limit=art.fx_limit;add_child(practice)
+	practice=load("res://scripts/offline_practice.gd").new();practice.art.fx_limit=art.fx_limit;practice.campaign_mode=true;add_child(practice)
 	practice.closed.connect(func():
 		practice.queue_free();practice=null;ui.show();world.show();terrain.show();camera.make_current()
 		if not state.is_empty() and not api.busy:api.action("sync")
