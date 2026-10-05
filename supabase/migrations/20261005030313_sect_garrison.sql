@@ -1,108 +1,10 @@
--- Xian of Clans: isolated, server-authoritative prototype. No changes to other games.
-create schema if not exists xian_private;
-revoke all on schema xian_private from public, anon;
-grant usage on schema xian_private to authenticated;
-create table if not exists xian_private.players (
- user_id uuid primary key references auth.users(id) on delete cascade,
- state jsonb not null, updated_at timestamptz not null default now()
-);
-alter table xian_private.players enable row level security;
-revoke all on xian_private.players from public,anon,authenticated;
-create table if not exists xian_private.receipts (
- user_id uuid not null references auth.users(id) on delete cascade,
- request_id uuid not null, created_at timestamptz not null default now(),
- primary key(user_id, request_id)
-);
-alter table xian_private.receipts enable row level security;
-revoke all on xian_private.receipts from public,anon,authenticated;
-
-create or replace function xian_private.catalog() returns jsonb language sql immutable set search_path='' as $$
-select '[
-{"id":"hall","name":"สำนักหลัก","water":100,"rice":100,"stone":10,"seconds":30,"limit":1},
-{"id":"well","name":"บ่อน้ำ","water":0,"rice":80,"stone":0,"seconds":10,"limit":3},
-{"id":"kitchen","name":"โรงเตี๊ยม","water":80,"rice":0,"stone":0,"seconds":10,"limit":3},
-{"id":"tank","name":"ถังเก็บน้ำ","water":40,"rice":60,"stone":0,"seconds":15,"limit":3},
-{"id":"granary","name":"ปิ่นโตข้าว","water":60,"rice":40,"stone":0,"seconds":15,"limit":3},
-{"id":"spring","name":"เตาหลอมโอสถ","water":100,"rice":100,"stone":0,"seconds":30,"limit":2},
-{"id":"crystal","name":"ถุงโอสถเซียน","water":80,"rice":80,"stone":5,"seconds":20,"limit":2},
-{"id":"servant","name":"เพิงช่าง","water":0,"rice":0,"stone":0,"seconds":0,"limit":7,"jade_prices":[0,250,500,1000,2000,3500,5000],"upgradable":false},
-{"id":"recruit","name":"โรงรับศิษย์","water":80,"rice":100,"stone":5,"seconds":20,"limit":2},
-{"id":"barracks","name":"หอฝึกนักสู้","water":120,"rice":140,"stone":10,"seconds":30,"limit":1},
-{"id":"training","name":"ลานฝึกกระบี่","water":100,"rice":100,"stone":10,"seconds":30,"limit":1},
-{"id":"tower","name":"หอคอยธนู","water":80,"rice":80,"stone":10,"seconds":20,"limit":8},
-{"id":"ward","name":"หอค่ายกล","water":150,"rice":150,"stone":30,"seconds":60,"limit":4},
-{"id":"wall","name":"กำแพง","water":5,"rice":5,"stone":0,"seconds":0,"limit":80}
-]'::jsonb $$;
-
-create or replace function xian_private.storage_capacity(kind text,lv int) returns int
-language sql immutable set search_path='' as $$
- select case when lv<=3 then greatest(0,lv)*case when kind='crystal' then 500 else 2000 end
- else (array[0,2000,4000,6000,20000,80000,300000,1000000,3000000,10000000,15000000])[least(10,lv)+1] end;
-$$;
-create or replace function xian_private.production_rate(kind text,lv int) returns numeric
-language sql immutable set search_path='' as $$
- select case when lv<=3 then greatest(0,lv)*case when kind='spring' then 0.04 else 1 end
- else (array[0,0,0,0,5,15,40,100,250,600,1200]::numeric[])[least(10,lv)+1]*case when kind='spring' then 0.5 else 1 end end;
-$$;
-create or replace function xian_private.barracks_price(target_level int) returns int
-language sql immutable set search_path='' as $$
- select (array[0,0,1000,5000,20000,75000,250000,750000,2000000,5000000,10000000])[target_level+1];
-$$;
-revoke all on function xian_private.storage_capacity(text,int),xian_private.production_rate(text,int),xian_private.barracks_price(int) from public,anon,authenticated;
-
--- Visual fullness of the shared pill store; stable stone key preserves saves/old clients.
-create or replace function xian_private.pill_fill(s jsonb) returns numeric
-language sql immutable set search_path='' as $$
- select least(1::numeric,greatest(0::numeric,coalesce((s->>'stone')::numeric,0)) /
- greatest(1::numeric,100+coalesce((select sum(xian_private.storage_capacity('crystal',(b->>'level')::int)) from jsonb_array_elements(s->'buildings') b where b->>'id'='crystal'),0)))
-$$;
-revoke all on function xian_private.pill_fill(jsonb) from public,anon,authenticated;
-
--- Width is explicit on migrated courtyards. Legacy packed bases keep 1x1
--- until a free 2x2 location exists; no building or army is deleted.
-create or replace function xian_private.free_plot(bs jsonb, px int, py int, width int, excluded int)
-returns boolean language sql immutable set search_path='' as $$
- select px>=0 and py>=0 and px+width<=16 and py+width<=16 and not exists (
- select 1 from jsonb_array_elements(bs) with ordinality q(v,i)
- where i-1<>excluded
- and px < (v->>'x')::int + case when v->>'id'='training' then coalesce((v->>'size')::int,1) else 1 end
- and px+width > (v->>'x')::int
- and py < (v->>'y')::int + case when v->>'id'='training' then coalesce((v->>'size')::int,1) else 1 end
- and py+width > (v->>'y')::int
- )
-$$;
-revoke all on function xian_private.free_plot(jsonb,int,int,int,int) from public,anon,authenticated;
-
--- Contiguous straight wall run, selected through a single owned anchor index.
-create or replace function xian_private.wall_run(bs jsonb, anchor int)
-returns int[] language plpgsql immutable set search_path='' as $$
-declare b jsonb:=bs->anchor; result int[]:=array[anchor]; axis int; horizontal bool; vertical bool;
- dx int;dy int;direction int;distance int;found int;
-begin
- if anchor is null or anchor<0 or b is null or b->>'id'<>'wall' then raise exception 'เลือกกำแพงก่อน';end if;
- axis:=coalesce((b->>'rotation')::int,0)%2;
- select exists(select 1 from jsonb_array_elements(bs) v where v->>'id'='wall' and (v->>'y')::int=(b->>'y')::int and abs((v->>'x')::int-(b->>'x')::int)=1),
- exists(select 1 from jsonb_array_elements(bs) v where v->>'id'='wall' and (v->>'x')::int=(b->>'x')::int and abs((v->>'y')::int-(b->>'y')::int)=1) into horizontal,vertical;
- if vertical and not horizontal then axis:=1;elsif horizontal and not vertical then axis:=0;end if;
- dx:=case when axis=0 then 1 else 0 end;dy:=1-dx;
- foreach direction in array array[-1,1] loop
-  for distance in 1..15 loop
-   select i-1 into found from jsonb_array_elements(bs) with ordinality q(v,i)
-   where v->>'id'='wall' and (v->>'x')::int=(b->>'x')::int+dx*direction*distance and (v->>'y')::int=(b->>'y')::int+dy*direction*distance;
-   exit when found is null;result:=array_append(result,found);
-  end loop;
- end loop;
- return result;
-end $$;
-revoke all on function xian_private.wall_run(jsonb,int) from public,anon,authenticated;
-
 -- Include completed training even when the defender is offline. No writes here.
 create or replace function xian_private.ready_army(s jsonb,t bigint) returns jsonb
 language sql immutable security invoker set search_path='' as $$
  select jsonb_agg(greatest(0,coalesce((s->'army'->>i)::int,0))+
   (select count(*) from jsonb_array_elements(coalesce(s->'jobs','[]'::jsonb)) j
    where (j->>'type')::int=i and (j->>'finish')::bigint<=t) order by i)
- from generate_series(0,9) i;
+ from generate_series(0,2) i;
 $$;
 create or replace function xian_private.garrison(s jsonb,t bigint) returns jsonb
 language sql immutable security invoker set search_path='' as $$
@@ -111,12 +13,10 @@ language sql immutable security invoker set search_path='' as $$
 $$;
 create or replace function xian_private.army_power(a jsonb) returns numeric
 language sql immutable security invoker set search_path='' as $$
- select sum(coalesce((a->>i)::numeric,0)*(array[35,90,150,190,280,380,500,700,950,1300])[i+1]) from generate_series(0,9) i;
+ select coalesce((a->>0)::numeric,0)*35+coalesce((a->>1)::numeric,0)*90+coalesce((a->>2)::numeric,0)*150;
 $$;
 revoke all on function xian_private.ready_army(jsonb,bigint),xian_private.garrison(jsonb,bigint),xian_private.army_power(jsonb) from public,anon,authenticated;
 
--- The privileged dispatcher is in a non-exposed schema, authenticates ownership,
--- serializes each player's actions and never accepts balances or victory from clients.
 create or replace function xian_private.act(p_action text,p_args jsonb,p_request uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare
@@ -142,7 +42,7 @@ begin
     'last_tick',t,'buildings',jsonb_build_array(
     jsonb_build_object('id','hall','x',7,'y',7,'level',1,'finish',0),
     jsonb_build_object('id','servant','x',5,'y',7,'level',1,'finish',0)),
-    'army','[0,0,0,0,0,0,0,0,0,0]'::jsonb,'jobs','[]'::jsonb,'wins',0,'match_level',1,'shield',t+86400);
+    'army','[0,0,0]'::jsonb,'jobs','[]'::jsonb,'wins',0,'match_level',1,'shield',t+86400);
   insert into xian_private.players(user_id,state) values(uid,s);
  end if;
  -- Normalize only once under the account lock; archive removed dorms for recovery.
@@ -187,29 +87,26 @@ begin
    when 'hall' then hall:=lev;
    when 'servant' then workers:=workers+1;
    when 'training' then cap:=lev*20;
-   when 'tank' then wc:=wc+xian_private.storage_capacity('tank',lev);
-   when 'granary' then rc:=rc+xian_private.storage_capacity('granary',lev);
-   when 'crystal' then sc:=sc+xian_private.storage_capacity('crystal',lev);
-   when 'well' then wr:=wr+xian_private.production_rate('well',lev);
-   when 'kitchen' then rr:=rr+xian_private.production_rate('kitchen',lev);
-   when 'spring' then sr:=sr+xian_private.production_rate('spring',lev);
+   when 'tank' then wc:=wc+lev*2000;
+   when 'granary' then rc:=rc+lev*2000;
+   when 'crystal' then sc:=sc+lev*500;
+   when 'well' then wr:=wr+lev;
+   when 'kitchen' then rr:=rr+lev;
+   when 'spring' then sr:=sr+lev*0.04;
    else null; end case;
   end if;
  end loop;
  -- Production is only granted for buildings that existed at the previous sync.
  for b in select value from jsonb_array_elements(s->'buildings') loop
   if (b->>'finish')::bigint>0 and (b->>'finish')::bigint<=t then
-   case b->>'id' when 'well' then wr:=wr-(xian_private.production_rate('well',(b->>'level')::int+1)-xian_private.production_rate('well',(b->>'level')::int))*greatest(0,least(elapsed,(b->>'finish')::bigint-old_t))::numeric/greatest(1,elapsed);
-   when 'kitchen' then rr:=rr-(xian_private.production_rate('kitchen',(b->>'level')::int+1)-xian_private.production_rate('kitchen',(b->>'level')::int))*greatest(0,least(elapsed,(b->>'finish')::bigint-old_t))::numeric/greatest(1,elapsed);
-   when 'spring' then sr:=sr-(xian_private.production_rate('spring',(b->>'level')::int+1)-xian_private.production_rate('spring',(b->>'level')::int))*greatest(0,least(elapsed,(b->>'finish')::bigint-old_t))::numeric/greatest(1,elapsed);
+   case b->>'id' when 'well' then wr:=wr-greatest(0,least(elapsed,(b->>'finish')::bigint-old_t))::numeric/greatest(1,elapsed);
+   when 'kitchen' then rr:=rr-greatest(0,least(elapsed,(b->>'finish')::bigint-old_t))::numeric/greatest(1,elapsed);
+   when 'spring' then sr:=sr-0.04*greatest(0,least(elapsed,(b->>'finish')::bigint-old_t))::numeric/greatest(1,elapsed);
    else null; end case;
   end if;
  end loop;
  water:=least(wc,round((s->>'water')::numeric+elapsed*wr,4)); rice:=least(rc,round((s->>'rice')::numeric+elapsed*rr,4)); stone:=least(sc,round((s->>'stone')::numeric+elapsed*sr,4));
  army:=s->'army';
- for idx in 0..9 loop
-  if army->idx is null then army:=army||'0'::jsonb;end if;
- end loop;
  for job in select value from jsonb_array_elements(s->'jobs') loop
   if (job->>'finish')::bigint<=t then
    idx:=(job->>'type')::int; army:=jsonb_set(army,array[idx::text],to_jsonb((army->>idx)::int+1));
@@ -218,33 +115,7 @@ begin
  s:=s||jsonb_build_object('buildings',bs,'army',army,'jobs',jobs,'last_tick',t,'water',water,'rice',rice,'stone',stone);
  worker_max:=7;
  if exists(select 1 from xian_private.receipts where user_id=uid and request_id=p_request) then p_action:='sync'; end if;
- if p_action='wall_manage' then
-  if s ? 'raid' then raise exception 'จบการบุกก่อนจัดฐาน';end if;
-  idx:=(p_args->>'index')::int;op:=p_args->>'operation';typ:=p_args->>'scope';
-  if idx is null or idx<0 or idx>=jsonb_array_length(bs) or bs->idx->>'id'<>'wall' then raise exception 'เลือกกำแพงก่อน';end if;
-  if op is null or op not in ('delete','upgrade') or typ is null or typ not in ('one','row','all') then raise exception 'คำสั่งกำแพงไม่ถูกต้อง';end if;
-  if p_args->>'signature' is distinct from (select string_agg((i-1)::text||':'||(v->>'x')||':'||(v->>'y')||':'||(v->>'level'),',' order by i) from jsonb_array_elements(bs) with ordinality q(v,i) where v->>'id'='wall') then raise exception 'ฐานเปลี่ยนแล้ว กรุณาเลือกกำแพงใหม่';end if;
-  if typ='one' then wall_indices:=array[idx];
-  elsif typ='row' then wall_indices:=xian_private.wall_run(bs,idx);
-  else select array_agg((i-1)::int) into wall_indices from jsonb_array_elements(bs) with ordinality q(v,i) where v->>'id'='wall';end if;
-  if op='delete' then
-   select coalesce(jsonb_agg(v order by i),'[]'::jsonb) into bs from jsonb_array_elements(bs) with ordinality q(v,i) where not ((i-1)::int=any(wall_indices));
-  else
-   cw:=0;qty:=0;
-   foreach j in array wall_indices loop
-    lev:=(bs->j->>'level')::int;
-    if lev<10 and lev<hall+1 then cw:=cw+5*power(2,lev)::int;qty:=qty+1;end if;
-   end loop;
-   if qty=0 then raise exception 'กำแพงที่เลือกถึงระดับสูงสุดแล้ว';end if;
-   if water<cw or rice<cw then raise exception 'ทรัพยากรไม่พอสำหรับกำแพงที่เลือก';end if;
-   foreach j in array wall_indices loop
-    lev:=(bs->j->>'level')::int;
-    if lev<10 and lev<hall+1 then bs:=jsonb_set(bs,array[j::text,'level'],to_jsonb(lev+1));end if;
-   end loop;
-   s:=s||jsonb_build_object('water',water-cw,'rice',rice-cw);
-  end if;
-  s:=jsonb_set(s,'{buildings}',bs);
- elsif p_action='wall_line' then
+ if p_action='wall_line' then
   if s ? 'raid' then raise exception 'จบการบุกก่อนจัดฐาน';end if;
   posx:=(p_args->>'x')::int;posy:=(p_args->>'y')::int;endx:=(p_args->>'end_x')::int;endy:=(p_args->>'end_y')::int;
   if posx is null or posy is null or endx is null or endy is null or least(posx,posy,endx,endy)<0 or greatest(posx,posy,endx,endy)>15 then raise exception 'อยู่นอกพื้นที่สร้าง';end if;
@@ -314,7 +185,6 @@ begin
    if lev>=10 or (typ<>'hall' and lev>=hall+1) then raise exception 'อัปเกรดสำนักหลักก่อน'; end if;
    if typ<>'wall' and busy>=workers then raise exception 'ช่างทำงานครบทุกคนแล้ว'; end if;
    cw:=(c->>'water')::int*power(2,lev); cr:=(c->>'rice')::int*power(2,lev); cs:=(c->>'stone')::int*power(2,lev);
-   if typ='barracks' and lev>0 then cw:=xian_private.barracks_price(lev+1);cr:=cw;cs:=cw;end if;
    if water<cw or rice<cr or stone<cs then raise exception 'ทรัพยากรไม่พอ'; end if;
    duration:=least(28800,(c->>'seconds')::int*power(3,lev));
    b:=b||jsonb_build_object('finish',case when duration=0 then 0 else t+duration end,'level',case when duration=0 then lev+1 else lev end);
@@ -324,13 +194,13 @@ begin
   s:=jsonb_set(s,'{buildings}',bs);
  elsif p_action='train' then
   idx:=(p_args->>'type')::int;
-  if idx is null or idx not between 0 and 9 then raise exception 'ไม่มีศิษย์ชนิดนี้'; end if;
+  if idx is null or idx not between 0 and 2 then raise exception 'ไม่มีศิษย์ชนิดนี้'; end if;
   if not exists(select 1 from jsonb_array_elements(bs) where value->>'id'='barracks' and (value->>'level')::int>0) then raise exception 'สร้างหอฝึกนักสู้ก่อน'; end if;
   if not exists(select 1 from jsonb_array_elements(bs) where value->>'id'='training' and (value->>'level')::int>0) then raise exception 'สร้างลานฝึกกระบี่ก่อน'; end if;
-  if idx>0 and (not exists(select 1 from jsonb_array_elements(bs) where value->>'id'='barracks' and (value->>'level')::int>=idx+1)) then raise exception 'ต้องมีหอฝึกนักสู้ขั้นสูงขึ้น'; end if;
+  if idx>0 and (hall<idx+1 or not exists(select 1 from jsonb_array_elements(bs) where value->>'id'='barracks' and (value->>'level')::int>=idx+1)) then raise exception 'ต้องมีสำนักและหอฝึกนักสู้ขั้นสูงขึ้น'; end if;
   select sum(value::int) into qty from jsonb_array_elements_text(army);
   if qty+jsonb_array_length(jobs)>=cap then raise exception 'ลานฝึกกระบี่เต็ม กรุณาอัปเกรดลานฝึก'; end if;
-  cw:=(array[20,40,60,100,200,500,1000,2500,6000,15000])[idx+1];cr:=(array[30,60,90,150,300,750,1500,3750,9000,22500])[idx+1];cs:=(array[0,8,20,40,80,200,400,1000,2400,6000])[idx+1];
+  cw:=20*(idx+1); cr:=30*(idx+1); cs:=case idx when 0 then 0 when 1 then 8 else 20 end;
   if water<cw or rice<cr or stone<cs then raise exception 'ทรัพยากรไม่พอ'; end if;
   select greatest(t,coalesce(max((value->>'finish')::bigint),t)) into old_t from jsonb_array_elements(jobs);
   s:=s||jsonb_build_object('water',water-cw,'rice',rice-cr,'stone',stone-cs,'jobs',jobs||jsonb_build_array(jsonb_build_object('type',idx,'finish',old_t+10*(idx+1))));
@@ -438,7 +308,7 @@ begin
  elsif p_action='raid_start' then
   if s ? 'raid' then raise exception 'กำลังบุกอยู่';end if;
   if not s ? 'scout' then raise exception 'สำรวจฐานก่อน';end if;
-  power:=xian_private.army_power(army);
+  power:=(army->>0)::int*35+(army->>1)::int*90+(army->>2)::int*150;
   if power<=0 then raise exception 'ต้องฝึกศิษย์ก่อน';end if;
   opponent:=s->'scout';defense:=(opponent->>'defense')::numeric;
   if opponent ? 'player' then
@@ -468,7 +338,7 @@ begin
    ds:=ds||jsonb_build_object('water',(ds->>'water')::numeric-loot_w,'rice',(ds->>'rice')::numeric-loot_r,'stone',(ds->>'stone')::numeric-loot_s,'shield',t+14400,'last_defense',report);
    update xian_private.players set state=ds where user_id=defender;
   end if;
-  s:=s||jsonb_build_object('raid',raid,'army','[0,0,0,0,0,0,0,0,0,0]'::jsonb,'shield',0);
+  s:=s||jsonb_build_object('raid',raid,'army','[0,0,0]'::jsonb,'shield',0);
  elsif p_action='raid_claim' then
   raid:=s->'raid';
   if raid is null or (raid->>'finish')::bigint>t then raise exception 'การบุกยังไม่จบ';end if;
@@ -481,10 +351,3 @@ begin
  update xian_private.players set state=s,updated_at=now() where user_id=uid;
  return jsonb_build_object('state',s,'catalog',xian_private.catalog(),'server_time',t,'server_day',day,'checkin_available',coalesce(s->>'checkin','')<>day,'capacity',jsonb_build_object('water',wc,'rice',rc,'stone',sc,'army',cap,'workers',workers,'busy',busy,'worker_max',worker_max));
 end; $$;
-revoke all on function xian_private.catalog() from public,anon,authenticated;
-revoke all on function xian_private.act(text,jsonb,uuid) from public,anon;
-grant execute on function xian_private.act(text,jsonb,uuid) to authenticated;
-create or replace function public.xian_action(p_action text,p_args jsonb,p_request uuid)
-returns jsonb language sql security invoker set search_path='' as $$ select xian_private.act(p_action,p_args,p_request) $$;
-revoke all on function public.xian_action(text,jsonb,uuid) from public,anon;
-grant execute on function public.xian_action(text,jsonb,uuid) to authenticated;

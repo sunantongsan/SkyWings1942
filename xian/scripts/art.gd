@@ -1,5 +1,12 @@
 extends RefCounted
+var realistic_enabled=true
+var stone_mat: StandardMaterial3D
+var realistic=preload("res://scripts/realistic_art.gd").new()
 var mats = {}
+func stone_material() -> StandardMaterial3D:
+	if stone_mat==null:
+		stone_mat=StandardMaterial3D.new();stone_mat.albedo_texture=realistic.texture("stone");stone_mat.albedo_color=Color("9b9d90");stone_mat.roughness=1;stone_mat.uv1_triplanar=true;stone_mat.uv1_world_triplanar=true;stone_mat.uv1_scale=Vector3.ONE*0.5
+	return stone_mat
 func material(hex: String) -> StandardMaterial3D:
 	if mats.has(hex): return mats[hex]
 	var m = StandardMaterial3D.new()
@@ -7,6 +14,7 @@ func material(hex: String) -> StandardMaterial3D:
 	# Stylized PBR: keep the broad readable shapes, but let sun/highlights sell depth.
 	m.roughness = 0.72
 	m.metallic = 0.0
+	if realistic_enabled and hex in ["b8b19c","a9b091","b4bb87","c8c4a1"]:return stone_material()
 	mats[hex] = m
 	return m
 func box(parent: Node3D, pos: Vector3, size: Vector3, color: String) -> MeshInstance3D:
@@ -70,6 +78,11 @@ func mesh_transform(node: Node3D, root: Node3D) -> Transform3D:
 	return result
 func model_bounds(root: Node3D) -> AABB:
 	var bounds=AABB();var first=true
+	for sprite in root.find_children("*","Sprite3D",true,false):
+		var size=Vector2(sprite.texture.get_width()/float(sprite.hframes),sprite.texture.get_height()/float(sprite.vframes))
+		var rect=AABB(Vector3((sprite.offset.x-size.x*0.5)*sprite.pixel_size,(sprite.offset.y-size.y*0.5)*sprite.pixel_size,0),Vector3(size.x*sprite.pixel_size,size.y*sprite.pixel_size,0.01));var value=mesh_transform(sprite,root)*rect
+		if first:bounds=value;first=false
+		else:bounds=bounds.merge(value)
 	for mesh in root.find_children("*","MeshInstance3D",true,false):
 		var value=mesh_transform(mesh,root)*mesh.get_aabb()
 		if first:bounds=value;first=false
@@ -136,6 +149,7 @@ func courtyard(level: int) -> Node3D:
 		cone(root,Vector3(x,1.32,-2.5),0.42,0.08,0.24,"438a86",4).rotation.y=PI/4
 	return root
 func wall(mask: int=0, rotation: int=0, level: int=1) -> Node3D:
+	if realistic_enabled:return upgrades().wall(mask,rotation,level)
 	var root=Node3D.new();root.set_meta("donor_building",true);root.set_meta("wall_mask",mask)
 	if mask==0:mask=5 if rotation%2==0 else 10
 	# Half spans meet exactly on the shared cell boundary, including corners/T junctions.
@@ -148,6 +162,8 @@ func wall(mask: int=0, rotation: int=0, level: int=1) -> Node3D:
 	box(root,Vector3(0,1.82,0),Vector3(0.76,0.15,0.76),"537c73" if level<5 else "b59753")
 	cone(root,Vector3(0,2.0,0),0.52,0.08,0.24,"d1b970",4).rotation.y=PI/4
 	evolve(root,"wall",level)
+	if realistic_enabled:
+		for mesh in root.find_children("*","MeshInstance3D",true,false):mesh.material_override=stone_material()
 	batch_static(root)
 	return root
 func construction_dressing(parent: Node3D, footprint_size: int, progress: float):
@@ -168,6 +184,21 @@ func construction_dressing(parent: Node3D, footprint_size: int, progress: float)
 	for i in range(3):box(parent,Vector3(-0.7+i*0.65,0.13,span*0.5+0.35),Vector3(0.42,0.26,0.32),"b8a37a")
 
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
+	if realistic_enabled and kind=="granary":return glass_tiffin(level,fill)
+	if realistic_enabled and kind=="training":
+		var yard=courtyard(level);yard.set_meta("realistic_art",true);yard.set_meta("visual_level",level)
+		for mesh in yard.find_children("*","MeshInstance3D",true,false):
+			if mesh.position.y<0.3:
+				var floor_mat=StandardMaterial3D.new();floor_mat.albedo_color=Color("aaa695");floor_mat.roughness=0.9;mesh.material_override=floor_mat
+		batch_static(yard);return yard
+	if realistic_enabled and kind in ["well","ward"]:return upgrades().building(kind,level)
+	if realistic_enabled and realistic.WIDTHS.has(kind):
+		var model=realistic.building(kind,level,fill)
+		if kind=="spring":
+			var smoke=motion(model,"black_smoke");smoke.position.y=2.0+level*0.025
+			for i in range(5):
+				realistic.puff(smoke,Color(0.10,0.10,0.11,0.4))
+		return model
 	if kind=="wall":return wall(0,0,level)
 	var result=building_base(kind,level,fill)
 	evolve(result,kind,level)
@@ -206,6 +237,7 @@ func building_base(kind: String, level: int, fill = 0.5) -> Node3D:
 		lantern(root,Vector3(-1.15,0,-1.15),0.48);lantern(root,Vector3(1.15,0,-1.15),0.48)
 	return root
 func person(kind: int, armed: bool=true) -> Node3D:
+	if realistic_enabled:return realistic.character(kind,armed)
 	var root=Node3D.new()
 	if kind==2:
 		var model=source_scene("Dragon_Evolved.gltf").instantiate();root.add_child(model)
@@ -251,21 +283,31 @@ func person(kind: int, armed: bool=true) -> Node3D:
 	pose(root,"idle")
 	return root
 
+var fx_count=0
 func impact_fx(parent: Node3D, pos: Vector3, kind: int=0):
-	var root=Node3D.new();root.position=pos;parent.add_child(root)
-	var flash=cone(root,Vector3.ZERO,0.5,0.08,0.08,"ffd47b" if kind!=1 else "82ddff",12)
-	flash.rotation.x=PI/2
-	for i in range(5):
-		var shard=box(root,Vector3.ZERO,Vector3(0.05,0.05,0.7),"fff0b0" if kind==0 else "9beaff")
-		shard.rotation.y=i*TAU/5.0
-		shard.position=Vector3(sin(i*TAU/5.0)*0.55,0.12,cos(i*TAU/5.0)*0.55)
-	var tween=root.create_tween();tween.set_parallel(true);tween.tween_property(root,"scale",Vector3.ONE*1.8,0.16);tween.tween_property(root,"position:y",root.position.y+0.2,0.18)
-	tween.chain().tween_callback(root.queue_free)
+	if fx_count>=28:return
+	fx_count+=1
+	var root=Node3D.new();root.set_script(preload("res://scripts/combat_fx.gd"));root.position=pos;parent.add_child(root);root.tree_exited.connect(func():fx_count=maxi(0,fx_count-1))
+	var tint=Color("ffe1a0") if kind in [0,3,6,7] else Color("a6e8ff") if kind in [1,4,5] else Color("ff994c")
+	root.glow=realistic.puff(root,Color(tint,0.55))
+	var mesh=ImmediateMesh.new();mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(16):
+		var a=-1.1+i*2.2/16;var b=-1.1+(i+1)*2.2/16
+		for v in [Vector3(cos(a)*0.75,0,sin(a)*0.75),Vector3(cos(a)*0.86,0,sin(a)*0.86),Vector3(cos(b)*0.86,0,sin(b)*0.86),Vector3(cos(a)*0.75,0,sin(a)*0.75),Vector3(cos(b)*0.86,0,sin(b)*0.86),Vector3(cos(b)*0.75,0,sin(b)*0.75)]:mesh.surface_add_vertex(v)
+	mesh.surface_end();var arc=MeshInstance3D.new();arc.mesh=mesh;arc.material_override=clear_material(tint.to_html(false),0.75);arc.rotation=Vector3(0.55,randf()*TAU,0.4);root.add_child(arc);root.arc=arc
+	for i in range(7):
+		var spark=orb(root,Vector3.ZERO,Vector3(0.035,0.07,0.035),tint.to_html(false));root.sparks.append(spark)
+func strike_fx(parent: Node3D, start: Vector3, target: Vector3, kind: int):
+	var maker=preload("res://scripts/skill_visuals.gd").new();maker.art=self;maker.build(parent,start,target,kind)
 func rubble(parent: Node3D, pos: Vector3):
 	for i in range(5):
 		var angle=i*TAU/5.0;var r=rock(parent,pos+Vector3(cos(angle)*0.65,0,sin(angle)*0.65),0.22+0.04*(i%2));r.rotation.y=angle
 
-func pose(root: Node3D, state: String, attack_duration: float=0.8):
+func pose(root: Node3D, state: String, attack_duration: float=0.8,direction: Vector3=Vector3.ZERO):
+	if root.has_node("CharacterSprite"):
+		root.get_node("CharacterSprite").set_pose(state,attack_duration)
+		if direction!=Vector3.ZERO:root.get_node("CharacterSprite").face(direction)
+		return
 	if not root.has_meta("anim_player"):return
 	var player: AnimationPlayer=root.get_meta("anim_player")
 	if state!="attack" and root.get_meta("attacking",false) and player.is_playing():return
@@ -303,6 +345,10 @@ func landscape(parent: Node3D, mountain: bool=false, deployment: bool=false):
 	for i in range(42):
 		var angle=i*TAU/42;var radius=rng.randf_range(30,38)
 		var at=Vector3(cos(angle)*radius,0,sin(angle)*radius)
+		if realistic_enabled:
+			if i%2==0:
+				var tree=realistic.sprite("tree",rng.randf_range(5.0,7.0),0.05);tree.position=at;parent.add_child(tree)
+			continue
 		if i%4==0:
 			var rock=orb(parent,at+Vector3(0,0.6,0),Vector3(2.4,1.6,1.9),"8b9c90" if mountain else "9ba586")
 			rock.rotation.y=angle
@@ -328,7 +374,7 @@ func batch_static(root: Node3D):
 	# Merge only immutable decoration. Actors, health bars and selectable buildings stay independent.
 	var groups: Dictionary={}
 	for node in root.find_children("*","MeshInstance3D",true,false):
-		if node.mesh==null:continue
+		if node.mesh==null or node.is_queued_for_deletion():continue
 		var ancestor: Node=node;var moving=false
 		while ancestor!=root:
 			if ancestor.get_meta("dynamic_visual",false):moving=true;break
@@ -649,6 +695,8 @@ func hand_pump(level: int) -> Node3D:
 	var stream=cone(group,Vector3(-0.48,0.87,0.65),0.027,0.027,0.42,"89dce6",6);stream.name="Stream"
 	root.set_meta("pipe_radius",radius);return root
 func scaffold_worker(parent: Node3D, span: float):
+	if realistic_enabled:
+		var worker=realistic.sprite("carpenter_motion",2.1*4,0.07);worker.hframes=4;worker.vframes=2;worker.offset.y=worker.texture.get_height()*0.215;worker.set_script(preload("res://scripts/realistic_loop.gd"));worker.position=Vector3(0,0,span*0.46);parent.add_child(worker);return
 	box(parent,Vector3(0,1.78,span*0.46),Vector3(2.3,0.1,0.73),"b8925c")
 	var group=motion(parent,"saw");group.position=Vector3(-0.58,1.84,span*0.46)
 	small_worker(group,true)
@@ -663,6 +711,12 @@ func scaffold_worker(parent: Node3D, span: float):
 
 func ruins(parent: Node3D, pos: Vector3, kind: String="hall", width: int=1) -> Node3D:
 	var root=new_original();root.name="Ruins";root.set_meta("ruins",true);root.position=pos;parent.add_child(root)
+	if realistic_enabled:
+		root.add_child(realistic.sprite("ruins",2.8 if width==1 else 5.3,0.22))
+		var smoke=motion(root,"embers");smoke.name="EmbersMotion"
+		for i in range(5):
+			realistic.puff(smoke,Color(0.23,0.23,0.23,0.3))
+		return root
 	var span=2.4 if width==1 else 5.3
 	box(root,Vector3(0,0.08,0),Vector3(span,0.16,span),"4b4b43")
 	for i in range(9 if kind!="wall" else 5):
@@ -791,3 +845,13 @@ func slingshot_fx(parent: Node3D, start: Vector3, end: Vector3):
 	var pebble=orb(parent,start,Vector3.ONE*0.18,"a39880")
 	var tween=pebble.create_tween();tween.tween_property(pebble,"position",end,0.3)
 	tween.tween_callback(pebble.queue_free)
+
+func upgrades():
+	var maker=preload("res://scripts/sect_art.gd").new();maker.art=self;return maker
+
+func glass_tiffin(level: int,fill: float) -> Node3D:
+	var root=Node3D.new();root.set_meta("realistic_art",true);root.set_meta("visual_level",clampi(level,1,10));root.set_meta("storage_fill",fill);root.set_meta("tiers",clampi(level,1,10));realistic.shadow(root,2.0)
+	for i in range(clampi(level,1,10)):
+		var layer=realistic.sprite("glass_tiffin",2.0,0.18);layer.name="GlassTier"+str(i);layer.position.y=i*0.24;root.add_child(layer)
+	var label=Label3D.new();label.name="StorageAmount";label.text=str(roundi(fill*100))+"%";label.font_size=36;label.pixel_size=0.01;label.outline_size=8;label.position=Vector3(0,0.18,0.2);label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;root.add_child(label)
+	return root

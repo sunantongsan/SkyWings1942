@@ -3,7 +3,7 @@ const Art=preload("res://scripts/art.gd")
 const KINDS=["hall","well","kitchen","tank","granary","spring","crystal","servant","recruit","training","dorm","tower","ward","wall","barracks"]
 func _initialize():call_deferred("run")
 func run():
- var art=Art.new()
+ var art=Art.new();art.realistic_enabled=false # Validate the retained mesh fallback.
  for kind in KINDS:
   var last_count=-1
   var last_height=-1.0

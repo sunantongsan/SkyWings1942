@@ -16,7 +16,7 @@ do $$ declare r jsonb; b jsonb; failed bool:=false; begin
  assert (b->>'size')::int=2 and (b->>'x')::int<=14 and (b->>'y')::int<=14,'Legacy footprint not migrated';
  assert (r->'state'->'buildings'->3->>'x')::int=14,'Neighbor moved';
  assert (r->'capacity'->>'army')::int=20,'Courtyard capacity incorrect';
- assert r->'state'->'army'='[21,0,0]'::jsonb,'Existing troops lost';
+ assert r->'state'->'army'='[21,0,0,0,0,0,0,0,0,0]'::jsonb,'Existing troops lost';
  begin perform public.xian_action('train','{"type":0}',gen_random_uuid()); exception when others then failed:=true;end;
  assert failed,'Over-cap training allowed';
  failed:=false;

@@ -59,6 +59,11 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' import.log; then exit 1; fi
           godot --headless --path xian --script res://tests/smoke.gd 2>&1 | tee smoke.log
           grep XIAN_SMOKE_PASSED smoke.log
+          godot --headless --path xian --script res://tests/ten_troops.gd 2>&1 | tee ten_troops.log
+          grep XIAN_TEN_TROOPS_PASSED ten_troops.log
+          timeout 90 godot --headless --path xian --script res://tests/skills_and_breaches.gd 2>&1 | tee skills.log
+          grep XIAN_SKILLS_BREACHES_PASSED skills.log
+          if grep -E 'SCRIPT ERROR|Parse Error' skills.log ten_troops.log; then exit 1; fi
           godot --headless --path xian --script res://tests/auth.gd 2>&1 | tee auth.log
           grep XIAN_AUTH_PASSED auth.log
           godot --headless --path xian --script res://tests/touch_build.gd 2>&1 | tee touch.log
@@ -77,6 +82,12 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' levels.log walls.log; then exit 1; fi
           godot --headless --path xian --script res://tests/donor_assets.gd 2>&1 | tee donor.log
           grep XIAN_DONOR_ASSETS_PASSED donor.log
+          godot --headless --path xian --script res://tests/sect_life.gd 2>&1 | tee sect-life.log
+          grep XIAN_SECT_LIFE_PASSED sect-life.log
+          if grep -E 'SCRIPT ERROR|Parse Error' sect-life.log; then exit 1; fi
+          godot --headless --path xian --script res://tests/realistic_art.gd 2>&1 | tee realistic.log
+          grep XIAN_REALISTIC_ART_PASSED realistic.log
+          if grep -E 'SCRIPT ERROR|Parse Error' realistic.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' practice.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' donor.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' touch.log; then exit 1; fi
