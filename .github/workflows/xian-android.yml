@@ -99,6 +99,23 @@ jobs:
           timeout 90 godot --headless --path xian --script res://tests/responsiveness.gd 2>&1 | tee responsiveness.log
           grep XIAN_RESPONSIVENESS_PASSED responsiveness.log
           if grep -E 'SCRIPT ERROR|Parse Error' responsiveness.log; then exit 1; fi
+      - name: Render village review and matching building icons
+        run: |
+          set -o pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb
+          timeout 180 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/studio_v48.gd 2>&1 | tee studio.log
+          grep XIAN_STUDIO_V48_PASSED studio.log
+          if grep -E 'SCRIPT ERROR|Parse Error' studio.log; then exit 1; fi
+          godot --headless --path xian --editor --import --quit
+          timeout 90 godot --headless --path xian --script res://tests/architecture.gd 2>&1 | tee architecture.log
+          grep XIAN_ARCHITECTURE_PASSED architecture.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Xian-v048-Review
+          path: |
+            xian/build/review/v048-*.png
+            xian/assets/ui/buildings/*.png
       - name: Export Android
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore

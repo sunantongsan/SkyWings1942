@@ -1,5 +1,6 @@
 extends RefCounted
 var realistic_enabled=true
+var architecture_enabled=true
 var stone_mat: StandardMaterial3D
 var realistic=preload("res://scripts/realistic_art.gd").new()
 var mats = {}
@@ -184,6 +185,8 @@ func construction_dressing(parent: Node3D, footprint_size: int, progress: float)
 	for i in range(3):box(parent,Vector3(-0.7+i*0.65,0.13,span*0.5+0.35),Vector3(0.42,0.26,0.32),"b8a37a")
 
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
+	if realistic_enabled and architecture_enabled and kind in preload("res://scripts/village_architecture.gd").KINDS:
+		var studio=preload("res://scripts/village_architecture.gd").new();studio.art=self;return studio.build(kind,level,fill)
 	if realistic_enabled and kind=="granary":return glass_tiffin(level,fill)
 	if realistic_enabled and kind=="training":
 		var yard=courtyard(level);yard.set_meta("realistic_art",true);yard.set_meta("visual_level",level)
@@ -284,8 +287,9 @@ func person(kind: int, armed: bool=true) -> Node3D:
 	return root
 
 var fx_count=0
+var fx_limit=28
 func impact_fx(parent: Node3D, pos: Vector3, kind: int=0):
-	if fx_count>=28:return
+	if fx_count>=fx_limit:return
 	fx_count+=1
 	var root=Node3D.new();root.set_script(preload("res://scripts/combat_fx.gd"));root.position=pos;parent.add_child(root);root.tree_exited.connect(func():fx_count=maxi(0,fx_count-1))
 	var tint=Color("ffe1a0") if kind in [0,3,6,7] else Color("a6e8ff") if kind in [1,4,5] else Color("ff994c")

@@ -49,6 +49,11 @@ var last_buildings = ""
 var icon_cache: Dictionary={}
 var base_cache: Dictionary={}
 var side_refresh_pending=false
+var side_panel: PanelContainer
+var build_category="all"
+var selection_marker: Node3D
+var low_effects=false
+var resource_compact=false
 var map_drawn = ""
 var battle_visual = false
 var battle_nodes: Array = []
@@ -81,6 +86,9 @@ var font = preload("res://assets/NotoSansThai.ttf")
 
 func _ready():
 	Engine.max_fps = 30
+	var display_config=ConfigFile.new()
+	if display_config.load("user://display.cfg")==OK:low_effects=display_config.get_value("graphics","low_effects",false)
+	art.fx_limit=8 if low_effects else 28
 	api = API.new(); add_child(api)
 	api.updated.connect(receive)
 	api.failed.connect(func(error):
@@ -95,7 +103,7 @@ func _ready():
 	e.background_mode = Environment.BG_COLOR; e.background_color = Color("aec7bf")
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color = Color("c5dce4"); e.ambient_light_energy = 0.38
 	env.environment=e; add_child(env)
-	camera = Camera3D.new(); camera.projection = Camera3D.PROJECTION_ORTHOGONAL; camera.size=34; camera.far=300;camera.h_offset=6; add_child(camera)
+	camera = Camera3D.new(); camera.projection = Camera3D.PROJECTION_ORTHOGONAL; camera.size=29; camera.far=300;camera.h_offset=6; add_child(camera)
 	position_camera()
 	terrain=Node3D.new(); add_child(terrain)
 	world=Node3D.new(); add_child(world)
@@ -111,12 +119,13 @@ func _ready():
 	gift_button=button(ui,"ของขวัญ",navigate.bind("jade"));gift_button.position=Vector2(24,112);gift_button.size=Vector2(128,76)
 	gift_glow=VisualStyle.panel();gift_glow.bg_color=Color("376a63");gift_glow.border_color=Color("ffe39a");gift_glow.shadow_color=Color(1,0.76,0.28,0.5);gift_glow.shadow_size=12;gift_button.add_theme_stylebox_override("normal",gift_glow)
 	gift_button.icon=load("res://assets/ui/gift.svg");gift_button.expand_icon=true;gift_button.add_theme_constant_override("icon_max_width",50);gift_button.visible=false
-	var sidebar=panel(Vector2(960,92),Vector2(304,530))
+	var sidebar=panel(Vector2(960,92),Vector2(304,530));side_panel=sidebar
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
-	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ผลิตนักสู้","train"],["บุกสำนัก","raid"],["บอทออฟไลน์","practice"],["Ghost Match3","match"],["หยก / เช็กอิน","jade"]]:
+	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["ฝึกทหาร","train"],["บุกสำนัก","raid"],["ฝึกบุก","practice"],["จับคู่","match"],["ร้านค้า","jade"]]:
 		button(row,pair[0],navigate.bind(pair[1]))
+	button(row,"⚙",show_settings)
 	button(row,"−",zoom.bind(5.0));button(row,"+",zoom.bind(-5.0))
 	toast=Label.new();toast.position=Vector2(28,588);toast.size=Vector2(915,42);toast.add_theme_color_override("font_color",Color("ffe7a5"));toast.add_theme_color_override("font_shadow_color",Color.BLACK);toast.add_theme_constant_override("shadow_offset_x",2);toast.add_theme_constant_override("shadow_offset_y",2);ui.add_child(toast)
 	draw_terrain("bamboo")
@@ -185,13 +194,19 @@ func receive(payload: Dictionary):
 	catalog=payload.get("catalog",[])
 	checkin_available=payload.get("checkin_available",false);gift_claiming=false
 	for item in catalog:
-		if item.id=="kitchen":item.name="โรงเตี๊ยมไก่ย่าง"
-		if item.id=="granary":item.name="ปิ่นโตแก้วข้าวเปลือก"
-		if item.id=="spring":item.name="หม้อหุงโอสถ"
+		if item.id=="kitchen":item.name="โรงครัว"
+		if item.id=="granary":item.name="ยุ้งฉาง"
+		if item.id=="spring":item.name="โรงปรุงโอสถ"
+		if item.id=="tank":item.name="อ่างเก็บน้ำ"
+		if item.id=="crystal":item.name="คลังโอสถ"
+		if item.id=="servant":item.name="เรือนช่าง"
 		if item.id=="ward":item.name="หอค่ายกล"
-		if item.id=="tower":item.name="บันไดหนังสติ๊ก"
+		if item.id=="tower":item.name="หอหน้าไม้"
 	if payload.get("needs_create",false):show_create();return
+	var previous_selection=state.get("buildings",[])[selected].duplicate() if selected>=0 and selected<state.get("buildings",[]).size() else {}
 	state=payload.get("state",{});caps=payload.get("capacity",{})
+	if not previous_selection.is_empty() and (selected>=state.get("buildings",[]).size() or state.buildings[selected].id!=previous_selection.id or state.buildings[selected].x!=previous_selection.x or state.buildings[selected].y!=previous_selection.y):
+		selected=-1;moving=false;clear_preview()
 	if mode in ["login","create"]:close_modal();mode="home"
 	if state.has("raid"):mode="raid"
 	if map_drawn!=state.get("map","bamboo"):draw_terrain(state.get("map","bamboo"))
@@ -206,7 +221,7 @@ func receive(payload: Dictionary):
 	else:side_refresh_pending=true
 	if mode=="match":show_match()
 	if mode=="jade" and is_instance_valid(modal):show_gifts()
-	message("บันทึกออนไลน์แล้ว")
+	message("บันทึกแล้ว")
 func now_time() -> float:return server_time+since_sync
 func update_top():
 	if state.is_empty():return
@@ -237,9 +252,15 @@ func navigate(target: String):
 	elif target=="raid" and state.has("raid"):draw_battle();show_side()
 	else:show_side()
 func show_side():
+	if is_instance_valid(side_panel):
+		side_panel.visible=not state.is_empty() and (mode!="home" or selected>=0)
+		camera.h_offset=6 if side_panel.visible else 0
+	refresh_selection()
 	build_cards.clear()
 	clear(side)
-	label(side,"XIAN OF CLANS",23)
+	var title_row=HBoxContainer.new();side.add_child(title_row)
+	label(title_row,{"build":"ก่อสร้าง","train":"กองทัพ","raid":"การต่อสู้"}.get(mode,"ข้อมูลสำนัก"),22)
+	button(title_row,"ปิด",func():selected=-1;navigate("home"))
 	if state.is_empty():label(side,"เริ่มต้นตำนานสำนักของคุณ");return
 	label(side,"ช่างว่าง %d/%d • ศิษย์ %d/%d" % [int(caps.get("workers",1))-int(caps.get("busy",0)),int(caps.get("workers",1)),army_total(),int(caps.get("army",10))],16)
 	match mode:
@@ -251,10 +272,17 @@ func show_side():
 เชื่อมมุมอัตโนมัติ • 5 น้ำ / 5 ข้าวต่อช่อง",16)
 				button(side,"หมุนแนวลาก 90°",func():wall_axis=1 if wall_axis<=0 else 0;clear_preview();message("แนวตั้ง" if wall_axis==1 else "แนวนอน"))
 				button(side,"ลากได้ทั้งสองแนว",func():wall_axis=-1;clear_preview())
+			var filters=HBoxContainer.new();side.add_child(filters)
+			for pair in [["ทั้งหมด","all"],["ผลิต","economy"],["ทหาร","army"],["ป้องกัน","defense"]]:
+				var tab=button(filters,pair[0],func():build_category=pair[1];show_side());tab.add_theme_font_size_override("font_size",13);tab.add_theme_constant_override("outline_size",0)
 			for c in catalog:
+				if c.id=="recruit":continue
+				var category="defense" if c.id in ["wall","tower","ward"] else "army" if c.id in ["training","barracks"] else "economy"
+				if build_category!="all" and build_category!=category:continue
 				var caption="%s\nน้ำ %d ข้าว %d\nโอสถ %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds]
-				if c.id=="servant":caption="เพิงช่าง • %d / 7 หลัง\n%s\nสร้างเสร็จทันที • ไม่อัปเกรด" % [builder_count(),"ครบแล้ว" if builder_count()>=7 else ("ฟรี" if builder_price()==0 else "%d หยก" % builder_price())]
+				if c.id=="servant":caption="เรือนช่าง • %d / 7 หลัง\n%s\nสร้างเสร็จทันที • ไม่อัปเกรด" % [builder_count(),"ครบแล้ว" if builder_count()>=7 else ("ฟรี" if builder_price()==0 else "%d หยก" % builder_price())]
 				var card=button(side,caption,choose_build.bind(c.id))
+				if c.id!="servant":card.disabled=float(state.get("water",0))<float(c.water) or float(state.get("rice",0))<float(c.rice) or float(state.get("stone",0))<float(c.stone)
 				if c.id=="servant":card.disabled=builder_count()>=7 or int(state.get("jade",0))<builder_price()
 				card.icon=building_icon(c.id);card.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;card.expand_icon=true;card.add_theme_constant_override("icon_max_width",76);card.custom_minimum_size=Vector2(272,100)
 				build_cards.append({"node":card,"kind":c.id})
@@ -281,7 +309,7 @@ func show_side():
 			label(side,"หยกเซียน",26)
 			button(side,"เปิดของขวัญ / เช็คอิน",show_gifts)
 			for pair in [["น้ำ 250","water"],["ข้าว 250","rice"],["โอสถเซียน 25","stone"]]:button(side,"5 หยก → "+pair[0],send.bind("exchange",{"resource":pair[1]}))
-			label(side,"หยกถูกปล้นไม่ได้\nใช้สร้างเพิงช่างและเร่งงาน",16)
+			label(side,"หยกถูกปล้นไม่ได้\nใช้สร้างเรือนช่างและเร่งงาน",16)
 		"raid":show_raid()
 		_:
 			if selected>=0 and selected<state.buildings.size():
@@ -298,8 +326,8 @@ func show_side():
 				if b.id=="barracks":
 					label(side,"ปลดล็อกนักรบใหม่ทุกระดับ 1–10",16)
 					button(side,"ผลิตนักสู้",navigate.bind("train"))
-				if b.id=="spring":label(side,"หลอมโอสถเซียน → ถุงโอสถ",16)
-				if b.id=="crystal":label(side,"ผ้าโปร่งมองเห็นโอสถด้านใน\nฝ่ายบุกมองเห็นปริมาณได้",16)
+				if b.id=="spring":label(side,"ผลิตโอสถเซียน → คลังโอสถ",16)
+				if b.id=="crystal":label(side,"คลังเก็บโอสถสำหรับฝึกทหาร\nฝ่ายบุกมองเห็นปริมาณได้",16)
 				clock_label=label(side,remaining(b.finish))
 				if float(b.finish)>now_time():
 					button(side,"เสร็จทันที • %d หยก" % ceili((float(b.finish)-now_time())/300),send.bind("boost",{"index":selected}))
@@ -309,7 +337,10 @@ func show_side():
 					var costs=[int(c.water*pow(2,b.level)),int(c.rice*pow(2,b.level)),int(c.stone*pow(2,b.level))]
 					if b.id=="barracks" and int(b.level)<10:costs=[Troops.UPGRADE[int(b.level)],Troops.UPGRADE[int(b.level)],Troops.UPGRADE[int(b.level)]]
 					label(side,"อัปเกรด: น้ำ %d / ข้าว %d / โอสถ %d" % costs,16)
-					if b.id!="wall" and int(b.level)<10:button(side,"อัปเกรด",send.bind("upgrade",{"index":selected}))
+					if b.id!="wall" and int(b.level)<10:
+						var upgrade=button(side,"อัปเกรด",confirm_upgrade.bind(selected,costs))
+						upgrade.disabled=float(state.get("water",0))<costs[0] or float(state.get("rice",0))<costs[1] or float(state.get("stone",0))<costs[2]
+					elif int(b.level)>=10:label(side,"ระดับสูงสุด",18)
 				if b.id=="wall":
 					for choice in [["ชิ้นนี้","one"],["แถวนี้","row"],["ทั้งหมด","all"]]:
 						button(side,"อัปเกรดกำแพง "+choice[0],wall_dialog.bind("upgrade",choice[1]))
@@ -319,20 +350,31 @@ func show_side():
 				button(side,"ย้ายอาคาร",func():moving=true;wall_group.clear();clear_preview();message("ลากบนพื้นไปยังช่องสีเขียว แล้วปล่อยเพื่อย้าย"))
 			else:
 				label(side,"สำนักของคุณ",27)
-				label(side,"1. สร้างบ่อน้ำและโรงเตี๊ยม\n2. สร้างโกดังเพิ่มความจุ\n3. รับศิษย์และบุกสำนัก\n4. เล่นจับคู่ระหว่างรอ",20)
+				label(side,"1. สร้างบ่อน้ำและโรงครัว\n2. สร้างโกดังเพิ่มความจุ\n3. ฝึกทหารและบุกสำนัก\n4. เล่นจับคู่ระหว่างรอ",20)
 				label(side,"แตะอาคารเพื่อดู / อัปเกรด\nลากพื้นเพื่อเลื่อนมุมมอง",16)
+			var refund=state.get("recruit_refund",{})
+			if int(refund.get("water",0))+int(refund.get("rice",0))+int(refund.get("stone",0))>0:
+				label(side,"ทรัพยากรคืนฐานรับศิษย์รอเข้าโกดัง: น้ำ %d / ข้าว %d / โอสถ %d" % [refund.get("water",0),refund.get("rice",0),refund.get("stone",0)],16)
 			if state.has("last_defense"):
 				var d=state.last_defense
 				if d.has("garrison"):label(side,"นักรบป้องกัน: "+Troops.summary(d.garrison),16)
 				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d โอสถ %d" % [d.attacker,d.water,d.rice,d.stone],16)
 			button(side,"อัปเดตข้อมูล",send.bind("sync",{}))
 			button(side,"เครดิตภาพ / โมเดล",show_credits)
+func layout_signature() -> String:
+	var parts=PackedStringArray()
+	for b in state.get("buildings",[]):parts.append("%s:%d:%d" % [b.id,int(b.x),int(b.y)])
+	return ",".join(parts)
 func send(action: String,args: Dictionary):
 	if api.busy:
 		message("กำลังบันทึกคำสั่งก่อนหน้า กรุณารอสักครู่");return
 	message("รับคำสั่งแล้ว กำลังบันทึก…")
+	args=args.duplicate();args["layout"]=layout_signature()
 	api.action(action,args)
 func building_icon(kind: String) -> Texture2D:
+	var icon_path="res://assets/ui/buildings/"+kind+".png"
+	if ResourceLoader.exists(icon_path):return load(icon_path)
+	if FileAccess.file_exists(icon_path):return ImageTexture.create_from_image(Image.load_from_file(icon_path))
 	if icon_cache.has(kind):return icon_cache[kind]
 	if kind=="granary":return load("res://assets/realistic/glass_tiffin.webp")
 	if art.realistic_enabled and art.realistic.WIDTHS.has(kind):
@@ -434,7 +476,7 @@ func draw_base():
 			var target={"well":"tank","kitchen":"granary","spring":"crystal"}[b.id]
 			for storage in state.buildings:
 				if storage.id==target and int(storage.level)>0:
-					var person=art.person(0,false);person.scale=Vector3.ONE*0.5;world.add_child(person)
+					var person=art.person(0,false);person.scale=Vector3.ONE;world.add_child(person)
 					if not person.get_meta("realistic_art",false):art.box(person,Vector3(0.4,0.65,0),Vector3(0.35,0.4,0.35),"62b4c1" if b.id=="well" else "d2bb79")
 					actors.append({"node":person,"from":model.position+Vector3(1,0,0),"to":cell_pos(storage.x,storage.y)+Vector3(1,0,0),"phase":actors.size(),"kind":0,"progress":0.0,"forward":true,"pause":0.0});person.position=actors[-1].from;break
 	for key in base_cache:
@@ -453,6 +495,16 @@ func draw_base():
 	for x in range(16):
 		for y in range(16):
 			if not grid.is_point_solid(Vector2i(x,y)):open.append(Vector2i(x,y))
+	for carrier in actors:
+		if open.is_empty():continue
+		var origin=Vector2i(roundi(carrier.from.x/3+7.5),roundi(carrier.from.z/3+7.5))
+		var target=Vector2i(roundi(carrier.to.x/3+7.5),roundi(carrier.to.z/3+7.5))
+		var start=open[0];var goal=open[0]
+		for cell in open:
+			if Vector2(cell-origin).length_squared()<Vector2(start-origin).length_squared():start=cell
+			if Vector2(cell-target).length_squared()<Vector2(goal-target).length_squared():goal=cell
+		carrier.path=grid.get_id_path(start,goal);carrier.path_index=1;carrier.forward=true
+		carrier.node.position=cell_pos(start.x,start.y)
 	var visible_unit=0
 	for kind in range(10):
 		for i in range(mini(2 if kind>1 else 6,Troops.count(state.army,kind))):
@@ -498,7 +550,7 @@ func position_camera():
 func zoom(amount: float):camera.size=clampf(camera.size+amount,18,80)
 func world_area(pos: Vector2) -> bool:
 	if is_instance_valid(gift_button) and gift_button.visible and gift_button.get_global_rect().has_point(pos):return false
-	return Rect2(0,82,950,500).has_point(pos)
+	return Rect2(0,82,950 if is_instance_valid(side_panel) and side_panel.visible else 1280,550).has_point(pos)
 func clear_preview():
 	if is_instance_valid(preview):preview.queue_free()
 	preview=null;preview_ok=false;placement_drag=false;wall_start=Vector2i(-1,-1);wall_cells.clear();wall_preview_key=""
@@ -567,12 +619,12 @@ func drop_build(pos: Vector2):
 	if not preview_ok or api.busy:
 		message("วางไม่ได้: เลือกช่องว่างภายในสำนัก" if not preview_ok else "กำลังบันทึก กรุณารอสักครู่");return
 	if not wall_group.is_empty():
-		api.action("wall_edit",{"index":selected,"operation":"move","x":preview_cell.x,"y":preview_cell.y});moving=false;wall_group.clear()
+		send("wall_edit",{"index":selected,"operation":"move","x":preview_cell.x,"y":preview_cell.y});moving=false;wall_group.clear()
 	elif chosen_build=="wall":
 		var end: Vector2i=wall_cells[-1]
 		api.action("wall_line",{"x":wall_start.x,"y":wall_start.y,"end_x":end.x,"end_y":end.y,"rotation":maxi(0,wall_axis)})
 	elif moving:
-		api.action("move",{"index":selected,"x":preview_cell.x,"y":preview_cell.y});moving=false
+		send("move",{"index":selected,"x":preview_cell.x,"y":preview_cell.y});moving=false
 	else:api.action("build",{"type":chosen_build,"x":preview_cell.x,"y":preview_cell.y})
 	end_placement()
 func pan_view(relative: Vector2):
@@ -584,6 +636,7 @@ func card_at(pos: Vector2) -> String:
 		if is_instance_valid(c.node) and c.node.get_global_rect().has_point(pos):return c.kind
 	return ""
 func menu_input(event) -> bool:
+	if not is_instance_valid(side_panel) or not side_panel.visible:return false
 	var menu_rect=Rect2(960,92,304,530)
 	if (event is InputEventMouseButton or event is InputEventMouseMotion) and event.device==InputEvent.DEVICE_ID_EMULATION and menu_rect.has_point(event.position):return true
 	if event is InputEventScreenTouch:
@@ -723,15 +776,16 @@ func _process(delta):
 			elif time>unit.node.get_meta("next_strike",0.0):art.pose(unit.node,"attack",0.8);art.strike_fx(world,unit.node.position,unit.node.position+Vector3(0,0,-1),unit.kind);unit.node.set_meta("next_strike",time+Troops.COOLDOWN[unit.kind])
 		if progress>=1:draw_base()
 	for actor in actors:
-		var distance=actor.from.distance_to(actor.to)
 		actor.pause=maxf(0.0,actor.pause-delta)
-		if distance<0.1 or actor.pause>0:
+		if not actor.has("path") or actor.path.size()<2 or actor.pause>0:
 			art.pose(actor.node,"idle");continue
-		actor.progress=move_toward(actor.progress,1.0 if actor.forward else 0.0,delta*0.85/distance)
-		actor.node.position=actor.from.lerp(actor.to,actor.progress)
+		var cell=actor.path[actor.path_index];var goal=cell_pos(cell.x,cell.y)
+		actor.node.position=actor.node.position.move_toward(goal,delta*0.85)
 		art.pose(actor.node,"walk")
-		if actor.progress>=1.0 or actor.progress<=0.0:
-			actor.forward=not actor.forward;actor.pause=0.7
+		if actor.node.position.distance_to(goal)<0.01:
+			if actor.path_index==actor.path.size()-1:actor.forward=false;actor.pause=0.7
+			elif actor.path_index==0:actor.forward=true;actor.pause=0.7
+			actor.path_index+=1 if actor.forward else -1
 
 	if is_instance_valid(clock_label) and not state.is_empty():
 		if mode=="raid" and state.has("raid"):clock_label.text="การต่อสู้อัตโนมัติ • %d วิ" % maxi(0,int(state.raid.finish-now_time()))
@@ -844,3 +898,40 @@ func update_storage_visuals():
 		model.set_meta("storage_fill",fill)
 		var amount=model.get_node_or_null("StorageAmount")
 		if amount!=null:amount.text=str(roundi(fill*100))+"%"
+
+func refresh_selection():
+	if is_instance_valid(selection_marker):selection_marker.queue_free();selection_marker=null
+	if state.is_empty() or selected<0 or selected>=state.get("buildings",[]).size() or mode!="home":return
+	var b=state.buildings[selected]
+	selection_marker=Node3D.new();world.add_child(selection_marker);selection_marker.position=building_position(b)
+	var width=footprint(b)*3.0
+	for side in [-1,1]:
+		art.box(selection_marker,Vector3(side*width/2,0.09,0),Vector3(0.07,0.035,width),"7cd7ed")
+		art.box(selection_marker,Vector3(0,0.09,side*width/2),Vector3(width,0.035,0.07),"7cd7ed")
+
+func confirm_upgrade(index: int,costs: Array):
+	if index<0 or index>=state.buildings.size():return
+	var b=state.buildings[index];var signature=JSON.stringify(b)
+	var box=modal_box(Vector2(350,180),Vector2(580,320))
+	label(box,"อัปเกรด "+find_catalog(b.id).get("name",b.id),25)
+	label(box,"ระดับ %d → %d" % [int(b.level),int(b.level)+1],22)
+	label(box,"ใช้ น้ำ %d • ข้าว %d • โอสถ %d" % costs,19)
+	button(box,"ยืนยันอัปเกรด",func():
+		close_modal()
+		if index>=state.buildings.size() or JSON.stringify(state.buildings[index])!=signature:message("ข้อมูลอาคารเปลี่ยนแล้ว กรุณาเลือกใหม่");return
+		send("upgrade",{"index":index})
+	)
+	button(box,"ยกเลิก",close_modal)
+
+func show_settings():
+	var box=modal_box(Vector2(380,160),Vector2(520,380))
+	label(box,"ตั้งค่าการแสดงผล",26)
+	var toggle=button(box,"เอฟเฟกต์: "+("ประหยัด" if low_effects else "ปกติ"),func():
+		low_effects=not low_effects;art.fx_limit=8 if low_effects else 28
+		if is_instance_valid(practice):practice.art.fx_limit=art.fx_limit
+		var config=ConfigFile.new();config.set_value("graphics","low_effects",low_effects);config.save("user://display.cfg")
+		show_settings()
+	)
+	label(box,"โหมดประหยัดลดจำนวนประกายโจมตีที่แสดงพร้อมกัน",17)
+	button(box,"จัดมุมมองกลางสำนัก",func():pivot=Vector3.ZERO;camera.size=29;position_camera();close_modal())
+	button(box,"ปิด",close_modal)

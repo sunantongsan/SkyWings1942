@@ -58,6 +58,9 @@ func _ready():
 	text(sidebar,"แตะขอบเขียวเพื่อปล่อยศิษย์\nลากพื้นเลื่อน / จีบสองนิ้วซูม",17)
 	for i in range(10):
 		var b=button(sidebar,"",func():selected_kind=i;refresh_hud());unit_buttons.append(b)
+		var sheet=load("res://assets/realistic/"+Troops.ASSETS[i]+".webp")
+		var portrait=AtlasTexture.new();portrait.atlas=sheet;portrait.region=Rect2(0,0,sheet.get_width()/4.0,sheet.get_height()/2.0)
+		b.icon=portrait;b.expand_icon=true;b.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;b.add_theme_constant_override("icon_max_width",44);b.custom_minimum_size.y=64
 	text(sidebar,"นักรบแต่ละชนิดมีสกิลเฉพาะ\nโจรปีนกำแพง • เสือล่านักรบ\nคนหินทุบสิ่งกีดขวาง",16)
 	skill_label=text(sidebar,"",16)
 	var zoom_row=HBoxContainer.new();sidebar.add_child(zoom_row)
@@ -120,7 +123,7 @@ func place_at(screen: Vector2):
 	hint.text="★ ทำลายสำนักหลัก  •  ★ ทำลาย 50%  •  ★ ทำลายทั้งหมด"
 	refresh_hud()
 func position_camera():
-	camera.position=pivot+Vector3(42,58,42);camera.look_at(pivot)
+	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
 func pan(relative: Vector2):
 	pivot+=Vector3(-relative.x-relative.y,0,relative.x-relative.y)*camera.size/1400.0
 	pivot.x=clampf(pivot.x,-22,22);pivot.z=clampf(pivot.z,-22,22);position_camera()

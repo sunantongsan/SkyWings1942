@@ -59,7 +59,7 @@ func character(kind: int, armed: bool) -> Node3D:
 	var s=sprite(id,1.0,0.02);s.name="CharacterSprite";s.hframes=4;s.vframes=2
 	# Sheet cells retain their generated transparent padding; never crop each frame
 	# independently, which would make the feet jump between animation frames.
-	s.pixel_size=(3.6 if kind==9 and armed else 2.6 if kind in [2,4,6,7,8] and armed else 1.8)/(s.texture.get_height()/2.0)
+	s.pixel_size=(3.6 if kind==9 and armed else 2.6 if kind in [2,4,6,7,8] and armed else 1.35)/(s.texture.get_height()/2.0)
 	var feet={"fighter":431,"collector":480,"thief":482,"turtle":418,"sword_sage_red":490,"tiger":440,"stone_warrior":476}
 	s.offset.y=float(feet.get(id,s.texture.get_height()*0.49))-s.texture.get_height()/4.0
 	s.set_script(preload("res://scripts/realistic_actor.gd"));s.flying=armed and Troops.air(kind);s.troop_kind=kind if armed else -1

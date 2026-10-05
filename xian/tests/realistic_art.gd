@@ -2,7 +2,7 @@ extends SceneTree
 const Art=preload("res://scripts/art.gd")
 func _initialize():call_deferred("run")
 func run():
-	var art=Art.new()
+	var art=Art.new();art.architecture_enabled=false # Retained legacy art regression
 	for kind in art.realistic.WIDTHS:
 		if kind=="carpenter":continue
 		var previous=Rect2()
