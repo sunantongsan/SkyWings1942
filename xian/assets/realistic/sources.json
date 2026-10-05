@@ -33,5 +33,9 @@
   "crystal_levels": "577f0694-01fb-4ebc-9d53-a8a1d20fb6b3",
   "carpenter_motion": "5b4d8cc3-e13c-4a28-8e42-6ac6012fa23f",
   "ground": "ae7b8b8f-929f-432b-9d21-5b125e981be6",
-  "stone": "edcc82d5-83b0-4bdd-8121-72697a0eacb0"
+  "stone": "edcc82d5-83b0-4bdd-8121-72697a0eacb0",
+  "pump_operator": "92aaf177-9a9e-4ae8-9a5b-34d691e0fad6",
+  "materials": "5a686333-a64d-43d1-9166-4bc1ca0291eb",
+  "fighter_actions": "f0dee034-ddf7-4c4d-8759-858194e49b07",
+  "pump_materials": "64d97a51-90fb-4fb2-b7c9-3e5f8255bb11"
 }

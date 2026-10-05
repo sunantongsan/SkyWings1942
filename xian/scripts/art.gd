@@ -149,6 +149,7 @@ func courtyard(level: int) -> Node3D:
 		cone(root,Vector3(x,1.32,-2.5),0.42,0.08,0.24,"438a86",4).rotation.y=PI/4
 	return root
 func wall(mask: int=0, rotation: int=0, level: int=1) -> Node3D:
+	if realistic_enabled:return upgrades().wall(mask,rotation,level)
 	var root=Node3D.new();root.set_meta("donor_building",true);root.set_meta("wall_mask",mask)
 	if mask==0:mask=5 if rotation%2==0 else 10
 	# Half spans meet exactly on the shared cell boundary, including corners/T junctions.
@@ -183,6 +184,7 @@ func construction_dressing(parent: Node3D, footprint_size: int, progress: float)
 	for i in range(3):box(parent,Vector3(-0.7+i*0.65,0.13,span*0.5+0.35),Vector3(0.42,0.26,0.32),"b8a37a")
 
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
+	if realistic_enabled and kind in ["well","ward"]:return upgrades().building(kind,level)
 	if realistic_enabled and realistic.WIDTHS.has(kind):
 		var model=realistic.building(kind,level,fill)
 		if kind=="spring":
@@ -314,8 +316,6 @@ func landscape(parent: Node3D, mountain: bool=false, deployment: bool=false):
 		var mat=StandardMaterial3D.new();mat.albedo_texture=ImageTexture.create_from_image(pixels);mat.uv1_scale=Vector3(10,10,10);mat.roughness=1
 		ground_materials[mountain]=mat
 	ground.material_override=ground_materials[mountain]
-	if realistic_enabled:
-		ground.material_override.albedo_texture=realistic.texture("ground");ground.material_override.uv1_scale=Vector3(18,18,18);ground.material_override.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;ground.material_override.albedo_color=Color("b8c3a5")
 	# A thin stone boundary frames the buildable area without a chessboard.
 	for axis in range(2):
 		for side in [-1,1]:
@@ -325,7 +325,7 @@ func landscape(parent: Node3D, mountain: bool=false, deployment: bool=false):
 		for axis in range(2):
 			for side in [-1,1]:
 				var pos=Vector3(side*21,0.022,0) if axis==0 else Vector3(0,0.022,side*21)
-				box(parent,pos,Vector3(5.8,0.035,47.8) if axis==0 else Vector3(35.8,0.035,5.8),"54775c")
+				box(parent,pos,Vector3(5.8,0.035,47.8) if axis==0 else Vector3(35.8,0.035,5.8),"82ba72")
 	var rng=RandomNumberGenerator.new();rng.seed=894 if mountain else 421
 	for i in range(42):
 		var angle=i*TAU/42;var radius=rng.randf_range(30,38)
@@ -830,3 +830,6 @@ func slingshot_fx(parent: Node3D, start: Vector3, end: Vector3):
 	var pebble=orb(parent,start,Vector3.ONE*0.18,"a39880")
 	var tween=pebble.create_tween();tween.tween_property(pebble,"position",end,0.3)
 	tween.tween_callback(pebble.queue_free)
+
+func upgrades():
+	var maker=preload("res://scripts/sect_art.gd").new();maker.art=self;return maker

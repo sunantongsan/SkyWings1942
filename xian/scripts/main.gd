@@ -38,6 +38,9 @@ var server_time = 0.0
 var since_sync = 0.0
 var poll = 0.0
 var actors: Array = []
+var home_units: Array=[]
+var defense_nodes: Array=[]
+var home_defense_time=0.0
 var pan_start = Vector2.ZERO
 var dragging = false
 var pivot = Vector3.ZERO
@@ -181,14 +184,14 @@ func receive(payload: Dictionary):
 		if item.id=="kitchen":item.name="โรงเตี๊ยมไก่ย่าง"
 		if item.id=="granary":item.name="กล่องข้าวตามสั่ง"
 		if item.id=="spring":item.name="หม้อหุงโอสถ"
-		if item.id=="ward":item.name="หอกระจายข่าว"
+		if item.id=="ward":item.name="หอค่ายกล"
 		if item.id=="tower":item.name="บันไดหนังสติ๊ก"
 	if payload.get("needs_create",false):show_create();return
 	state=payload.get("state",{});caps=payload.get("capacity",{})
 	if mode in ["login","create"]:close_modal();mode="home"
 	if state.has("raid"):mode="raid"
 	if map_drawn!=state.get("map","bamboo"):draw_terrain(state.get("map","bamboo"))
-	var encoded=JSON.stringify(state.get("buildings",[]))+str(int(float(state.get("water",0))/maxf(1,float(caps.get("water",1000)))*100))+str(int(float(state.get("rice",0))/maxf(1,float(caps.get("rice",1000)))*100))+str(int(float(state.get("stone",0))/maxf(1,float(caps.get("stone",100)))*10))
+	var encoded=JSON.stringify(state.get("army",[]))+str(state.get("last_defense",{}).get("time",0))+JSON.stringify(state.get("buildings",[]))+str(int(float(state.get("water",0))/maxf(1,float(caps.get("water",1000)))*100))+str(int(float(state.get("rice",0))/maxf(1,float(caps.get("rice",1000)))*100))+str(int(float(state.get("stone",0))/maxf(1,float(caps.get("stone",100)))*10))
 	if encoded!=last_buildings and not battle_visual:
 		last_buildings=encoded;draw_base()
 	if mode=="raid" and state.has("raid") and not battle_visual:draw_battle()
@@ -279,6 +282,7 @@ func show_side():
 					label(side,"ลานเปิด 2×2 ช่อง
 ความจุ %d → %d หน่วย" % [int(b.level)*20,mini(200,(int(b.level)+1)*20)])
 					if int(b.get("size",2))==1:label(side,"พื้นที่แน่น: ย้ายลานไปช่องว่าง 2×2 เพื่อขยาย",16)
+					label(side,"ป้องกันสำนัก 50% ของแต่ละชนิด (ปัดลง)",16)
 					label(side,"พักและเก็บนักสู้เท่านั้น\nผลิตนักสู้ที่หอฝึกนักสู้",16)
 				if b.id=="barracks":
 					label(side,"ผลิตศิษย์ / นักกระบี่ / มังกร\nปลดล็อกที่ระดับ 1 / 2 / 3",16)
@@ -303,6 +307,7 @@ func show_side():
 				label(side,"แตะอาคารเพื่อดู / อัปเกรด\nลากพื้นเพื่อเลื่อนมุมมอง",16)
 			if state.has("last_defense"):
 				var d=state.last_defense
+				if d.has("garrison"):label(side,"นักรบป้องกัน: %d / %d / %d" % d.garrison,16)
 				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d โอสถ %d" % [d.attacker,d.water,d.rice,d.stone],16)
 			button(side,"อัปเดตข้อมูล",send.bind("sync",{}))
 			button(side,"เครดิตภาพ / โมเดล",show_credits)
@@ -337,12 +342,14 @@ func show_raid():
 		var r=state.raid
 		label(side,r.enemy.name)
 		clock_label=label(side,"การต่อสู้อัตโนมัติ • %d วิ" % maxi(0,int(r.finish-now_time())))
+		if r.enemy.has("garrison"):label(side,"นักรบฝ่ายป้องกัน: %d / %d / %d" % r.enemy.garrison,16)
 		label(side,"ส่งศิษย์ %d / %d / %d\nผลคำนวณโดยเซิร์ฟเวอร์" % [r.army[0],r.army[1],r.army[2]],16)
 		button(side,"จบการบุก / รับของ",send.bind("raid_claim",{}))
 	elif state.has("scout"):
 		var s=state.scout
 		label(side,s.name,22)
 		label(side,("สำนักผู้เล่น" if s.has("player") else "สำนักบอท")+" • ระดับ %d\nพลังป้องกัน %d\nน้ำ %d ข้าว %d โอสถ %d" % [s.level,s.defense,s.water,s.rice,s.stone])
+		if s.has("garrison"):label(side,"นักรบป้องกัน 50%: %d / %d / %d" % s.garrison,16)
 		label(side,"ส่งกองกำลังทั้งหมด\nหน่วยที่ส่งจะใช้ไปในการบุก",16)
 		button(side,"เริ่มบุก (25 วินาที)",send.bind("raid_start",{}))
 		button(side,"ค้นหาสำนักผู้เล่น",send.bind("scout",{"mode":"player"}))
@@ -401,15 +408,54 @@ func draw_base():
 	var yard: Dictionary={}
 	for b in state.buildings:
 		if b.id=="training" and int(b.level)>0:yard=b;break
+	home_units=[];defense_nodes=[]
+	var grid=AStarGrid2D.new();grid.region=Rect2i(0,0,16,16);grid.diagonal_mode=AStarGrid2D.DIAGONAL_MODE_NEVER;grid.update()
+	for building in state.buildings:
+		for x in range(int(building.x),int(building.x)+footprint(building)):
+			for y in range(int(building.y),int(building.y)+footprint(building)):
+				grid.set_point_solid(Vector2i(x,y))
+	var open: Array=[]
+	for x in range(16):
+		for y in range(16):
+			if not grid.is_point_solid(Vector2i(x,y)):open.append(Vector2i(x,y))
 	var visible_unit=0
 	for kind in range(3):
-		for i in range(mini(2 if kind==2 else 6,int(state.army[kind]))):
-			var person=art.person(kind);world.add_child(person)
-			var origin=cell_pos(6+i*0.4,9+kind)
-			if not yard.is_empty():origin=building_position(yard)+Vector3(-1.7+(visible_unit%4)*1.1,0,-1.0+int(visible_unit/4)*1.15)
-			if kind==2 and not yard.is_empty():origin=building_position(yard)+Vector3(-4.0-i*3.8,0,0)
-			actors.append({"node":person,"from":origin,"to":origin+Vector3(0.15,0,0.25),"phase":i,"kind":kind})
-			visible_unit+=1
+		for i in range(mini(3 if kind==2 else 10,int(state.army[kind]))):
+			if open.is_empty():break
+			var person=art.person(kind);person.set_script(preload("res://scripts/sect_life.gd"));person.art=art;person.grid=grid;person.unit_kind=kind;person.serial=visible_unit
+			var cell=open[(visible_unit*29+17)%open.size()]
+			person.cell=cell;person.position=cell_pos(cell.x,cell.y);person.destination=person.position
+			person.activity=["stroll","stroll","sleep","stroll","spar","spar"][visible_unit%6]
+			if kind>0 and person.activity=="sleep":person.activity="stroll"
+			if visible_unit<2 and not yard.is_empty():
+				person.activity="camp";person.position=building_position(yard)+Vector3(-0.8+visible_unit*1.6,0,0)
+			elif person.activity=="sleep":
+				# Pick a free cell next to an actual building, never inside its footprint.
+				var beside=open.filter(func(c):return [Vector2i.LEFT,Vector2i.RIGHT,Vector2i.UP,Vector2i.DOWN].any(func(d):return grid.is_in_boundsv(c+d) and grid.is_point_solid(c+d)))
+				if not beside.is_empty():
+					var c=beside[visible_unit%beside.size()];person.cell=c;person.position=cell_pos(c.x,c.y)+Vector3(0.55,0,0.3)
+			elif person.activity=="spar" and visible_unit%6==5 and not home_units.is_empty():
+				person.position=home_units[-1].position+Vector3(1.1,0,-1.1)
+				person.get_node("CharacterSprite").flip_h=true
+			world.add_child(person);home_units.append(person);visible_unit+=1
+	var report=state.get("last_defense",{})
+	if report.has("finish") and now_time()<float(report.finish):start_home_defense(report)
+func start_home_defense(report: Dictionary):
+	home_defense_time=float(report.finish)
+	var guards=report.get("garrison",[0,0,0]);var used=[0,0,0]
+	for person in home_units:
+		var kind=int(person.unit_kind)
+		if used[kind]<int(guards[kind]):
+			person.alarm(cell_pos(5+used[kind]%5,10)+Vector3(0,0,kind*0.5));used[kind]+=1
+	for kind in range(3):
+		# Every committed defender gets a visual; the calm village uses fewer extras.
+		for i in range(used[kind],int(guards[kind])):
+			var guard=art.person(kind);guard.set_script(preload("res://scripts/sect_life.gd"));guard.art=art;guard.unit_kind=kind;guard.position=cell_pos(6+i%4,6)
+			world.add_child(guard);home_units.append(guard);guard.alarm(cell_pos(4+i%8,10)+Vector3(0,0,(i/8)*0.5+kind*0.2))
+		for i in range(mini(20,int(report.get("army",[0,0,0])[kind]))):
+			var node=art.person(kind);world.add_child(node)
+			defense_nodes.append({"node":node,"start":cell_pos(4+i*0.5,14),"target":cell_pos(5+i%5,11),"phase":i,"kind":kind})
+	message("สำนักถูกบุกรุก! นักรบ 50% ออกป้องกันฐาน")
 func position_camera():
 	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
 func zoom(amount: float):camera.size=clampf(camera.size+amount,18,80)
@@ -630,6 +676,13 @@ func _process(delta):
 				if not node.get_meta("next_strike",0.0)>time:
 					art.pose(node,"attack",0.85);node.set_meta("next_strike",time+1.0)
 			else:art.pose(node,"walk")
+	if not battle_visual and not defense_nodes.is_empty():
+		var progress=clampf(1.0-(home_defense_time-now_time())/25.0,0,1)
+		for unit in defense_nodes:
+			unit.node.position=unit.start.lerp(unit.target,minf(1,progress*3))
+			if progress<0.33:art.pose(unit.node,"walk")
+			elif time>unit.node.get_meta("next_strike",0.0):art.pose(unit.node,"attack",0.8);unit.node.set_meta("next_strike",time+1)
+		if progress>=1:draw_base()
 	for actor in actors:
 		var f=(sin(time*0.5+actor.phase)+1)/2
 		var direction=(actor.to-actor.from)*(1.0 if cos(time*0.5+actor.phase)>=0 else -1.0)
@@ -643,7 +696,7 @@ func _process(delta):
 		elif mode=="home" and selected>=0 and selected<state.buildings.size():clock_label.text=remaining(state.buildings[selected].finish)
 
 func draw_battle():
-	battle_visual=true;clear(world);actors=[];battle_nodes=[];battle_buildings=[]
+	battle_visual=true;clear(world);actors=[];battle_nodes=[];battle_buildings=[];defense_nodes=[];home_units=[]
 	pivot=Vector3.ZERO;position_camera()
 	var enemy=state.raid.enemy
 	var buildings=enemy.get("buildings",[
@@ -660,6 +713,11 @@ func draw_battle():
 			var start=cell_pos(4+i*0.45,13+kind*0.5)
 			var target=cell_pos(5+i%5,8 if kind==2 else 7)
 			battle_nodes.append({"node":node,"start":start,"target":target,"kind":kind,"phase":i})
+	var guards=enemy.get("garrison",[0,0,0])
+	for kind in range(3):
+		for i in range(int(guards[kind])):
+			var node=art.person(kind);world.add_child(node)
+			battle_nodes.append({"node":node,"start":cell_pos(4+(i%8)*0.65,3+(i/8)*0.35+kind*0.15),"target":cell_pos(4+(i%8)*0.65,7.8-(i/8)*0.45),"kind":kind,"phase":i})
 	message("กำลังบุก "+str(enemy.name)+" • การต่อสู้อัตโนมัติรุ่นทดลอง")
 
 func _notification(what):

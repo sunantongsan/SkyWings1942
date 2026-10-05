@@ -9,6 +9,9 @@ func run():
 		for level in range(1,2 if kind=="servant" else 11):
 			var model=art.building(kind,level,0.25);root.add_child(model)
 			assert(model.get_meta("realistic_art",false),kind)
+			if kind in ["well","ward"]:
+				assert(model.get_meta("visual_level")==level)
+				model.free();continue
 			var visual=model.get_node("RealisticVisual")
 			assert(visual.texture!=null and visual.pixel_size>0)
 			var bounds=art.model_bounds(model)
