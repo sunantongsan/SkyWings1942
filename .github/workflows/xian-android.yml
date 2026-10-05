@@ -108,17 +108,22 @@ jobs:
           set -o pipefail
           sudo apt-get update -qq
           sudo apt-get install -y xvfb
+          timeout 300 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/ground_visibility.gd 2>&1 | tee ground.log
+          grep XIAN_GROUND_VISIBILITY_PASSED ground.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Shader compilation failed' ground.log; then exit 1; fi
           timeout 180 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/studio_v48.gd 2>&1 | tee studio.log
-          grep XIAN_STUDIO_V49_PASSED studio.log
+          grep XIAN_STUDIO_V50_PASSED studio.log
           if grep -E 'SCRIPT ERROR|Parse Error' studio.log; then exit 1; fi
           godot --headless --path xian --editor --import --quit
           timeout 90 godot --headless --path xian --script res://tests/architecture.gd 2>&1 | tee architecture.log
           grep XIAN_ARCHITECTURE_PASSED architecture.log
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: Xian-v049-Review
+          name: Xian-v050-Review
           path: |
-            xian/build/review/v049-*.png
+            xian/build/review/v050-*.png
+            xian/build/review/ground-report.json
             xian/assets/ui/buildings/*.png
       - name: Export Android
         env:

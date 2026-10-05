@@ -1,4 +1,5 @@
 extends Node3D
+const Iso=preload("res://scripts/iso_layout.gd")
 const Troops=preload("res://scripts/troops.gd")
 const VisualStyle=preload("res://scripts/visual_style.gd")
 const Art = preload("res://scripts/art.gd")
@@ -451,7 +452,7 @@ func show_credits():
 func base_model(b: Dictionary, buildings: Array, fill=0.5) -> Node3D:
 	if b.id=="wall":return art.wall(Walls.mask(buildings,Walls.cell(b)),int(b.get("rotation",0)),int(b.level))
 	return art.building(b.id,int(b.level),fill)
-func cell_pos(x: float,y: float) -> Vector3:return Vector3((x-7.5)*3,0,(y-7.5)*3)
+func cell_pos(x: float,y: float) -> Vector3:return Iso.world_cell(x,y)
 func draw_terrain(kind: String):
 	map_drawn=kind;clear(terrain)
 	art.landscape(terrain,kind=="mountain")
@@ -555,7 +556,7 @@ func start_home_defense(report: Dictionary):
 			defense_nodes.append({"node":node,"start":cell_pos(4+i*0.5,14),"target":cell_pos(4+(i%8)*0.8,11.2+(i/8)*0.65+kind*0.3),"phase":i,"kind":kind})
 	message("สำนักถูกบุกรุก! นักรบ 50% ออกป้องกันฐาน")
 func position_camera():
-	camera.position=pivot+Vector3(40,32.66,40);camera.look_at(pivot)
+	Iso.place_camera(camera,pivot)
 func zoom(amount: float):camera.size=clampf(camera.size+amount,18,80)
 func world_area(pos: Vector2) -> bool:
 	if is_instance_valid(base_actions) and base_actions.visible and base_actions.get_global_rect().has_point(pos):return false

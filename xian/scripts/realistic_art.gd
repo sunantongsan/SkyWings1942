@@ -1,4 +1,5 @@
 extends RefCounted
+const Iso=preload("res://scripts/iso_layout.gd")
 const Troops=preload("res://scripts/troops.gd")
 # Prerendered artwork uses the game's fixed isometric view. Gameplay, collision,
 # storage amounts and targeting remain independent of these visual nodes.
@@ -57,6 +58,7 @@ func ground_sprite(visual: Sprite3D, key: String, depth: float=0.22):
 		ground_anchors[key]=float(used.end.y)-visual.texture.get_height()*0.5-used.size.x*depth
 	visual.offset.y=ground_anchors[key]
 	visual.position.y=0.025
+	visual.material_override=Iso.sprite_depth_material(visual)
 
 func character(kind: int, armed: bool) -> Node3D:
 	var root=Node3D.new();root.set_meta("realistic_art",true)

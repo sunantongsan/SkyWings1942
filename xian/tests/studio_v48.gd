@@ -9,7 +9,7 @@ func run():
   var viewport=SubViewport.new();viewport.size=Vector2i(192,192);viewport.transparent_bg=true;viewport.own_world_3d=true;viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS;root.add_child(viewport)
   var model=art.building(kind,1,0.5);viewport.add_child(model)
   var bounds=art.model_bounds(model);var target=Vector3(0,bounds.end.y*0.45,0)
-  var camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=maxf(3.8,maxf(bounds.size.x,bounds.size.z)*1.55);viewport.add_child(camera);camera.position=target+Vector3(40,32.66,40);camera.look_at(target);camera.make_current()
+  var camera=Camera3D.new();camera.projection=Camera3D.PROJECTION_ORTHOGONAL;camera.size=maxf(3.8,maxf(bounds.size.x,bounds.size.z)*1.55);viewport.add_child(camera);load("res://scripts/iso_layout.gd").place_camera(camera,target);camera.make_current()
   var sun=DirectionalLight3D.new();sun.rotation_degrees=Vector3(-55,-35,0);sun.light_energy=0.95;viewport.add_child(sun)
   var env=WorldEnvironment.new();env.environment=Environment.new();env.environment.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR;env.environment.ambient_light_color=Color("d3dfdb");env.environment.ambient_light_energy=0.65;viewport.add_child(env)
   for i in range(3):await process_frame
@@ -30,21 +30,21 @@ func run():
  scene.draw_base();scene.update_top();scene.show_side();scene.camera.size=33
  for i in range(12):await process_frame
  await RenderingServer.frame_post_draw
- root.get_texture().get_image().save_png("res://build/review/v049-village.png")
+ root.get_texture().get_image().save_png("res://build/review/v050-village.png")
  scene.selected=0;scene.show_side()
  for i in range(5):await process_frame
  await RenderingServer.frame_post_draw
- root.get_texture().get_image().save_png("res://build/review/v049-building.png")
+ root.get_texture().get_image().save_png("res://build/review/v050-building.png")
  scene.mode="build";scene.show_side()
  for i in range(5):await process_frame
  await RenderingServer.frame_post_draw
- root.get_texture().get_image().save_png("res://build/review/v049-build-menu.png")
+ root.get_texture().get_image().save_png("res://build/review/v050-build-menu.png")
  scene.mode="manage";scene.show_side()
  for i in range(5):await process_frame
  await RenderingServer.frame_post_draw
- root.get_texture().get_image().save_png("res://build/review/v049-manage.png")
+ root.get_texture().get_image().save_png("res://build/review/v050-manage.png")
  scene.show_settings()
  for i in range(4):await process_frame
  await RenderingServer.frame_post_draw
- root.get_texture().get_image().save_png("res://build/review/v049-settings.png")
- print("XIAN_STUDIO_V49_PASSED");quit()
+ root.get_texture().get_image().save_png("res://build/review/v050-settings.png")
+ print("XIAN_STUDIO_V50_PASSED");quit()

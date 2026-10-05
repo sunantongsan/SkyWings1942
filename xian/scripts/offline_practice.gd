@@ -1,4 +1,5 @@
 extends Node3D
+const Iso=preload("res://scripts/iso_layout.gd")
 const Troops=preload("res://scripts/troops.gd")
 signal closed
 const Sim=preload("res://scripts/practice_sim.gd")
@@ -79,7 +80,7 @@ func text(parent: Node, value: String, size=18) -> Label:
 	var l=Label.new();l.text=value;l.add_theme_font_size_override("font_size",size);l.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART;parent.add_child(l);return l
 func button(parent: Node, value: String, callback: Callable) -> Button:
 	var b=Button.new();b.text=value;b.custom_minimum_size.y=44;b.pressed.connect(callback);parent.add_child(b);return b
-func world_pos(p: Vector2, height=0.0) -> Vector3:return Vector3((p.x-7.5)*3,height,(p.y-7.5)*3)
+func world_pos(p: Vector2, height=0.0) -> Vector3:return Iso.world_cell(p.x,p.y,height)
 func start_level(value: int):
 	level=value;result_shown=false;accumulator=0;sim.setup(level);wall_revision=-1;pivot=Vector3.ZERO;position_camera()
 	for child in battlefield.get_children():
@@ -123,7 +124,7 @@ func place_at(screen: Vector2):
 	hint.text="★ ทำลายสำนักหลัก  •  ★ ทำลาย 50%  •  ★ ทำลายทั้งหมด"
 	refresh_hud()
 func position_camera():
-	camera.position=pivot+Vector3(40,32.66,40);camera.look_at(pivot)
+	Iso.place_camera(camera,pivot)
 func pan(relative: Vector2):
 	pivot+=Vector3(-relative.x-relative.y,0,relative.x-relative.y)*camera.size/1400.0
 	pivot.x=clampf(pivot.x,-22,22);pivot.z=clampf(pivot.z,-22,22);position_camera()
