@@ -178,7 +178,11 @@ func receive(payload: Dictionary):
 	catalog=payload.get("catalog",[])
 	checkin_available=payload.get("checkin_available",false);gift_claiming=false
 	for item in catalog:
-		if item.id=="kitchen":item.name="โรงเตี๊ยม"
+		if item.id=="kitchen":item.name="โรงเตี๊ยมไก่ย่าง"
+		if item.id=="granary":item.name="กล่องข้าวตามสั่ง"
+		if item.id=="spring":item.name="หม้อหุงโอสถ"
+		if item.id=="ward":item.name="หอกระจายข่าว"
+		if item.id=="tower":item.name="บันไดหนังสติ๊ก"
 	if payload.get("needs_create",false):show_create();return
 	state=payload.get("state",{});caps=payload.get("capacity",{})
 	if mode in ["login","create"]:close_modal();mode="home"
@@ -609,6 +613,11 @@ func _process(delta):
 	if battle_visual and state.has("raid"):
 		var progress=clampf((now_time()-float(state.raid.start))/25.0,0,1)
 		update_raid_destruction(progress,float(state.raid.get("ratio",0)))
+		for defense in battle_buildings:
+			if defense.kind in ["ward","tower"] and not defense.destroyed and progress>0.3 and progress<1 and time>defense.get("next_wave",0):
+				if defense.kind=="ward":art.sound_wave(world,defense.node.position,12.6)
+				elif not battle_nodes.is_empty():art.slingshot_fx(world,defense.node.position+Vector3(0,2.8,0),battle_nodes[0].node.position+Vector3(0,0.7,0))
+				defense.next_wave=time+(1.8 if defense.kind=="ward" else 1.0)
 		for unit in battle_nodes:
 			var node=unit.node
 			node.position=unit.start.lerp(unit.target,clampf(progress*3,0,1))
