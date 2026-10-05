@@ -180,7 +180,8 @@ func building_base(kind: String, level: int, fill = 0.5) -> Node3D:
 	if kind=="crystal":return pill_pouch(level,fill)
 	if kind=="barracks":return barracks(level)
 	if kind=="kitchen":return inn(clampi(level,1,10))
-	if kind=="granary":return food_bag(clampi(level,1,10),fill)
+	if kind=="granary":return rice_tiffin(clampi(level,1,10),fill)
+	if kind=="servant":return builder_shed()
 	if kind=="well":return hand_pump(clampi(level,1,10))
 	if kind=="tank":return water_bottle(clampi(level,1,10),fill)
 	if kind=="tower":return resource_building(kind,level,fill)
@@ -482,7 +483,7 @@ func evolve(root: Node3D, kind: String, level: int):
 	# Every level changes silhouette, masonry height and an additive detail;
 	# higher tiers add buttresses, gables, lanterns and a jade/gold crown.
 	var lv=clampi(level,1,10);root.set_meta("visual_level",lv)
-	if kind in ["kitchen","granary","well","tank","spring"]:return
+	if kind in ["kitchen","granary","well","tank","spring","servant"]:return
 	if lv==1:return
 	var colors=["836d50","9d7956","a58758","547c72","3f898a","447f98","596ea8","896baf","ae814f","d4b269"]
 	var accent=colors[lv-1];var span=5.7 if kind=="training" else 2.68
@@ -554,27 +555,54 @@ func inn(level: int) -> Node3D:
 	var sign=Label3D.new();sign.text="เตี๊ยม";sign.font=load("res://assets/NotoSansThai.ttf");sign.font_size=36;sign.pixel_size=0.005;sign.position=Vector3(0,0.9,1.22);sign.modulate=Color("f3d394");root.add_child(sign)
 	for x in [-1,1]:lantern(root,Vector3(x*1.17,0,1.05),0.45)
 	root.set_meta("floors",level);return root
-func food_bag(level: int, fill: float) -> Node3D:
-	var root=new_original();var k=0.78+level*0.035;var tint=level_color(level)
-	box(root,Vector3(0,0.08,0),Vector3(2.8,0.16,2.7),"a7a58c")
-	var bag=Node3D.new();root.add_child(bag);bag.scale=Vector3.ONE*k
-	var shell=orb(bag,Vector3(0,1.12,0),Vector3(2.0,1.85,1.55),tint)
-	shell.name="ClearFoodBag";shell.material_override=clear_material(Color(tint).lightened(0.55).to_html(false),0.3);shell.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	for x in [-1,1]:
-		var handle=ring(bag,Vector3(x*0.62,2.24,0),0.37,0.065,tint);handle.rotation.x=PI/2;handle.scale=Vector3(0.8,1,1.3)
-		for z in [-0.78,0.78]:beam(bag,Vector3(x,0.2,z),Vector3(x,2.0,z),0.025,tint)
-	for y in [0.4,1.2,1.75]:
-		var seam=ring(bag,Vector3(0,y,0),0.8 if y!=1.2 else 0.98,0.015,tint);seam.scale.z=0.78
+func rice_tiffin(level: int, fill: float) -> Node3D:
+	var root=new_original();var tint=level_color(level);var amount=clampf(fill,0,1)
+	box(root,Vector3(0,0.08,0),Vector3(2.7,0.16,2.7),"98a999")
+	var glass=clear_material("d9f0e5",0.25)
+	var portions=ceili(amount*level*18);root.set_meta("food_count",portions);root.set_meta("storage_fill",amount);root.set_meta("tiers",level)
 	for i in range(level):
-		var flower=orb(bag,Vector3(-0.85+i*0.18,0.42,0.79),Vector3(0.1,0.1,0.02),tint)
-		flower.rotation.z=i*0.5
-	var count=ceili(clampf(fill,0,1)*24);root.set_meta("food_count",count);root.set_meta("storage_fill",clampf(fill,0,1))
-	for i in range(count):
-		var p=Vector3((i%3-1)*0.54,0.39+floori(i/6.0)*0.38,(-0.37 if i%6<3 else 0.37))
-		var color=["e8d6a2","de7950","78ad60","d8ae57"][i%4]
-		orb(bag,p,Vector3(0.46,0.32,0.42),color)
-		if i%4==1:cone(bag,p+Vector3(0,0.2,0),0.1,0,0.16,"648e4c",5)
-		if i%4==0:box(bag,p+Vector3(0,0.16,0),Vector3(0.22,0.025,0.035),"b4936b")
+		var y=0.25+i*0.38
+		cone(root,Vector3(0,y,0),0.85,0.85,0.065,tint,20)
+		var bowl=cone(root,Vector3(0,y+0.17,0),0.83,0.85,0.29,"d9f0e5",20)
+		bowl.name="ClearRiceTier"+str(i);bowl.material_override=glass;bowl.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ring(root,Vector3(0,y+0.31,0),0.85,0.03,tint)
+		var layer_fill=clampf(amount*level-i,0,1)
+		if layer_fill>0:
+			cone(root,Vector3(0,y+0.045+layer_fill*0.1,0),0.75,0.75,layer_fill*0.2,"fff1ce",20)
+			for grain in range(ceili(layer_fill*18)):
+				var a=grain*2.4;var radius=0.14+0.55*sqrt(float(grain)/18)
+				orb(root,Vector3(cos(a)*radius,y+0.08+layer_fill*0.2,sin(a)*radius),Vector3(0.16,0.045,0.065),"fff9df").rotation.y=a
+		for ornament in range(2+level):
+			var a=ornament*TAU/(2+level)
+			orb(root,Vector3(cos(a)*0.854,y+0.14,sin(a)*0.854),Vector3(0.045,0.08,0.045),"efd798")
+	var top=0.25+level*0.38
+	cone(root,Vector3(0,top,0),0.88,0.7,0.12,tint,20)
+	for side in [-1,1]:
+		beam(root,Vector3(side*0.92,0.24,0),Vector3(side*0.92,top+0.43,0),0.075,tint)
+	beam(root,Vector3(-0.92,top+0.43,0),Vector3(0.92,top+0.43,0),0.1,"d5b779")
+	if amount>0:
+		var steam=motion(root,"smoke");steam.position=Vector3(0.23,top+0.1,0.2)
+		for i in range(4):
+			var puff=orb(steam,Vector3.ZERO,Vector3.ONE*0.13,"f2f1dd");puff.material_override=clear_material("f2f1dd",0.24);puff.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return root
+func builder_shed() -> Node3D:
+	var root=new_original();root.set_meta("fixed_level",true)
+	box(root,Vector3(0,0.08,0),Vector3(2.7,0.16,2.7),"928b74")
+	for x in [-1.02,1.02]:
+		for z in [-0.8,0.82]:box(root,Vector3(x,0.91,z),Vector3(0.1,1.7,0.1),"856344")
+	box(root,Vector3(0,0.9,-0.87),Vector3(2.1,1.55,0.045),"9aa7a6")
+	box(root,Vector3(-1.07,0.9,0),Vector3(0.04,1.55,1.72),"879795")
+	for i in range(13):
+		var x=-1.22+i*0.2
+		box(root,Vector3(x,1.91,0),Vector3(0.19,0.06,2.15),"9ea9a7" if i%3 else "a78869").rotation.x=-0.13
+		box(root,Vector3(x,1.95,0),Vector3(0.035,0.06,2.15),"bcc6bb").rotation.x=-0.13
+	for i in range(11):box(root,Vector3(-1+i*0.2,0.9,-0.82),Vector3(0.035,1.5,0.04),"bdc1ad")
+	box(root,Vector3(0.15,0.69,0.54),Vector3(1.6,0.12,0.58),"b2915a")
+	for x in [-0.48,0.72]:box(root,Vector3(x,0.37,0.54),Vector3(0.1,0.63,0.45),"795d3d")
+	for i in range(3):box(root,Vector3(0.38+i*0.1,0.81,0.58),Vector3(0.065,0.07,0.55),"dcc18a")
+	box(root,Vector3(-0.5,0.85,0.56),Vector3(0.09,0.08,0.47),"825535")
+	box(root,Vector3(-0.5,0.89,0.36),Vector3(0.35,0.13,0.13),"697575")
+	cone(root,Vector3(0.76,0.3,-0.45),0.23,0.28,0.45,"a57d52",10)
 	return root
 func water_bottle(level: int, fill: float) -> Node3D:
 	var root=new_original();var k=0.76+level*0.045;var tint=level_color(level)
@@ -636,3 +664,22 @@ func scaffold_worker(parent: Node3D, span: float):
 	for i in range(9):cone(tool,Vector3(-0.15+i*0.066,0.7,0.49),0.035,0,0.07,"c8d6d8",3).rotation.z=PI
 	box(tool,Vector3(-0.25,0.83,0.49),Vector3(0.16,0.18,0.07),"825131")
 	for x in [-0.18,0.18]:beam(tool,Vector3(x,0.74,0.05),Vector3(x-0.1,0.84,0.49),0.1,"e7bd91")
+
+func ruins(parent: Node3D, pos: Vector3, kind: String="hall", width: int=1) -> Node3D:
+	var root=new_original();root.name="Ruins";root.set_meta("ruins",true);root.position=pos;parent.add_child(root)
+	var span=2.4 if width==1 else 5.3
+	box(root,Vector3(0,0.08,0),Vector3(span,0.16,span),"4b4b43")
+	for i in range(9 if kind!="wall" else 5):
+		var a=i*2.4;var radius=span*(0.13+0.025*i)
+		var chunk=box(root,Vector3(cos(a)*radius,0.21+(i%3)*0.08,sin(a)*radius),Vector3(0.32+(i%2)*0.3,0.3,0.35),"8c8b7c" if i%2 else "605d50")
+		chunk.rotation=Vector3(0.12*i,a,0.16*(i%3))
+	if kind!="wall":
+		for side in [-1,1]:
+			beam(root,Vector3(side*span*0.34,0.1,-0.5),Vector3(side*0.2,0.45,0.7),0.15,"483e31")
+			box(root,Vector3(side*0.5,0.3,-0.35),Vector3(0.85,0.08,0.6),"526c62").rotation.z=side*0.35
+	var smoke=motion(root,"embers");smoke.position.y=0.3
+	for i in range(2 if kind=="wall" else 5):
+		var puff=orb(smoke,Vector3.ZERO,Vector3.ONE*0.3,"7d817b");puff.material_override=clear_material("7d817b",0.24);puff.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var fire=motion(root,"fire")
+	for i in range(2):cone(fire,Vector3(-0.3+i*0.6,0.25,0.1),0.09,0.01,0.24,"d99a50",6)
+	batch_static(root);return root

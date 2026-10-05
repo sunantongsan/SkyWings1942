@@ -21,6 +21,9 @@ jobs:
         with:
           packages: platform-tools
       - name: Install engine and Android templates
+        env:
+          XIAN_ADMOB_APP_ID: ${{ vars.XIAN_ADMOB_APP_ID || 'ca-app-pub-3940256099942544~3347511713' }}
+          XIAN_ADMOB_INTERSTITIAL_ID: ${{ vars.XIAN_ADMOB_INTERSTITIAL_ID || 'ca-app-pub-3940256099942544/1033173712' }}
         run: |
           wget -q https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -O /tmp/godot.zip
           unzip -q /tmp/godot.zip -d /tmp/godot
@@ -66,6 +69,9 @@ jobs:
           grep -q XIAN_PRACTICE_TOUCH_PASSED practice-touch.log
           godot --headless --path xian --script res://tests/practice.gd 2>&1 | tee practice.log
           grep -q XIAN_OFFLINE_PRACTICE_PASSED practice.log
+          godot --headless --path xian --script res://tests/gifts_builders.gd 2>&1 | tee gifts.log
+          grep -q XIAN_GIFTS_BUILDERS_PASSED gifts.log
+          if grep -E 'SCRIPT ERROR|Parse Error' gifts.log; then exit 1; fi
           godot --headless --path xian --script res://tests/building_levels.gd 2>&1 | tee levels.log
           grep -q XIAN_BUILDING_LEVELS_PASSED levels.log
           if grep -E 'SCRIPT ERROR|Parse Error' levels.log walls.log; then exit 1; fi

@@ -8,10 +8,13 @@ import android.content.*;
 import android.widget.*;
 import java.util.*;
 import com.godot.game.R;
-/** Embedded original GhostMatch3 gameplay. Ad providers are disabled in this host. */
+/** Embedded GhostMatch3 with account rewards and ads between levels. */
 public class GhostMatchActivity extends Activity {
  String profileId="local";
  private GhostGameView gameView;
+ private GhostRewards rewards;
+ private GhostAds ads;
+ private TextView rewardLabel;
  @Override public void onCreate(Bundle state){
   super.onCreate(state);
   String id=getIntent().getStringExtra("profile");
@@ -21,14 +24,18 @@ public class GhostMatchActivity extends Activity {
   LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setBackgroundColor(Color.rgb(18,10,46));
   Button back=new Button(this);back.setText("กลับสำนัก  •  Xian of Clans");back.setOnClickListener(v->finish());
   layout.addView(back,new LinearLayout.LayoutParams(-1,(int)(48*getResources().getDisplayMetrics().density)));
+  rewardLabel=new TextView(this);rewardLabel.setText("ผ่านด่านรับ 2 หยก • โฆษณาทุก 2 ด่าน");rewardLabel.setTextColor(Color.WHITE);rewardLabel.setGravity(Gravity.CENTER);layout.addView(rewardLabel);
+  rewards=new GhostRewards(this,getIntent().getStringExtra("token"));ads=new GhostAds(this);
   gameView=new GhostGameView(this);layout.addView(gameView,new LinearLayout.LayoutParams(-1,0,1));setContentView(layout);
  }
- boolean needsPrivacyOptions(){return false;}
- void openPrivacyOptions(){}
+ boolean needsPrivacyOptions(){return ads!=null&&ads.needsPrivacy();}
+ void openPrivacyOptions(){if(ads!=null)ads.privacy();}
  void showRewardedMoves(Runnable earned,Runnable unavailable){unavailable.run();}
- void onLevelCompleted(int level){}
- void showAdBeforeNextLevel(Runnable next){next.run();}
- @Override protected void onDestroy(){if(gameView!=null)gameView.dispose();super.onDestroy();}
+ void onLevelCompleted(int level){rewardStatus("ผ่านด่านแล้ว • กำลังส่ง 2 หยกเข้าสำนัก");rewards.win(level);ads.completed();}
+ void onLevelStarted(int level){rewards.begin(level);}
+ void rewardStatus(String message){runOnUiThread(()->{if(!isFinishing()&&rewardLabel!=null)rewardLabel.setText(message);});}
+ void showAdBeforeNextLevel(Runnable next){ads.betweenLevels(next);}
+ @Override protected void onDestroy(){if(gameView!=null)gameView.dispose();if(rewards!=null)rewards.close();if(ads!=null)ads.close();super.onDestroy();}
 }
 
 class GhostGameView extends View {
@@ -115,6 +122,7 @@ class GhostGameView extends View {
     }
 
     private void newLevel(){
+        if(!worldMap)((GhostMatchActivity)getContext()).onLevelStarted(level);
         animationSerial++;animationPhase=0;exploding.clear();castPoints.clear();powerMultiplier=1;
         for(float[] row:fallFrom)Arrays.fill(row,0);
         configureLayout();
@@ -308,7 +316,7 @@ class GhostGameView extends View {
             if(dx*dx+dy*dy<w*w*.008f){
                 if(stage>highestLevel){message("ประตูนี้ยังล็อกอยู่ ผ่านด่านก่อนหน้าให้สำเร็จก่อน");return;}
                 level=stage;tutorialStage=level==1&&!progress.getBoolean("tutorial_complete",false)?0:-1;
-                worldMap=false;newLevel();missionBrief=level>1;invalidate();return;
+                ((GhostMatchActivity)getContext()).showAdBeforeNextLevel(()->{worldMap=false;newLevel();missionBrief=level>1;invalidate();});return;
             }
         }
     }

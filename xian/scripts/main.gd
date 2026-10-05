@@ -16,6 +16,11 @@ var ui: Control
 var side: VBoxContainer
 var toast: Label
 var top: Label
+var resource_labels: Dictionary={}
+var gift_button: Button
+var gift_glow: StyleBoxFlat
+var checkin_available=false
+var gift_claiming=false
 var clock_label: Label
 var modal: PanelContainer
 var mode = "login"
@@ -40,6 +45,7 @@ var last_buildings = ""
 var map_drawn = ""
 var battle_visual = false
 var battle_nodes: Array = []
+var battle_buildings: Array=[]
 var auth_status: Label
 var auth_controls: Array[Control] = []
 var auth_signup = false
@@ -70,7 +76,10 @@ func _ready():
 	Engine.max_fps = 30
 	api = API.new(); add_child(api)
 	api.updated.connect(receive)
-	api.failed.connect(message)
+	api.failed.connect(func(error):
+		gift_claiming=false;message(error)
+		if mode=="jade" and is_instance_valid(modal):show_gifts()
+	)
 	api.auth_notice.connect(message)
 	api.auth_working.connect(auth_loading)
 	api.authenticated.connect(func(): message("เชื่อมต่อแล้ว กำลังเปิดสำนัก…"))
@@ -86,7 +95,15 @@ func _ready():
 	var layer=CanvasLayer.new(); add_child(layer)
 	ui=Control.new();ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT);ui.mouse_filter=Control.MOUSE_FILTER_IGNORE;layer.add_child(ui)
 	ui.theme=VisualStyle.theme()
-	var header=panel(Vector2(16,12),Vector2(1248,66));top=label(header,"XIAN OF CLANS   •   เซียน ออฟ แคลน",24)
+	var header=panel(Vector2(16,12),Vector2(1248,66));var resources=HBoxContainer.new();header.add_child(resources)
+	top=label(resources,"เซียน ออฟ แคลน",20);top.custom_minimum_size.x=220
+	for pair in [["water","น้ำ"],["rice","ข้าว"],["stone","โอสถ"],["jade","หยก"]]:
+		var group=HBoxContainer.new();group.custom_minimum_size.x=225;resources.add_child(group)
+		var icon=TextureRect.new();icon.texture=load("res://assets/ui/"+pair[0]+".svg");icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.custom_minimum_size=Vector2(42,38);group.add_child(icon)
+		resource_labels[pair[0]]=label(group,pair[1]+" • —",17)
+	gift_button=button(ui,"ของขวัญ",navigate.bind("jade"));gift_button.position=Vector2(24,112);gift_button.size=Vector2(128,76)
+	gift_glow=VisualStyle.panel();gift_glow.bg_color=Color("376a63");gift_glow.border_color=Color("ffe39a");gift_glow.shadow_color=Color(1,0.76,0.28,0.5);gift_glow.shadow_size=12;gift_button.add_theme_stylebox_override("normal",gift_glow)
+	gift_button.icon=load("res://assets/ui/gift.svg");gift_button.expand_icon=true;gift_button.add_theme_constant_override("icon_max_width",50);gift_button.visible=false
 	var sidebar=panel(Vector2(960,92),Vector2(304,530))
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
@@ -159,6 +176,7 @@ func show_create():
 func receive(payload: Dictionary):
 	server_time=float(payload.get("server_time",0));since_sync=0
 	catalog=payload.get("catalog",[])
+	checkin_available=payload.get("checkin_available",false);gift_claiming=false
 	for item in catalog:
 		if item.id=="kitchen":item.name="โรงเตี๊ยม"
 	if payload.get("needs_create",false):show_create();return
@@ -173,11 +191,17 @@ func receive(payload: Dictionary):
 	elif battle_visual and (mode!="raid" or not state.has("raid")):battle_visual=false;draw_base()
 	update_top();show_side()
 	if mode=="match":show_match()
+	if mode=="jade" and is_instance_valid(modal):show_gifts()
 	message("บันทึกออนไลน์แล้ว")
 func now_time() -> float:return server_time+since_sync
 func update_top():
 	if state.is_empty():return
-	top.text="%s  |  น้ำ %d/%d   ข้าว %d/%d   โอสถ %d/%d   หยก %d" % [state.name,int(state.water),int(caps.get("water",1000)),int(state.rice),int(caps.get("rice",1000)),int(state.stone),int(caps.get("stone",100)),int(state.jade)]
+	top.text=str(state.get("name","สำนักของคุณ"))
+	for pair in [["water","น้ำ"],["rice","ข้าว"],["stone","โอสถ"],["jade","หยก"]]:
+		var value=int(state.get(pair[0],0))
+		resource_labels[pair[0]].text=("%s\n%d" % [pair[1],value]) if pair[0]=="jade" else ("%s\n%d / %d" % [pair[1],value,int(caps.get(pair[0],1000))])
+	gift_button.visible=not battle_visual
+
 func open_practice():
 	if is_instance_valid(practice):return
 	clear_preview();fingers.clear();pinching=false;menu_touch=-1
@@ -194,6 +218,7 @@ func navigate(target: String):
 	if battle_visual and target!="raid":battle_visual=false;draw_base()
 	mode=target;chosen_build="";moving=false;wall_group.clear();clear_preview();close_modal()
 	if target=="match":show_match()
+	elif target=="jade":show_side();show_gifts()
 	elif target=="raid" and not state.has("raid"):api.action("scout")
 	elif target=="raid" and state.has("raid"):draw_battle();show_side()
 	else:show_side()
@@ -213,7 +238,10 @@ func show_side():
 				button(side,"หมุนแนวลาก 90°",func():wall_axis=1 if wall_axis<=0 else 0;clear_preview();message("แนวตั้ง" if wall_axis==1 else "แนวนอน"))
 				button(side,"ลากได้ทั้งสองแนว",func():wall_axis=-1;clear_preview())
 			for c in catalog:
-				var card=button(side,"%s\nน้ำ %d ข้าว %d\nโอสถ %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds],choose_build.bind(c.id))
+				var caption="%s\nน้ำ %d ข้าว %d\nโอสถ %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds]
+				if c.id=="servant":caption="เพิงช่าง • %d / 7 หลัง\n%s\nสร้างเสร็จทันที • ไม่อัปเกรด" % [builder_count(),"ครบแล้ว" if builder_count()>=7 else ("ฟรี" if builder_price()==0 else "%d หยก" % builder_price())]
+				var card=button(side,caption,choose_build.bind(c.id))
+				if c.id=="servant":card.disabled=builder_count()>=7 or int(state.get("jade",0))<builder_price()
 				card.icon=building_icon(c.id);card.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;card.expand_icon=true;card.add_theme_constant_override("icon_max_width",76);card.custom_minimum_size=Vector2(272,100)
 				build_cards.append({"node":card,"kind":c.id})
 		"train":
@@ -233,10 +261,9 @@ func show_side():
 			label(side,"ฝึกปราณ: สำนัก 2 / หอฝึก 2\nสัตว์เทวะ: สำนัก 3 / หอฝึก 3",15)
 		"jade":
 			label(side,"หยกเซียน",26)
-			label(side,"เช็กอิน +5 หยก\nสะสมครบ 7 ครั้ง รับ +20")
-			button(side,"รับรางวัลเช็กอิน",send.bind("checkin",{}))
+			button(side,"เปิดของขวัญ / เช็คอิน",show_gifts)
 			for pair in [["น้ำ 250","water"],["ข้าว 250","rice"],["โอสถเซียน 25","stone"]]:button(side,"5 หยก → "+pair[0],send.bind("exchange",{"resource":pair[1]}))
-			label(side,"หยกถูกปล้นไม่ได้\nยังไม่เปิดขายเงินจริง",16)
+			label(side,"หยกถูกปล้นไม่ได้\nใช้สร้างเพิงช่างและเร่งงาน",16)
 		"raid":show_raid()
 		_:
 			if selected>=0 and selected<state.buildings.size():
@@ -257,6 +284,8 @@ func show_side():
 				clock_label=label(side,remaining(b.finish))
 				if float(b.finish)>now_time():
 					button(side,"เสร็จทันที • %d หยก" % ceili((float(b.finish)-now_time())/300),send.bind("boost",{"index":selected}))
+				elif b.id=="servant":
+					label(side,"ช่าง 1 คนต่อหลัง • ไม่อัปเกรด\nสร้างเพิ่มด้วยหยกได้สูงสุด 7 หลัง",16)
 				else:
 					label(side,"อัปเกรด: น้ำ %d / ข้าว %d / โอสถ %d" % [int(c.water*pow(2,b.level)),int(c.rice*pow(2,b.level)),int(c.stone*pow(2,b.level))],16)
 					button(side,"อัปเกรด",send.bind("upgrade",{"index":selected}))
@@ -266,7 +295,7 @@ func show_side():
 				button(side,"ย้ายอาคาร",func():moving=true;wall_group.clear();clear_preview();message("ลากบนพื้นไปยังช่องสีเขียว แล้วปล่อยเพื่อย้าย"))
 			else:
 				label(side,"สำนักของคุณ",27)
-				label(side,"1. สร้างบ่อน้ำและโรงอาหาร\n2. สร้างโกดังเพิ่มความจุ\n3. รับศิษย์และบุกสำนัก\n4. เล่นจับคู่ระหว่างรอ",20)
+				label(side,"1. สร้างบ่อน้ำและโรงเตี๊ยม\n2. สร้างโกดังเพิ่มความจุ\n3. รับศิษย์และบุกสำนัก\n4. เล่นจับคู่ระหว่างรอ",20)
 				label(side,"แตะอาคารเพื่อดู / อัปเกรด\nลากพื้นเพื่อเลื่อนมุมมอง",16)
 			if state.has("last_defense"):
 				var d=state.last_defense
@@ -318,7 +347,7 @@ func show_raid():
 func show_match():
 	mode="home"
 	if Engine.has_singleton("XianAuth"):
-		Engine.get_singleton("XianAuth").open_ghost_match(api.user_id)
+		Engine.get_singleton("XianAuth").open_ghost_match(api.user_id,api.token)
 	else:
 		var box=modal_box()
 		label(box,"Ghost Match3",30)
@@ -379,6 +408,7 @@ func position_camera():
 	camera.position=pivot+Vector3(40,48,40);camera.look_at(pivot)
 func zoom(amount: float):camera.size=clampf(camera.size+amount,18,80)
 func world_area(pos: Vector2) -> bool:
+	if is_instance_valid(gift_button) and gift_button.visible and gift_button.get_global_rect().has_point(pos):return false
 	return Rect2(0,82,950,500).has_point(pos)
 func clear_preview():
 	if is_instance_valid(preview):preview.queue_free()
@@ -574,8 +604,11 @@ func _process(delta):
 	since_sync+=delta;poll+=delta
 	if poll>12 and not state.is_empty() and not api.busy and mode!="match":poll=0;api.action("sync")
 	var time=Time.get_ticks_msec()/1000.0
+	if gift_glow!=null:gift_glow.shadow_color=Color(1,0.76,0.28,0.4+0.2*sin(time*3) if checkin_available else 0.12)
+	if is_instance_valid(gift_button):gift_button.self_modulate=Color(1,0.9+0.1*sin(time*3),0.73+0.27*sin(time*3),1) if checkin_available else Color.WHITE
 	if battle_visual and state.has("raid"):
 		var progress=clampf((now_time()-float(state.raid.start))/25.0,0,1)
+		update_raid_destruction(progress,float(state.raid.get("ratio",0)))
 		for unit in battle_nodes:
 			var node=unit.node
 			node.position=unit.start.lerp(unit.target,clampf(progress*3,0,1))
@@ -599,7 +632,7 @@ func _process(delta):
 		elif mode=="home" and selected>=0 and selected<state.buildings.size():clock_label.text=remaining(state.buildings[selected].finish)
 
 func draw_battle():
-	battle_visual=true;clear(world);actors=[];battle_nodes=[]
+	battle_visual=true;clear(world);actors=[];battle_nodes=[];battle_buildings=[]
 	pivot=Vector3.ZERO;position_camera()
 	var enemy=state.raid.enemy
 	var buildings=enemy.get("buildings",[
@@ -608,6 +641,7 @@ func draw_battle():
 		{"id":"crystal","x":9,"y":6,"level":1},{"id":"tank","x":8,"y":6,"level":1}])
 	for b in buildings:
 		var model=base_model(b,buildings,float(enemy.get("pill_fill",0.65)));model.position=building_position(b);world.add_child(model)
+		battle_buildings.append({"node":model,"kind":b.id,"width":footprint(b),"destroyed":false})
 		if b.id=="training" and footprint(b)==1:model.scale=Vector3(0.49,1,0.49)
 	for kind in range(3):
 		for i in range(mini(20,int(state.raid.army[kind]))):
@@ -620,3 +654,44 @@ func draw_battle():
 func _notification(what):
 	if is_instance_valid(practice):return
 	if what==NOTIFICATION_APPLICATION_RESUMED and is_instance_valid(api) and not state.is_empty() and not api.busy:api.action("sync")
+
+func update_raid_destruction(progress: float, ratio: float):
+	var count=floori(battle_buildings.size()*clampf(ratio,0,1))
+	for i in range(count):
+		var target=battle_buildings[i]
+		if target.destroyed or progress<0.36+0.63*float(i+1)/maxi(1,count):continue
+		target.destroyed=true;target.node.hide()
+		art.ruins(world,target.node.position,target.kind,target.width)
+
+func builder_count() -> int:
+	return state.get("buildings",[]).filter(func(b):return b.id=="servant").size()
+func builder_price() -> int:
+	var prices=find_catalog("servant").get("jade_prices",[0,250,500,1000,2000,3500,5000])
+	return int(prices[mini(6,builder_count())])
+func show_gifts():
+	clear_preview();fingers.clear();menu_touch=-1
+	var box=modal_box(Vector2(200,100),Vector2(850,480))
+	var title=HBoxContainer.new();box.add_child(title)
+	var picture=TextureRect.new();picture.texture=load("res://assets/ui/gift.svg");picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;picture.custom_minimum_size=Vector2(56,56);title.add_child(picture)
+	label(title,"ของขวัญประจำวัน",28)
+	label(box,"เช็คอินวันละครั้ง • สะสมครบ 7 ครั้งรับรางวัลใหญ่",18)
+	var grid=GridContainer.new();grid.columns=7;box.add_child(grid)
+	var count=int(state.get("checkin_count",0));var completed=count%7
+	if completed==0 and count>0 and not checkin_available:completed=7
+	for day in range(7):
+		var card=PanelContainer.new();card.custom_minimum_size=Vector2(110,124);grid.add_child(card)
+		var style=VisualStyle.panel();style.set_content_margin_all(7);style.border_color=Color("f6d680" if day==completed and checkin_available else "729a83");card.add_theme_stylebox_override("panel",style)
+		var column=VBoxContainer.new();card.add_child(column)
+		label(column,"วันที่ %d" % (day+1),17)
+		var icon=TextureRect.new();icon.texture=load("res://assets/ui/jade.svg");icon.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;icon.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;icon.custom_minimum_size=Vector2(40,34);column.add_child(icon)
+		label(column,"%d หยก" % (20 if day==6 else 5),18)
+		label(column,"รับแล้ว ✓" if day<completed else ("วันนี้" if day==completed and checkin_available else "รอรับ"),14)
+	var claim=button(box,"รับของขวัญวันนี้" if checkin_available else "รับแล้ว • กลับมาใหม่พรุ่งนี้",claim_daily)
+	claim.disabled=not checkin_available or gift_claiming or api.busy
+	button(box,"เล่นเกมจับคู่ • ผ่าน 1 ด่านรับ 2 หยก",func():close_modal();show_match())
+	label(box,"โฆษณาระหว่างด่านทุกครั้งที่ผ่านครบ 2 ด่าน",16)
+	button(box,"ปิด",close_modal)
+
+func claim_daily():
+	if gift_claiming or not checkin_available or api.busy:return
+	gift_claiming=true;send("checkin",{})

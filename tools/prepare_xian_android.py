@@ -30,3 +30,20 @@ s = p.read_text().replace("compileSdk         : 34", "compileSdk         : 35").
 p.write_text(s)
 (root / 'xian/android/.gdignore').touch()
 (root / 'xian/android/.build_version').write_text('4.4.1.stable')
+
+# AdMob test placement by default; production IDs belong to this game's app.
+import os,re
+app_id=os.environ.get('XIAN_ADMOB_APP_ID','ca-app-pub-3940256099942544~3347511713')
+unit_id=os.environ.get('XIAN_ADMOB_INTERSTITIAL_ID','ca-app-pub-3940256099942544/1033173712')
+if not re.fullmatch(r'ca-app-pub-\d{16}~\d{10}',app_id) or not re.fullmatch(r'ca-app-pub-\d{16}/\d{10}',unit_id):
+    raise ValueError('Invalid Xian AdMob IDs')
+p=build/'AndroidManifest.xml';s=p.read_text()
+if 'com.google.android.gms.ads.APPLICATION_ID' not in s:
+    s=s.replace('</application>',f'<meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="{app_id}" />\n</application>')
+p.write_text(s)
+p=build/'res/values/xian_ads.xml';p.parent.mkdir(parents=True,exist_ok=True)
+p.write_text(f'<resources><string name="xian_interstitial_id">{unit_id}</string></resources>')
+p=build/'build.gradle';s=p.read_text()
+if 'play-services-ads' not in s:
+    s += "\ndependencies {\n implementation 'com.google.android.gms:play-services-ads:25.4.0'\n implementation 'com.google.android.ump:user-messaging-platform:4.0.0'\n}\n"
+p.write_text(s)

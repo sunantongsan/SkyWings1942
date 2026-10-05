@@ -7,7 +7,7 @@ func run():
  for kind in KINDS:
   var last_count=-1
   var last_height=-1.0
-  for level in range(1,11):
+  for level in range(1,2 if kind=="servant" else 11):
    var model=art.building(kind,level,0.6)
    var bounds=art.model_bounds(model)
    assert(bounds.size.y>0.1 and bounds.size.y<7.0,"Invalid height "+kind)
@@ -27,10 +27,10 @@ func run():
   for fill in [0.0,0.5,1.0]:
    var model=art.building(kind,10,fill)
    assert(is_equal_approx(model.get_meta("storage_fill"),fill))
-   if kind=="granary":assert(model.get_meta("food_count")==ceili(fill*24))
+   if kind=="granary":assert(model.get_meta("food_count")==ceili(fill*180))
    else:assert((model.find_child("StoredWater",true,false)!=null)==(fill>0))
    model.free()
- for kind in ["kitchen","spring"]:
+ for kind in ["kitchen","spring","granary"]:
   for level in range(1,11):
    var model=art.building(kind,level)
    assert(model.get_meta("floors" if kind=="kitchen" else "tiers")==level)
