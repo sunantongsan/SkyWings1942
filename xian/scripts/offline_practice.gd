@@ -212,6 +212,8 @@ func _process(delta):
 			if shot.has("unit") or shot.has("guard"):
 				var actor=unit_models[shot.unit].node if shot.has("unit") else guard_models[shot.guard].node;var direction: Vector2=shot.to-shot.from
 				actor.rotation.y=atan2(direction.x,direction.y);art.pose(actor,"attack",0.8,Vector3(direction.x,0,direction.y))
+			if shot.get("weapon","") in ["trap_storm","trap_sword","trap_fire","lightning","storm"]:
+				art.formation_fx(battlefield,shot.weapon,world_pos(shot.from),world_pos(shot.to,shot.get("target_height",0.0)));continue
 			if shot.get("trap",false):
 				art.impact_fx(battlefield,world_pos(shot.from,0.3),8);continue
 			if shot.get("weapon","")=="ward":
@@ -339,6 +341,6 @@ func show_defense_guide():
 	var column=make_dialog();text(column,"รู้จักป้อมป้องกัน",26)
 	var scroll=ScrollContainer.new();scroll.custom_minimum_size=Vector2(550,255);column.add_child(scroll)
 	var content=VBoxContainer.new();content.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(content)
-	var notes={"cannon":"ยิงเป้าหมายพื้นดินทีละตัว • ใช้หน่วยบินเข้าทางนี้ได้","tower":"ยิงได้ทั้งพื้นดินและอากาศ • ระยะคุ้มกันกว้าง","mortar":"ยิงพื้นดินเป็นหมู่ • ยิงใกล้กว่า 2 ช่องไม่ได้","air_defense":"โจมตีเฉพาะหน่วยบิน • ใช้ทหารพื้นดินเข้าทำลาย","ward":"โจมตีหมู่รอบหอ • อย่ารวมทหารในรัศมีเดียวกัน","flame":"ยิงต่อเนื่องเป้าเดิมแรงขึ้น • ใช้หลายหน่วยเข้ากดดัน","storm":"สายฟ้าชิ่งใส่เป้าหมายใกล้กัน • แยกแนวโจมตี","bomb":"ระเบิดหน่วยพื้นดินที่เข้าใกล้ • ทำงานครั้งเดียว","air_mine":"ระเบิดหน่วยบินที่เข้าใกล้ • ทำงานครั้งเดียว"}
+	var notes={"cannon":"ยิงเป้าหมายพื้นดินทีละตัว • ใช้หน่วยบินเข้าทางนี้ได้","tower":"ยิงได้ทั้งพื้นดินและอากาศ • ระยะคุ้มกันกว้าง","mortar":"ยิงพื้นดินเป็นหมู่ • ยิงใกล้กว่า 2 ช่องไม่ได้","air_defense":"โจมตีเฉพาะหน่วยบิน • ใช้ทหารพื้นดินเข้าทำลาย","ward":"โจมตีหมู่รอบหอ • อย่ารวมทหารในรัศมีเดียวกัน","flame":"ยิงต่อเนื่องเป้าเดิมแรงขึ้น • ใช้หลายหน่วยเข้ากดดัน","storm":"สายฟ้าชิ่งใส่เป้าหมายใกล้กัน • แยกแนวโจมตี","lightning":"ยิงสายฟ้าใส่ศัตรูในระยะ 5.2 ช่อง ทุก 2 วินาที","trap_storm":"พายุทำลายศัตรูในวง 3.2 ช่อง นาน 4 วินาที","trap_sword":"กระบี่โจมตีหมู่ในวง 2.8 ช่อง นาน 4 วินาที","trap_fire":"เผาศัตรูในวง 2.6 ช่อง นาน 4 วินาที","bomb":"ระเบิดหน่วยพื้นดินที่เข้าใกล้ • ทำงานครั้งเดียว","air_mine":"ระเบิดหน่วยบินที่เข้าใกล้ • ทำงานครั้งเดียว"}
 	for kind in notes:text(content,Defenses.NAMES[kind]+" — "+notes[kind],17)
 	button(column,"กลับไปบุกต่อ",dismiss_dialog)

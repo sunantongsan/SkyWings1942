@@ -185,6 +185,7 @@ func construction_dressing(parent: Node3D, footprint_size: int, progress: float)
 	for i in range(3):box(parent,Vector3(-0.7+i*0.65,0.13,span*0.5+0.35),Vector3(0.42,0.26,0.32),"b8a37a")
 
 func building(kind: String, level: int, fill = 0.5) -> Node3D:
+	if kind in preload("res://scripts/formation_art.gd").KINDS:return preload("res://scripts/formation_art.gd").model(self,kind,level)
 	if kind in preload("res://scripts/campaign_defenses.gd").NEW_KINDS:return preload("res://scripts/campaign_defenses.gd").model(self,kind,level)
 	if realistic_enabled and architecture_enabled and kind in preload("res://scripts/village_architecture.gd").KINDS:
 		var studio=preload("res://scripts/village_architecture.gd").new();studio.art=self;return studio.build(kind,level,fill)
@@ -860,3 +861,10 @@ func glass_tiffin(level: int,fill: float) -> Node3D:
 		var layer=realistic.sprite("glass_tiffin",2.0,0.18);layer.name="GlassTier"+str(i);realistic.ground_sprite(layer,"glass_tiffin",0.15);layer.position.y+=i*0.24;root.add_child(layer)
 	var label=Label3D.new();label.name="StorageAmount";label.text=str(roundi(fill*100))+"%";label.font_size=36;label.pixel_size=0.01;label.outline_size=8;label.position=Vector3(0,0.18,0.2);label.billboard=BaseMaterial3D.BILLBOARD_ENABLED;root.add_child(label)
 	return root
+
+func formation_fx(parent: Node3D,kind: String,start: Vector3,target: Vector3):
+	if fx_count>=fx_limit:return
+	fx_count+=1
+	var effect=preload("res://scripts/formation_fx.gd").new();parent.add_child(effect)
+	effect.setup(self,kind,start,target)
+	effect.tree_exited.connect(func():fx_count=maxi(0,fx_count-1))

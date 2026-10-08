@@ -1,7 +1,8 @@
 extends RefCounted
-const NEW_KINDS=["cannon","mortar","air_defense","flame","storm"]
-const NAMES={"cannon":"ป้อมปืนใหญ่","tower":"หอหน้าไม้","mortar":"ป้อมครกหิน","air_defense":"หน้าไม้พิฆาตฟ้า","ward":"หอค่ายกล","flame":"หอเพลิง","storm":"หอสายฟ้า","bomb":"กับระเบิด","air_mine":"กับดักนภา"}
+const NEW_KINDS=["cannon","mortar","air_defense","flame","storm","lightning"]
+const NAMES={"cannon":"ป้อมปืนใหญ่","tower":"หอหน้าไม้","mortar":"ป้อมครกหิน","air_defense":"หน้าไม้พิฆาตฟ้า","ward":"หอค่ายกล","flame":"หอเพลิง","storm":"หอสายฟ้า","lightning":"ป้อมสายฟ้า","trap_storm":"ค่ายกลพายุ","trap_sword":"ค่ายกลกระบี่","trap_fire":"ค่ายกลไฟ","bomb":"กับระเบิด","air_mine":"กับดักนภา"}
 const STATS={
+ "lightning":{"range":5.2,"min_range":0.0,"cooldown":2.0,"damage":90.0,"target":"both","splash":0.0},
  "cannon":{"range":4.8,"min_range":0.0,"cooldown":1.1,"damage":28.0,"target":"ground","splash":0.0},
  "tower":{"range":5.2,"min_range":0.0,"cooldown":1.0,"damage":20.0,"target":"both","splash":0.0},
  "mortar":{"range":6.5,"min_range":2.0,"cooldown":3.0,"damage":58.0,"target":"ground","splash":1.4},

@@ -98,9 +98,23 @@ func tick_campaign_defense(b: Dictionary,dt: float):
 		extra.sort_custom(func(a,c):return a.pos.distance_squared_to(target.pos)<c.pos.distance_squared_to(target.pos))
 		for i in range(mini(2,extra.size())):damage_target(extra[i],damage*0.65)
 	else:damage_target(target,damage)
+func tick_formation_traps(dt: float):
+	for trap in traps:
+		if not trap.kind in ["trap_storm","trap_sword","trap_fire"]:continue
+		var radius=3.2 if trap.kind=="trap_storm" else 2.8 if trap.kind=="trap_sword" else 2.6
+		if not trap.triggered:
+			if not units.any(func(u):return u.hp>0 and u.pos.distance_to(trap.pos)<=radius):continue
+			trap.triggered=true;trap["active"]=4.0
+			shots.append({"from":trap.pos,"to":trap.pos,"kind":8,"enemy":true,"weapon":trap.kind,"trap":true})
+		if float(trap.get("active",0))<=0:continue
+		trap.active=maxf(0,trap.active-dt)
+		for victim in units:
+			if victim.hp<=0 or victim.pos.distance_to(trap.pos)>radius:continue
+			var damage=34.0 if trap.kind=="trap_storm" else 46.0 if trap.kind=="trap_sword" else 40.0
+			damage_target(victim,damage*dt*float(campaign_data.get("power",1.0)))
 func tick_traps():
 	for trap in traps:
-		if trap.triggered:continue
+		if trap.triggered or trap.kind in ["trap_storm","trap_sword","trap_fire"]:continue
 		var air=trap.kind=="air_mine"
 		for u in units:
 			if u.hp<=0 or Troops.air(u.kind)!=air or u.pos.distance_to(trap.pos)>1.0:continue
@@ -265,7 +279,7 @@ func step(dt: float):
 		if target.hp>0 and target.get("burn",0)>0:target.burn=maxf(0,target.burn-dt);damage_target(target,18*dt)
 	for u in units:tick_unit(u,dt)
 	for guard in defenders:tick_unit(guard,dt)
-	if campaign_mode:tick_traps()
+	if campaign_mode:tick_traps();tick_formation_traps(dt)
 	for b in buildings:
 		if campaign_mode:tick_campaign_defense(b,dt);continue
 		if b.hp<=0 or not b.kind in ["tower","ward"]:continue

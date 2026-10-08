@@ -1,0 +1,70 @@
+DO $test$
+DECLARE
+ u uuid:=gen_random_uuid();r jsonb;s jsonb;h1 text;h2 text;job_id text;req uuid;before_j int;t bigint:=floor(extract(epoch from now()));failed bool;level_needed int;result jsonb;b jsonb;
+BEGIN
+ BEGIN
+  insert into auth.users(id,aud,role,email,created_at,updated_at) values(u,'authenticated','authenticated',u::text||'@example.invalid',now(),now());
+  perform set_config('request.jwt.claim.sub',u::text,true);
+  perform public.xian_action('create','{"name":"Queue fixture","map":"bamboo"}',gen_random_uuid());
+  update xian_private.players set state=state||'{"jade":200}'::jsonb where user_id=u;
+  r:=public.xian_action('build','{"type":"barracks","x":0,"y":0}',gen_random_uuid());
+  failed:=false;
+  begin perform public.xian_action('build','{"type":"barracks","x":1,"y":0}',gen_random_uuid());exception when others then failed:=true;end;
+  assert failed,'Hall 1 must not allow second producer';
+  perform public.xian_action('boost','{"index":2}',gen_random_uuid());
+  for n in 2..5 loop
+   level_needed:=2*n-1;
+   update xian_private.players set state=jsonb_set(state,'{buildings,0,level}',to_jsonb(level_needed))||'{"water":1000,"rice":1000,"stone":100}'::jsonb where user_id=u;
+   r:=public.xian_action('build',jsonb_build_object('type','barracks','x',n,'y',0),gen_random_uuid());
+   perform public.xian_action('boost',jsonb_build_object('index',n+1),gen_random_uuid());
+  end loop;
+  r:=public.xian_action('sync','{}',gen_random_uuid());
+  assert (select count(*) from jsonb_array_elements(r->'state'->'buildings') q where q->>'id'='barracks')=5,'Five producers must unlock';
+  failed:=false;
+  begin perform public.xian_action('build','{"type":"barracks","x":6,"y":0}',gen_random_uuid());exception when others then failed:=true;end;
+  assert failed,'Sixth producer must be refused';
+  update xian_private.players set state=jsonb_set(state,'{buildings}',(state->'buildings')||'[{"id":"training","x":10,"y":10,"size":2,"level":2,"finish":0}]')||'{"water":1000,"rice":1000,"stone":100}'::jsonb where user_id=u;
+  r:=public.xian_action('sync','{}',gen_random_uuid());h1:=r->'state'->'buildings'->2->>'uid';h2:=r->'state'->'buildings'->3->>'uid';
+  assert h1 is not null and h2 is not null and h1<>h2,'Stable producer identities';
+  r:=public.xian_action('train',jsonb_build_object('producer',h1,'type',0,'quantity',2),gen_random_uuid());
+  r:=public.xian_action('train',jsonb_build_object('producer',h2,'type',0),gen_random_uuid());
+  assert (r->'state'->'jobs'->0->>'finish')::bigint=t+10 and (r->'state'->'jobs'->2->>'finish')::bigint=t+10,'Different producers must work simultaneously';
+  assert (r->'state'->'jobs'->1->>'finish')::bigint=t+20,'One producer preserves queue order';
+  r:=public.xian_action('train_pause',jsonb_build_object('producer',h1),gen_random_uuid());
+  assert r->'state'->'jobs'->0->>'paused'='true' and r->'state'->'jobs'->2->>'paused'='false','Pause must be isolated';
+  assert xian_private.ready_army(r->'state',t+100)->>0='1','Offline garrison must not count paused jobs';
+  r:=public.xian_action('train_resume',jsonb_build_object('producer',h1),gen_random_uuid());
+  assert (r->'state'->'jobs'->1->>'finish')::bigint=t+20,'Resume preserves remaining durations';
+  before_j:=(r->'state'->>'jade')::int;req:=gen_random_uuid();
+  r:=public.xian_action('boost_train',jsonb_build_object('producer',h1,'scope','current'),req);
+  assert r->'state'->'army'->>0='1' and jsonb_array_length(r->'state'->'jobs')=2,'Jade completes one soldier only';
+  assert (r->'state'->>'jade')::int=before_j-1,'Charge exactly once';
+  r:=public.xian_action('boost_train',jsonb_build_object('producer',h1,'scope','current'),req);
+  assert r->'state'->'army'->>0='1' and (r->'state'->>'jade')::int=before_j-1,'Replay must neither mint troops nor charge jade';
+  job_id:=r->'state'->'jobs'->0->>'id';
+  r:=public.xian_action('train_cancel',jsonb_build_object('producer',h1,'job',job_id),gen_random_uuid());
+  assert jsonb_array_length(r->'state'->'jobs')=1 and r->'state'->'jobs'->0->>'producer'=h2,'Cancellation isolates queues';
+  assert (r->'state'->'train_refund'->>'water')::int=20,'Refund must be retained';
+  r:=public.xian_action('sync','{}',gen_random_uuid());
+  assert (r->'state'->'train_refund'->>'water')::int=0,'Refund must settle when space exists';
+  failed:=false;
+  begin perform public.xian_action('train',jsonb_build_object('producer',h1,'type',1),gen_random_uuid());exception when others then failed:=true;end;
+  assert failed,'Troop unlock must use selected producer level';
+  r:=public.xian_action('boost_train',jsonb_build_object('producer',h2,'scope','all'),gen_random_uuid());
+  assert jsonb_array_length(r->'state'->'jobs')=0 and r->'state'->'army'->>0='2','Finish whole selected queue';
+  update xian_private.players set state=state||jsonb_build_object('repair_pending',true,'repair_until',t+20,'last_defense',jsonb_build_object('finish',t-1)) where user_id=u;
+  r:=public.xian_action('boost_repair','{}',gen_random_uuid());assert not r->'state' ? 'repair_pending','Jade speeds repair';
+  update xian_private.players set state=state||jsonb_build_object('raid',jsonb_build_object('start',t,'finish',t+25,'enemy','{}'::jsonb)) where user_id=u;
+  r:=public.xian_action('boost_raid','{}',gen_random_uuid());assert (r->'state'->'raid'->>'finish')::bigint=t,'Jade speeds raid wait';
+  assert (select count(*) from jsonb_array_elements(xian_private.catalog()) q where q->>'id' in ('trap_storm','trap_sword','trap_fire','lightning'))=4,'All defenses are buildable';
+  result:=xian_private.formation_battle('[{"id":"lightning","level":1,"x":15,"y":0}]','[10,0,0,0,0,0,0,0,0,0]');
+  assert (result->>'power_lost')::numeric=0 and jsonb_array_length(result->'events')=0,'No damage outside range';
+  foreach h1 in array array['trap_storm','trap_sword','trap_fire','lightning'] loop
+   result:=xian_private.formation_battle(jsonb_build_array(jsonb_build_object('id',h1,'level',1,'x',4,'y',9)),'[10,0,0,0,0,0,0,0,0,0]');
+   assert (result->>'power_lost')::numeric>0 and jsonb_array_length(result->'events')>0,'Defense must damage enemies and emit replay';
+   if h1<>'lightning' then assert jsonb_array_length(result->'events')=1,'Trap activates once per battle';end if;
+  end loop;
+  raise exception sqlstate 'ZX053' using message='rollback fixtures';
+ EXCEPTION WHEN SQLSTATE 'ZX053' THEN raise notice 'XIAN_PRODUCTION_DEFENSES_PASSED';
+ END;
+END $test$;

@@ -30,6 +30,7 @@ static func stage(number: int) -> Dictionary:
 	if chapter>=2:kinds.append("air_defense")
 	if chapter>=3:kinds.append("ward")
 	if chapter>=4:kinds.append("flame")
+	if chapter>=3:kinds.append("lightning")
 	if chapter>=6:kinds.append("storm")
 	var count=1+chapter+int(encounter/4)
 	if n==1:count=1
@@ -51,7 +52,7 @@ static func stage(number: int) -> Dictionary:
 	for i in range(mini(chapter+int(encounter/5),free.size())):
 		var p=free[(i*7+encounter)%free.size()]
 		if data.traps.any(func(t):return t.x==p.x and t.y==p.y):continue
-		data.traps.append({"kind":"air_mine" if chapter>=3 and i%3==0 else "bomb","x":p.x,"y":p.y})
+		data.traps.append({"kind":["trap_storm","trap_sword","trap_fire"][i%3] if chapter>=1 and i%2==0 else "air_mine" if chapter>=3 and i%3==0 else "bomb","x":p.x,"y":p.y})
 	if chapter>=2 and not free.is_empty():
 		data.guards.append({"kind":0 if chapter<5 else 5,"x":free[0].x,"y":free[0].y})
 	if chapter>=6 and free.size()>1:data.guards.append({"kind":6,"x":free[-1].x,"y":free[-1].y})

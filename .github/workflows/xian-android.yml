@@ -2,7 +2,7 @@ name: Xian of Clans Android
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/xian-of-clans]
+    branches: [main, feature/xian-of-clans, codex/xian-player-raids]
     paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'tools/fetch_ghost_assets.py', 'backend/**', '.github/workflows/xian-android.yml']
   pull_request:
     paths: ['xian/**', 'native/xian/**', 'tools/prepare_xian_android.py', 'tools/fetch_ghost_assets.py', 'backend/**', '.github/workflows/xian-android.yml']
@@ -60,6 +60,10 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' import.log; then exit 1; fi
           timeout 90 godot --headless --path xian --script res://tests/smoke.gd 2>&1 | tee smoke.log
           grep XIAN_SMOKE_PASSED smoke.log
+          timeout 90 godot --headless --path xian --script res://tests/player_raids.gd 2>&1 | tee player-raids.log
+          grep XIAN_PLAYER_RAIDS_UI_PASSED player-raids.log
+          timeout 90 godot --headless --path xian --script res://tests/production_defenses.gd 2>&1 | tee production-defenses.log
+          grep XIAN_PRODUCTION_DEFENSES_UI_PASSED production-defenses.log
           timeout 90 godot --headless --path xian --script res://tests/ten_troops.gd 2>&1 | tee ten_troops.log
           grep XIAN_TEN_TROOPS_PASSED ten_troops.log
           timeout 90 godot --headless --path xian --script res://tests/skills_and_breaches.gd 2>&1 | tee skills.log
@@ -124,6 +128,9 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error' studio.log; then exit 1; fi
           timeout 180 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/campaign_studio.gd 2>&1 | tee campaign-studio.log
           grep XIAN_CAMPAIGN_STUDIO_PASSED campaign-studio.log
+          timeout 120 xvfb-run -a godot --path xian --rendering-method gl_compatibility --script res://tests/capture_v053.gd 2>&1 | tee v053-review.log
+          grep XIAN_V053_CAPTURE_PASSED v053-review.log
+          if grep -E 'SCRIPT ERROR|Parse Error' v053-review.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error' campaign-studio.log; then exit 1; fi
           godot --headless --path xian --editor --import --quit
           timeout 90 godot --headless --path xian --script res://tests/architecture.gd 2>&1 | tee architecture.log
@@ -131,10 +138,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Xian-v051-Review
+          name: Xian-v053-Review
           path: |
             xian/build/review/v050-*.png
             xian/build/review/v051-*.png
+            xian/build/review/v053-*.png
             xian/build/review/campaign-balance.json
             xian/build/review/ground-report.json
             xian/assets/ui/buildings/*.png

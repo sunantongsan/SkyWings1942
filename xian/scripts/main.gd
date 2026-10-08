@@ -43,6 +43,14 @@ var actors: Array = []
 var home_units: Array=[]
 var defense_nodes: Array=[]
 var home_defense_time=0.0
+var repair_visual=false
+var repair_label: Label
+var defense_notice_id=""
+var production_hall=""
+var production_ui=preload("res://scripts/production_panel.gd").new()
+var train_requests: Array=[]
+var defense_fx_cursor=0
+var home_fx_cursor=0
 var pan_start = Vector2.ZERO
 var dragging = false
 var pivot = Vector3.ZERO
@@ -93,7 +101,7 @@ func _ready():
 	api = API.new(); add_child(api)
 	api.updated.connect(receive)
 	api.failed.connect(func(error):
-		gift_claiming=false;message(error)
+		gift_claiming=false;train_requests.clear();message(error)
 		if mode=="jade" and is_instance_valid(modal):show_gifts()
 	)
 	api.auth_notice.connect(message)
@@ -124,7 +132,7 @@ func _ready():
 	var scroll=ScrollContainer.new();sidebar_scroll=scroll;scroll.size_flags_vertical=Control.SIZE_EXPAND_FILL;scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED;scroll.scroll_deadzone=12;sidebar.add_child(scroll)
 	side=VBoxContainer.new();side.size_flags_horizontal=Control.SIZE_EXPAND_FILL;scroll.add_child(side)
 	var footer=panel(Vector2(16,634),Vector2(1248,70));var row=HBoxContainer.new();footer.add_child(row)
-	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["จัดฐาน","manage"],["ฝึกทหาร","train"],["บุกสำนัก","raid"],["ออฟไลน์","practice"],["จับคู่","match"],["ร้านค้า","jade"]]:
+	for pair in [["สำนัก","home"],["ก่อสร้าง","build"],["จัดฐาน","manage"],["ฝึกทหาร","train"],["บุกสำนัก","raid"],["รายงาน / เอาคืน","defense"],["ออฟไลน์","practice"],["จับคู่","match"],["ร้านค้า","jade"]]:
 		button(row,pair[0],navigate.bind(pair[1]))
 	button(row,"⚙",show_settings)
 	button(row,"−",zoom.bind(5.0));button(row,"+",zoom.bind(-5.0))
@@ -212,7 +220,7 @@ func receive(payload: Dictionary):
 	if mode in ["login","create"]:close_modal();mode="home"
 	if state.has("raid"):mode="raid"
 	if map_drawn!=state.get("map","bamboo"):draw_terrain(state.get("map","bamboo"))
-	var encoded=JSON.stringify(state.get("army",[]))+str(state.get("last_defense",{}).get("time",0))+JSON.stringify(state.get("buildings",[]))
+	var encoded=JSON.stringify(state.get("army",[]))+str(state.get("last_defense",{}).get("time",0))+str(repair_active())+JSON.stringify(state.get("buildings",[]))
 	if encoded!=last_buildings and not battle_visual:
 		last_buildings=encoded;draw_base()
 	if mode=="raid" and state.has("raid") and not battle_visual:draw_battle()
@@ -250,7 +258,7 @@ func navigate(target: String):
 	mode=target;chosen_build="";moving=false;wall_group.clear();clear_preview();close_modal()
 	if target=="match":show_match()
 	elif target=="jade":show_side();show_gifts()
-	elif target=="raid" and not state.has("raid"):api.action("scout")
+	elif target=="raid" and not state.has("raid"):api.action("scout",{"mode":"player"})
 	elif target=="raid" and state.has("raid"):draw_battle();show_side()
 	else:show_side()
 func show_side():
@@ -287,34 +295,20 @@ func show_side():
 				var tab=button(filters,pair[0],func():build_category=pair[1];show_side());tab.add_theme_font_size_override("font_size",13);tab.add_theme_constant_override("outline_size",0)
 			for c in catalog:
 				if c.id=="recruit":continue
-				var category="defense" if c.id in ["wall","tower","ward"] else "army" if c.id in ["training","barracks"] else "economy"
+				var category="defense" if c.id in ["wall","tower","ward","trap_storm","trap_sword","trap_fire","lightning"] else "army" if c.id in ["training","barracks"] else "economy"
 				if build_category!="all" and build_category!=category:continue
 				var caption="%s\nน้ำ %d ข้าว %d\nโอสถ %d • %d วิ" % [c.name,c.water,c.rice,c.stone,c.seconds]
 				if c.id=="servant":caption="เรือนช่าง • %d / 7 หลัง\n%s\nสร้างเสร็จทันที • ไม่อัปเกรด" % [builder_count(),"ครบแล้ว" if builder_count()>=7 else ("ฟรี" if builder_price()==0 else "%d หยก" % builder_price())]
+				if c.id=="barracks":caption+="\nสูงสุด %d / 5 หลัง • ปลดล็อกหลัก 1/3/5/7/9" % mini(5,(building_level("hall")+1)/2)
+				if int(c.get("hall_required",1))>1:caption+="\nต้องการสำนักหลักระดับ %d" % int(c.hall_required)
 				var card=button(side,caption,choose_build.bind(c.id))
 				if c.id!="servant":card.disabled=float(state.get("water",0))<float(c.water) or float(state.get("rice",0))<float(c.rice) or float(state.get("stone",0))<float(c.stone)
+				if c.id=="barracks":card.disabled=card.disabled or state.buildings.filter(func(b):return b.id=="barracks").size()>=mini(5,(building_level("hall")+1)/2)
+				if building_level("hall")<int(c.get("hall_required",1)):card.disabled=true
 				if c.id=="servant":card.disabled=builder_count()>=7 or int(state.get("jade",0))<builder_price()
 				card.icon=building_icon(c.id);card.icon_alignment=HORIZONTAL_ALIGNMENT_LEFT;card.expand_icon=true;card.add_theme_constant_override("icon_max_width",76);card.custom_minimum_size=Vector2(272,100)
 				build_cards.append({"node":card,"kind":c.id})
-		"train":
-			label(side,"หอฝึกนักสู้",25)
-			label(side,"ผลิตที่หอฝึก • เก็บที่ลานฝึกกระบี่
-ลานจุ 20 หน่วยต่อระดับ สูงสุด 200",16)
-			if building_level("barracks")==0:
-				label(side,"สร้างหอฝึกนักสู้เพื่อเริ่มผลิต",17)
-				button(side,"ไปสร้างหอฝึก",func():navigate("build");choose_build("barracks"))
-			var names=Troops.NAMES
-			for i in range(10):
-				var sheet=load("res://assets/realistic/"+Troops.ASSETS[i]+".webp")
-				var frame=AtlasTexture.new();frame.atlas=sheet;frame.region=Rect2(0,0,sheet.get_width()/4.0,sheet.get_height()/2.0)
-				var portrait=TextureRect.new();portrait.texture=frame;portrait.expand_mode=TextureRect.EXPAND_IGNORE_SIZE;portrait.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED;portrait.custom_minimum_size=Vector2(120,90);side.add_child(portrait)
-				label(side,"ระดับ %d • "% (i+1)+Troops.SKILLS[i],15)
-				label(side,Troops.DETAILS[i],14)
-				label(side,"%s: %d คน" % [names[i],Troops.count(state.army,i)])
-				var produce=button(side,"ผลิต • น้ำ %d ข้าว %d โอสถ %d" % [Troops.WATER[i],Troops.RICE[i],Troops.ELIXIR[i]],send.bind("train",{"type":i}))
-				produce.disabled=building_level("barracks")<i+1 or building_level("training")<1 or army_total()+state.jobs.size()>=int(caps.get("army",10))
-			label(side,"คิวผลิต: %d คน\nเวลาผลิต 10–100 วินาทีตามชนิด" % state.jobs.size())
-			label(side,"ปลดล็อกนักรบใหม่ทุกระดับหอฝึก 1–10",15)
+		"train":production_ui.build(self)
 		"jade":
 			label(side,"หยกเซียน",26)
 			button(side,"เปิดของขวัญ / เช็คอิน",show_gifts)
@@ -335,7 +329,7 @@ func show_side():
 					label(side,"พักและเก็บนักสู้เท่านั้น\nผลิตนักสู้ที่หอฝึกนักสู้",16)
 				if b.id=="barracks":
 					label(side,"ปลดล็อกนักรบใหม่ทุกระดับ 1–10",16)
-					button(side,"ผลิตนักสู้",navigate.bind("train"))
+					button(side,"ผลิตนักสู้ในหอนี้",open_production.bind(str(b.get("uid",""))))
 				if b.id=="spring":label(side,"ผลิตโอสถเซียน → คลังโอสถ",16)
 				if b.id=="crystal":label(side,"คลังเก็บโอสถสำหรับฝึกทหาร\nฝ่ายบุกมองเห็นปริมาณได้",16)
 				clock_label=label(side,remaining(b.finish))
@@ -369,6 +363,12 @@ func show_side():
 				var d=state.last_defense
 				if d.has("garrison"):label(side,"นักรบป้องกัน: "+Troops.summary(d.garrison),16)
 				label(side,"ถูกบุกโดย %s\nเสียน้ำ %d ข้าว %d โอสถ %d" % [d.attacker,d.water,d.rice,d.stone],16)
+			if repair_active():
+				repair_label=label(side,"ช่างกำลังซ่อมทุกอาคาร • %d วินาที" % ceili(float(state.repair_until)-now_time()),20)
+				button(side,"ซ่อมทั้งหมดทันที • 1 หยก",send.bind("boost_repair",{}))
+			for report in state.get("defense_history",[]):
+				label(side,"%s • เสียน้ำ %d ข้าว %d โอสถ %d" % [report.attacker,report.water,report.rice,report.stone],16)
+				button(side,"เอาคืน "+str(report.attacker),revenge.bind(str(report.id)))
 			button(side,"อัปเดตข้อมูล",send.bind("sync",{}))
 			button(side,"เครดิตภาพ / โมเดล",show_credits)
 func layout_signature() -> String:
@@ -383,6 +383,7 @@ func send(action: String,args: Dictionary):
 	api.action(action,args)
 func building_icon(kind: String) -> Texture2D:
 	var icon_path="res://assets/ui/buildings/"+kind+".png"
+	if kind in ["trap_storm","trap_sword","trap_fire","lightning"]:return load("res://assets/buildings/"+kind+".svg")
 	if ResourceLoader.exists(icon_path):return load(icon_path)
 	if FileAccess.file_exists(icon_path):return ImageTexture.create_from_image(Image.load_from_file(icon_path))
 	if icon_cache.has(kind):return icon_cache[kind]
@@ -419,7 +420,8 @@ func show_raid():
 		if r.enemy.has("garrison"):label(side,"นักรบฝ่ายป้องกัน: "+Troops.summary(r.enemy.garrison),16)
 		label(side,"ส่ง "+Troops.summary(r.army)+"\nผลคำนวณโดยเซิร์ฟเวอร์",16)
 		button(side,"จบการบุก / รับของ",send.bind("raid_claim",{}))
-	elif state.has("scout"):
+		if float(r.finish)>now_time():button(side,"จบการบุกทันที • 1 หยก",send.bind("boost_raid",{}))
+	elif state.has("scout") and state.scout.has("player"):
 		var s=state.scout
 		label(side,s.name,22)
 		label(side,("สำนักผู้เล่น" if s.has("player") else "สำนักบอท")+" • ระดับ %d\nพลังป้องกัน %d\nน้ำ %d ข้าว %d โอสถ %d" % [s.level,s.defense,s.water,s.rice,s.stone])
@@ -427,10 +429,20 @@ func show_raid():
 		label(side,"ส่งกองกำลังทั้งหมด\nหน่วยที่ส่งจะใช้ไปในการบุก",16)
 		button(side,"เริ่มบุก (25 วินาที)",send.bind("raid_start",{}))
 		button(side,"ค้นหาสำนักผู้เล่น",send.bind("scout",{"mode":"player"}))
-		button(side,"ค้นหาสำนักบอท",send.bind("scout",{}))
-		label(side,"เริ่มบุกแล้วโล่คุ้มครองจะหมด\nโกดังถูกปล้นได้บางส่วน หยกปลอดภัย",15)
+
+		label(side,"เริ่มบุกแล้วโล่คุ้มครองจะหมด\nเสียน้ำ ข้าว และโอสถ 60% ต่อการบุก หยกไม่หาย",15)
+	else:
+		label(side,"ค้นหาฐานผู้เล่นจริง บุกได้แม้เจ้าของออฟไลน์",18)
+		button(side,"ค้นหาสำนักผู้เล่น",send.bind("scout",{"mode":"player"}))
 	if state.has("last_raid"):
 		label(side,"ผลล่าสุด: %d ดาว" % state.last_raid.stars,22)
+func revenge(report_id: String):
+	mode="raid";selected=-1
+	api.action("scout",{"mode":"player","revenge":report_id})
+	show_side()
+func repair_active() -> bool:
+	return bool(state.get("repair_pending",false)) and float(state.get("repair_until",0))>now_time()
+
 func show_match():
 	mode="home"
 	if Engine.has_singleton("XianAuth"):
@@ -462,8 +474,13 @@ func draw_base():
 	for cached in base_cache.values():
 		if is_instance_valid(cached) and cached.get_parent()==world:world.remove_child(cached)
 	clear(world);actors=[]
+	repair_visual=repair_active()
 	var next_cache: Dictionary={}
 	for b in state.get("buildings",[]):
+		if repair_visual:
+			var rubble=art.ruins(world,building_position(b),b.id,footprint(b))
+			if b.id!="wall" and state.buildings.find(b)<8:art.construction_dressing(rubble,footprint(b),clampf(1.0-(float(state.repair_until)-now_time())/20.0,0.0,1.0))
+			continue
 		var resource={"tank":"water","granary":"rice","crystal":"stone"}.get(b.id,"")
 		var fill=float(state.get(resource,0))/maxf(1,float(caps.get(resource,1000)))
 		var key=JSON.stringify(b)+("/"+str(Walls.mask(state.buildings,Walls.cell(b))) if b.id=="wall" else "")
@@ -540,6 +557,7 @@ func draw_base():
 func garrison_position(kind: int,index: int) -> Vector3:
 	return cell_pos(4+(index%8)*0.8,10.3-(index/8)*0.65)+Vector3(0,1.7 if Troops.air(kind) else 0,-kind*0.7)
 func start_home_defense(report: Dictionary):
+	home_fx_cursor=0
 	home_defense_time=float(report.finish)
 	var guards=report.get("garrison",[0,0,0]);var used=[0,0,0,0,0,0,0,0,0,0]
 	for person in home_units:
@@ -757,13 +775,27 @@ func _process(delta):
 		menu_scroll_value=sidebar_scroll.scroll_vertical+menu_velocity*delta
 		sidebar_scroll.scroll_vertical=roundi(menu_scroll_value);menu_velocity*=exp(-7*delta)
 	since_sync+=delta;poll+=delta
+	if mode=="train":production_ui.update(self)
+	if not train_requests.is_empty() and not api.busy:
+		var command=train_requests.pop_front()
+		api.action("train",command)
+	elif not api.busy and state.get("jobs",[]).any(func(j):return not j.get("paused",false) and float(j.finish)<=now_time()):
+		api.action("sync")
+	if repair_visual and not repair_active() and not battle_visual:
+		draw_base();show_side()
+		if not api.busy:api.action("sync")
+	if is_instance_valid(repair_label) and repair_active():
+		repair_label.text="ช่างกำลังซ่อมทุกอาคาร • %d วินาที" % ceili(float(state.repair_until)-now_time())
 	if poll>12 and not state.is_empty() and not api.busy and mode!="match":poll=0;api.action("sync")
 	var time=Time.get_ticks_msec()/1000.0
 	if gift_glow!=null:gift_glow.shadow_color=Color(1,0.76,0.28,0.4+0.2*sin(time*3) if checkin_available else 0.12)
 	if is_instance_valid(gift_button):gift_button.self_modulate=Color(1,0.9+0.1*sin(time*3),0.73+0.27*sin(time*3),1) if checkin_available else Color.WHITE
 	if battle_visual and state.has("raid"):
-		var progress=clampf((now_time()-float(state.raid.start))/25.0,0,1)
+		var progress=clampf((now_time()-float(state.raid.start))/maxf(0.1,float(state.raid.finish)-float(state.raid.start)),0,1)
 		update_raid_destruction(progress,float(state.raid.get("ratio",0)))
+		var effects=state.raid.get("defense_fx",[])
+		while defense_fx_cursor<effects.size() and float(effects[defense_fx_cursor].time)<=progress*25.0:
+			replay_defense_fx(effects[defense_fx_cursor]);defense_fx_cursor+=1
 		for defense in battle_buildings:
 			if defense.kind in ["ward","tower"] and not defense.destroyed and progress>0.3 and progress<1 and time>defense.get("next_wave",0):
 				if defense.kind=="ward":art.sound_wave(world,defense.node.position,12.6)
@@ -781,6 +813,9 @@ func _process(delta):
 			else:art.pose(node,"walk")
 	if not battle_visual and not defense_nodes.is_empty():
 		var progress=clampf(1.0-(home_defense_time-now_time())/25.0,0,1)
+		var effects=state.get("last_defense",{}).get("defense_fx",[])
+		while home_fx_cursor<effects.size() and float(effects[home_fx_cursor].time)<=progress*25.0:
+			replay_defense_fx(effects[home_fx_cursor]);home_fx_cursor+=1
 		for unit in defense_nodes:
 			unit.node.position=unit.start.lerp(unit.target,minf(1,progress*3))
 			if progress<0.33:art.pose(unit.node,"walk")
@@ -803,6 +838,7 @@ func _process(delta):
 		elif mode=="home" and selected>=0 and selected<state.buildings.size():clock_label.text=remaining(state.buildings[selected].finish)
 
 func draw_battle():
+	defense_fx_cursor=0
 	battle_visual=true;base_cache.clear();clear(world);actors=[];battle_nodes=[];battle_buildings=[];defense_nodes=[];home_units=[]
 	pivot=Vector3.ZERO;position_camera()
 	var enemy=state.raid.enemy
@@ -817,8 +853,8 @@ func draw_battle():
 	for kind in range(10):
 		for i in range(mini(20,Troops.count(state.raid.army,kind))):
 			var node=art.person(kind);world.add_child(node)
-			var start=cell_pos(4+i*0.45,13+kind*0.5)
-			var target=cell_pos(4+(i%8)*0.8,8.4+(i/8)*0.65)
+			var start=cell_pos(4+kind*0.7+(i%3-1)*0.12,14+(i/3)*0.12)
+			var target=cell_pos(4+kind*0.7+(i%3-1)*0.12,8.5+(i/3)*0.12)
 			battle_nodes.append({"node":node,"start":start,"target":target,"kind":kind,"phase":i})
 	var guards=enemy.get("garrison",[0,0,0])
 	for kind in range(10):
@@ -900,6 +936,10 @@ func wall_signature() -> String:
 
 func update_storage_visuals():
 	for b in state.get("buildings",[]):
+		if repair_visual:
+			var rubble=art.ruins(world,building_position(b),b.id,footprint(b))
+			if b.id!="wall" and state.buildings.find(b)<8:art.construction_dressing(rubble,footprint(b),clampf(1.0-(float(state.repair_until)-now_time())/20.0,0.0,1.0))
+			continue
 		var resource={"tank":"water","granary":"rice","crystal":"stone"}.get(b.id,"")
 		if resource.is_empty():continue
 		var key=JSON.stringify(b)
@@ -987,3 +1027,16 @@ func show_base_actions():
 			var upgrade=button(row,"อัปเกรด",selected_upgrade);upgrade.disabled=float(b.finish)>now_time()
 		button(row,"จัดฐาน",navigate.bind("manage"))
 	button(row,"ปิด",func():selected=-1;moving=false;clear_preview();show_side())
+
+func open_production(id: String):
+	production_hall=id;selected=-1;navigate("train")
+func enqueue_training(producer: String,kind: int,quantity: int):
+	var waiting=0
+	for command in train_requests:waiting+=int(command.quantity)
+	if waiting+quantity>200:message("คิวคำสั่งเต็ม กรุณารอการบันทึก");return
+	if not train_requests.is_empty() and train_requests[-1].producer==producer and train_requests[-1].type==kind and int(train_requests[-1].quantity)+quantity<=20:
+		train_requests[-1].quantity+=quantity
+	else:train_requests.append({"producer":producer,"type":kind,"quantity":quantity})
+	message("เพิ่มคำสั่งผลิต %s %d หน่วย" % [Troops.NAMES[kind],quantity])
+func replay_defense_fx(event: Dictionary):
+	art.formation_fx(world,str(event.kind),cell_pos(float(event.x),float(event.y)),cell_pos(float(event.tx),float(event.ty)))

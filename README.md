@@ -1,3 +1,7 @@
+# Xian of Clans — 0.53 production and formations
+
+See [0.53 changes](xian/RELEASE-v053.md) for independent fighter halls, jade speedups and four new defenses, and [0.52 changes](xian/RELEASE-v052.md) for player raids and revenge. The sections below describe the initial prototype history.
+
 # Xian of Clans — playable online prototype v0.32
 
 Open `xian/project.godot` in Godot 4.4.1. The new standalone entry point exports only Xian assets; Galaxy models/scripts remain in git history/workspace for reference and are not part of this APK. Package `com.xianofclans.strategy` installs separately from Galaxy to preserve the old save.
