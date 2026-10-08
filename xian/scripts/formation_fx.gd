@@ -6,7 +6,7 @@ var duration=4.0
 var pieces: Array=[]
 var tint: StandardMaterial3D
 func setup(art,weapon: String,start: Vector3,target: Vector3):
-	kind=weapon;position=start;duration=0.4 if kind in ["lightning","storm"] else 4.0
+	kind=weapon;position=start;duration=0.65 if kind in ["lightning","storm"] else 4.0
 	var color=Models.COLORS.get(kind,"93bfff")
 	tint=art.clear_material(color,0.8).duplicate();tint.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;tint.emission_enabled=true;tint.emission=Color(color);tint.emission_energy_multiplier=1.4
 	if kind in ["lightning","storm"]:
@@ -14,9 +14,10 @@ func setup(art,weapon: String,start: Vector3,target: Vector3):
 		for i in range(1,10):
 			var point=source.lerp(end,float(i)/9)
 			if i<9:point+=Vector3(sin(i*8.7)*0.34,cos(i*3.9)*0.28,sin(i*4.3)*0.34)
-			art.beam(self,previous,point,0.065,color);previous=point
+			art.beam(self,previous,point,0.12,color);previous=point
 		art.orb(self,end,Vector3.ONE*0.25,color)
 	elif kind=="trap_storm":
+		Models.ring(art,self,9.2,0.13,0.09,color)
 		for i in range(7):
 			var band=Models.ring(art,self,0.6+i*0.30,0.25+i*0.68,0.12,color);band.rotation.z=0.12*sin(i*2);pieces.append(band)
 		for i in range(9):pieces.append(art.orb(self,Vector3.ZERO,Vector3(0.45,0.18,0.22),color))

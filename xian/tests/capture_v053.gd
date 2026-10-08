@@ -11,6 +11,9 @@ func run():
 	game.mode="home";game.show_side();game.pivot=Vector3(0,0,1);game.camera.size=38;game.position_camera()
 	for entry in [["trap_storm",4,9],["trap_sword",6,9],["trap_fire",10,9],["lightning",10,7]]:
 		game.art.formation_fx(game.world,entry[0],game.cell_pos(entry[1],entry[2]),game.cell_pos(8,9))
+	for effect in game.world.get_children():
+		if effect.get_script()==preload("res://scripts/formation_fx.gd"):
+			effect.set_process(false);effect._process(0.12)
 	await process_frame;await process_frame
 	root.get_texture().get_image().save_png("res://build/review/v053-formations.png")
 	print("XIAN_V053_CAPTURE_PASSED");quit()

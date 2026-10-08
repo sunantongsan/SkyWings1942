@@ -6,8 +6,7 @@ var finish_buttons: Array=[]
 func build(game):
 	clocks.clear();bars.clear();finish_buttons.clear()
 	var side=game.side
-	game.label(side,"หอฝึกนักสู้ • คิวแยกทุกหลัง",23)
-	game.label(side,"แตะรูปเพื่อเพิ่มคิว ผลิตต่อเนื่องอัตโนมัติ\nปลดล็อก 5 หลังที่สำนักหลักระดับ 1 / 3 / 5 / 7 / 9",15)
+	game.label(side,"แตะรูป +1 • ปุ่ม +5 • คิวแยกตามหอ",14)
 	var halls=game.state.buildings.filter(func(b):return b.id=="barracks" and int(b.level)>0)
 	if halls.is_empty():
 		game.label(side,"สร้างหอฝึกนักสู้ให้เสร็จก่อน",18)
@@ -17,12 +16,11 @@ func build(game):
 	var current: Dictionary={}
 	for i in range(halls.size()):
 		var hall=halls[i];var id=str(hall.get("uid",""));var count=game.state.jobs.filter(func(j):return str(j.get("producer",""))==id).size()
-		var tab=game.button(tabs,"หอ %d • Lv.%d\nคิว %d" % [i+1,int(hall.level),count],game.open_production.bind(id));tab.custom_minimum_size=Vector2(84,54);tab.add_theme_font_size_override("font_size",14)
+		var tab=game.button(tabs,"หอ %d • Lv.%d\nคิว %d" % [i+1,int(hall.level),count],game.open_production.bind(id));tab.tooltip_text="ปลดล็อกหอเพิ่มที่สำนักหลัก 1 / 3 / 5 / 7 / 9";tab.custom_minimum_size=Vector2(84,54);tab.add_theme_font_size_override("font_size",14)
 		if id==game.production_hall:current=hall;tab.modulate=Color("91e6ff")
 	var producer=game.production_hall
 	var queue=game.state.jobs.filter(func(j):return str(j.get("producer",""))==producer)
 	var paused=bool(current.get("training_paused",false))
-	game.label(side,"หอที่เลือก: ระดับ %d • %s" % [int(current.level),"พักคิว" if paused else "กำลังผลิต" if not queue.is_empty() else "พร้อมผลิต"],18)
 	if not queue.is_empty():
 		var active=queue[0]
 		var clock=game.label(side,"",17);clocks.append({"node":clock,"job":active})
